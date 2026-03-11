@@ -25,8 +25,7 @@ export default function LoginPage() {
       await supabase.from('profiles').upsert({ id: (await supabase.auth.getUser()).data.user?.id, email, name: email.split('@')[0] })
     }
 
-    router.push('/')
-    router.refresh()
+    window.location.href = '/'
   }
 
   return (

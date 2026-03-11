@@ -268,8 +268,16 @@ export default function ItemPage() {
 
         {/* EIER: ingen forespørsler og tilgjengelig */}
         {isOwner && item.available && pendingLoans.length === 0 && (
-          <div className="bg-[#FFF0E6] rounded-2xl p-4 text-center">
-            <p className="text-[#C4673A] text-sm font-medium">Dette er din gjenstand</p>
+          <div className="flex gap-2">
+            <div className="flex-1 bg-[#FFF0E6] rounded-2xl p-4 text-center">
+              <p className="text-[#C4673A] text-sm font-medium">Dette er din gjenstand</p>
+            </div>
+            <Link href={`/items/access?item=${item.id}`}>
+              <div className="bg-white border border-[#E8DDD0] rounded-2xl p-4 text-center shadow-sm">
+                <p className="text-sm">🔒</p>
+                <p className="text-xs text-[#9C7B65] mt-1">Tilgang</p>
+              </div>
+            </Link>
           </div>
         )}
 

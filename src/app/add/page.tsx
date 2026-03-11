@@ -184,56 +184,56 @@ Svar KUN med et JSON-array, ingen annen tekst:
   }
 
   const saveBooks = async () => {
-    setSavingBooks(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+  setSavingBooks(true)
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
 
-    const selected = books.filter(b => b.selected)
-    for (const book of selected) {
-      await supabase.from('items').insert({
-        owner_id: user.id,
-        name: book.title,
-        description: `Forfatter: ${book.author}`,
-        category: 'bok',
-        image_url: book.image_url,
-        available: true,
-      })
-    }
-    router.push('/profile')
+  const selected = books.filter(b => b.selected)
+  for (const book of selected) {
+    await supabase.from('items').insert({
+      owner_id: user.id,
+      name: book.title,
+      description: `Forfatter: ${book.author}`,
+      category: 'bok',
+      image_url: book.image_url,
+      available: true,
+    })
   }
+  router.push('/profile')
+}
 
   // Lagre enkelt item
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSaving(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+  e.preventDefault()
+  setSaving(true)
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
 
-    let image_url = ''
-    if (imageFile) {
-      const ext = imageFile.name.split('.').pop()
-      const path = `items/${user.id}/${Date.now()}.${ext}`
-      await supabase.storage.from('item-images').upload(path, imageFile)
-      const { data } = supabase.storage.from('item-images').getPublicUrl(path)
-      image_url = data.publicUrl
-    }
-
-    await supabase.from('items').insert({
-      owner_id: user.id,
-      name,
-      description,
-      category,
-      subcategory: subcategory || null,
-      image_url,
-      available: true,
-      price: price ? parseInt(price) : null,
-      vipps_number: vipps || null,
-    })
-
-    router.push('/profile')
+  let image_url = ''
+  if (imageFile) {
+    const ext = imageFile.name.split('.').pop()
+    const path = `items/${user.id}/${Date.now()}.${ext}`
+    await supabase.storage.from('item-images').upload(path, imageFile)
+    const { data } = supabase.storage.from('item-images').getPublicUrl(path)
+    image_url = data.publicUrl
   }
+
+  const { data: newItem } = await supabase.from('items').insert({
+    owner_id: user.id,
+    name,
+    description,
+    category,
+    subcategory: subcategory || null,
+    image_url,
+    available: true,
+    price: price ? parseInt(price) : null,
+    vipps_number: vipps || null,
+  }).select().single()
+
+  router.push(`/items/access?item=${newItem?.id}`)
+}
 
   // ── VELG MODUS ──
   if (mode === 'choose') {

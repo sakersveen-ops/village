@@ -29,6 +29,15 @@ export default function NewCommunityPage() {
         created_by: user.id,
         is_public: isPublic,
       })
+
+      const { data: mine } = await supabase
+        .from('community_members')
+        .select('role, status, communities(*)')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+
+      console.log('mine:', mine) // ← legg til denne
+
       .select()
       .single()
 

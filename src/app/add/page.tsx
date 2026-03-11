@@ -109,6 +109,32 @@ export default function AddPage() {
           ))}
         </div>
 
+        {/* Pris */}
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Pris per dag (la stå tom for gratis)</label>
+          <input
+            type="number"
+            placeholder="eks. 100"
+            value={price}
+            onChange={e => setPrice(e.target.value)}
+            className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A]"
+          />
+        </div>
+
+        {/* Vipps */}
+        {price && (
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Vipps-nummer</label>
+            <input
+              type="tel"
+              placeholder="eks. 98765432"
+              value={vipps}
+              onChange={e => setVipps(e.target.value)}
+              className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A]"
+            />
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={loading || !name}

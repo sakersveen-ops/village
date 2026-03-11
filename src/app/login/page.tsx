@@ -18,6 +18,15 @@ export default function LoginPage() {
 
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
     
+    // Redirect til invitasjonslenke hvis den finnes
+    const redirect = sessionStorage.getItem('redirectAfterLogin')
+    if (redirect) {
+      sessionStorage.removeItem('redirectAfterLogin')
+      window.location.href = redirect
+      return
+    }
+    window.location.href = '/'
+
     if (signInError) {
         const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
         if (signUpError) { setError(signUpError.message); setLoading(false); return }

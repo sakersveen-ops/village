@@ -72,6 +72,17 @@ export default function FeedPage() {
         </div>
       </div>
 
+      <div className="flex items-center gap-2">
+      <Link href="/invite">
+        <button className="text-sm text-[#C4673A] font-medium border border-[#C4673A] rounded-full px-3 py-1">
+          + Inviter
+        </button>
+      </Link>
+      <div className="w-9 h-9 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold text-sm">
+        {user?.email?.[0]?.toUpperCase()}
+      </div>
+    </div>
+
       {/* Grid */}
       <div className="grid grid-cols-2 gap-3 p-4">
         {loading ? (

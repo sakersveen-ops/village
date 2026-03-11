@@ -10,12 +10,14 @@ export default function CommunityPage() {
   const [items, setItems] = useState<any[]>([])
   const [pending, setPending] = useState<any[]>([])
   const [myRole, setMyRole] = useState<string | null>(null)
+  const [membershipStatus, setMembershipStatus] = useState<string | null>(null)
   const [user, setUser] = useState<any>(null)
   const [tab, setTab] = useState<'feed' | 'members' | 'admin'>('feed')
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [loading, setLoading] = useState(true)
+  const [requesting, setRequesting] = useState(false)
   const router = useRouter()
   const { id } = useParams()
 
@@ -37,24 +39,35 @@ export default function CommunityPage() {
 
       const { data: members } = await supabase
         .from('community_members')
-        .select('*, profiles(name, email)')
+        .select('*, profiles(name, email, avatar_url)')
         .eq('community_id', id)
         .eq('status', 'active')
       setMembers(members || [])
 
-      const me = members?.find((m: any) => m.user_id === user.id)
+      const me = (members || []).find((m: any) => m.user_id === user.id)
       setMyRole(me?.role || null)
 
-      const { data: pending } = await supabase
+      // Sjekk pending-status
+      if (!me) {
+        const { data: myMembership } = await supabase
+          .from('community_members')
+          .select('status, role')
+          .eq('community_id', id)
+          .eq('user_id', user.id)
+          .single()
+        setMembershipStatus(myMembership?.status || null)
+      }
+
+      const { data: pendingMembers } = await supabase
         .from('community_members')
-        .select('*, profiles(name, email)')
+        .select('*, profiles(name, email, avatar_url)')
         .eq('community_id', id)
         .eq('status', 'pending')
-      setPending(pending || [])
+      setPending(pendingMembers || [])
 
       const { data: items } = await supabase
         .from('items')
-        .select('*, profiles(name, email)')
+        .select('*, profiles(name, email, avatar_url)')
         .eq('community_id', id)
         .eq('available', true)
         .order('created_at', { ascending: false })
@@ -65,6 +78,35 @@ export default function CommunityPage() {
     load()
   }, [id])
 
+  const requestMembership = async () => {
+    setRequesting(true)
+    const supabase = createClient()
+    await supabase.from('community_members').insert({
+      community_id: id,
+      user_id: user?.id,
+      role: 'member',
+      status: 'pending',
+    })
+    const { data: admins } = await supabase
+      .from('community_members')
+      .select('user_id')
+      .eq('community_id', id)
+      .eq('role', 'admin')
+      .eq('status', 'active')
+    if (admins) {
+      await supabase.from('notifications').insert(
+        admins.map((a: any) => ({
+          user_id: a.user_id,
+          type: 'join_request',
+          title: 'Ny forespørsel om å bli med',
+          body: `${user?.email?.split('@')[0]} vil bli med i ${community.name}`,
+        }))
+      )
+    }
+    setMembershipStatus('pending')
+    setRequesting(false)
+  }
+
   const approveMember = async (memberId: string, approve: boolean) => {
     const supabase = createClient()
     if (approve) {
@@ -72,11 +114,9 @@ export default function CommunityPage() {
     } else {
       await supabase.from('community_members').delete().eq('id', memberId)
     }
+    const approved = pending.find(m => m.id === memberId)
     setPending(prev => prev.filter(m => m.id !== memberId))
-    if (approve) {
-      const approved = pending.find(m => m.id === memberId)
-      if (approved) setMembers(prev => [...prev, { ...approved, status: 'active' }])
-    }
+    if (approve && approved) setMembers(prev => [...prev, { ...approved, status: 'active' }])
   }
 
   const removeMember = async (memberId: string) => {
@@ -98,86 +138,64 @@ export default function CommunityPage() {
     setEditing(false)
   }
 
-  const inviteUrl = typeof window !== 'undefined' ? `${window.location.origin}/community/join/${community?.invite_code}` : ''
+  const copyInvite = () => {
+    const url = `${window.location.origin}/community/join/${community?.invite_code}`
+    navigator.clipboard.writeText(url)
+  }
 
-  const copyInvite = () => navigator.clipboard.writeText(inviteUrl)
-  const isMember = myRole !== null
-  const isPending = members === null // håndteres under 
-  
-  // Legg til state øverst:
-  const [membershipStatus, setMembershipStatus] = useState<string | null>(null)
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen text-[#9C7B65]">Laster…</div>
+  )
 
-  
-  if (loading) return <div className="flex items-center justify-center min-h-screen text-[#9C7B65]">Laster…</div>
-  // Sjekk pending-status for ikke-medlemmer
-  const { data: myMembership } = await supabase
-  .from('community_members')
-  .select('status, role')
-  .eq('community_id', id)
-  .eq('user_id', user.id)
-  .single()
-  setMembershipStatus(myMembership?.status || null)
-  if (myMembership) setMyRole(myMembership.role)
-    
-  const requestMembership = async () => {
-    const supabase = createClient()
-    await supabase.from('community_members').insert({
-        community_id: id,
-        user_id: user?.id,
-        role: 'member',
-        status: 'pending',
-    })
-    const { data: admins } = await supabase
-        .from('community_members')
-        .select('user_id')
-        .eq('community_id', id)
-        .eq('role', 'admin')
-        .eq('status', 'active')
-    if (admins) {
-        await supabase.from('notifications').insert(
-        admins.map((a: any) => ({
-            user_id: a.user_id,
-            type: 'join_request',
-            title: 'Ny forespørsel om å bli med',
-            body: `${user?.email?.split('@')[0]} vil bli med i ${community.name}`,
-        }))
-        )
-    }
-    setMembershipStatus('pending')
-    }
+  if (!community) return (
+    <div className="p-8 text-center text-[#9C7B65]">Fant ikke community</div>
+  )
 
-// Vis for ikke-medlemmer:
-if (!myRole && membershipStatus !== 'pending') return (
-  <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
-    <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
-      <div className="text-5xl mb-3">{community.avatar_emoji}</div>
-      <h1 className="text-xl font-bold text-[#2C1A0E] mb-1">{community.name}</h1>
-      {community.description && <p className="text-[#9C7B65] text-sm mb-4">{community.description}</p>}
-      {community.is_public ? (
-        <>
-          <p className="text-xs text-[#9C7B65] mb-6">Send en forespørsel – en admin godkjenner deg.</p>
-          <button onClick={requestMembership} className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium">
-            Be om å bli med
-          </button>
-        </>
-      ) : (
-        <p className="text-sm text-[#9C7B65]">🔒 Denne kretsen er privat. Du trenger en invitasjonslenke.</p>
-      )}
+  // Ikke-medlem: pending
+  if (!myRole && membershipStatus === 'pending') return (
+    <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
+      <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
+        <div className="text-5xl mb-4">📬</div>
+        <h1 className="text-xl font-bold text-[#2C1A0E] mb-2">Forespørsel sendt!</h1>
+        <p className="text-[#9C7B65] text-sm mb-6">Venter på godkjenning fra en admin i {community.name}.</p>
+        <button onClick={() => router.push('/')} className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium">
+          Tilbake til feeden
+        </button>
+      </div>
     </div>
-  </div>
-)
+  )
 
-if (!myRole && membershipStatus === 'pending') return (
-  <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
-    <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
-      <div className="text-5xl mb-4">📬</div>
-      <h1 className="text-xl font-bold text-[#2C1A0E] mb-2">Forespørsel sendt!</h1>
-      <p className="text-[#9C7B65] text-sm mb-6">Venter på godkjenning fra en admin i {community.name}.</p>
-      <button onClick={() => router.push('/')} className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium">Tilbake til feeden</button>
+  // Ikke-medlem: be om tilgang
+  if (!myRole) return (
+    <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
+      <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
+        <div className="text-5xl mb-3">{community.avatar_emoji}</div>
+        <h1 className="text-xl font-bold text-[#2C1A0E] mb-1">{community.name}</h1>
+        {community.description && (
+          <p className="text-[#9C7B65] text-sm mb-4">{community.description}</p>
+        )}
+        {community.is_public ? (
+          <>
+            <p className="text-xs text-[#9C7B65] mb-6">Send en forespørsel – en admin godkjenner deg.</p>
+            <button
+              onClick={requestMembership}
+              disabled={requesting}
+              className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium disabled:opacity-50"
+            >
+              {requesting ? 'Sender…' : 'Be om å bli med'}
+            </button>
+          </>
+        ) : (
+          <p className="text-sm text-[#9C7B65] mt-2">
+            🔒 Denne kretsen er privat. Du trenger en invitasjonslenke.
+          </p>
+        )}
+        <button onClick={() => router.back()} className="mt-3 text-sm text-[#9C7B65] w-full py-2">
+          ← Tilbake
+        </button>
+      </div>
     </div>
-  </div>
-)
-
+  )
 
   const isAdmin = myRole === 'admin'
 
@@ -189,8 +207,17 @@ if (!myRole && membershipStatus === 'pending') return (
 
         {editing ? (
           <div className="flex flex-col gap-3">
-            <input value={editName} onChange={e => setEditName(e.target.value)} className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-2 text-[#2C1A0E] text-xl font-bold outline-none focus:border-[#C4673A]" />
-            <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={2} className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-2 text-[#2C1A0E] text-sm outline-none focus:border-[#C4673A] resize-none" />
+            <input
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-2 text-[#2C1A0E] text-xl font-bold outline-none focus:border-[#C4673A]"
+            />
+            <textarea
+              value={editDesc}
+              onChange={e => setEditDesc(e.target.value)}
+              rows={2}
+              className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-2 text-[#2C1A0E] text-sm outline-none focus:border-[#C4673A] resize-none"
+            />
             <div className="flex gap-2">
               <button onClick={saveEdits} className="flex-1 bg-[#C4673A] text-white rounded-xl py-2 text-sm font-medium">Lagre</button>
               <button onClick={() => setEditing(false)} className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-2 text-sm">Avbryt</button>
@@ -203,7 +230,9 @@ if (!myRole && membershipStatus === 'pending') return (
             </div>
             <div className="flex-1">
               <h1 className="text-xl font-bold text-[#2C1A0E]">{community.name}</h1>
-              {community.description && <p className="text-sm text-[#9C7B65] mt-0.5">{community.description}</p>}
+              {community.description && (
+                <p className="text-sm text-[#9C7B65] mt-0.5">{community.description}</p>
+              )}
               <p className="text-xs text-[#9C7B65] mt-1">{members.length} medlemmer</p>
             </div>
             {isAdmin && (
@@ -213,14 +242,20 @@ if (!myRole && membershipStatus === 'pending') return (
         )}
 
         {/* Tabs */}
-        <div className="flex gap-2 mt-4">
+        <div className="flex gap-2 mt-4 overflow-x-auto">
           {(['feed', 'members', ...(isAdmin ? ['admin'] : [])] as string[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t as any)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${tab === t ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'}`}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors flex-shrink-0 ${
+                tab === t
+                  ? 'bg-[#C4673A] text-white border-transparent'
+                  : 'bg-white text-[#6B4226] border-[#E8DDD0]'
+              }`}
             >
-              {t === 'feed' ? 'Feed' : t === 'members' ? `Medlemmer (${members.length})` : `Admin ${pending.length > 0 ? `(${pending.length})` : ''}`}
+              {t === 'feed' ? 'Feed'
+                : t === 'members' ? `Medlemmer (${members.length})`
+                : `Admin${pending.length > 0 ? ` (${pending.length})` : ''}`}
             </button>
           ))}
         </div>
@@ -231,11 +266,17 @@ if (!myRole && membershipStatus === 'pending') return (
         {/* FEED */}
         {tab === 'feed' && (
           <>
-            {/* Invitasjonslenke */}
             {isAdmin && (
-              <button onClick={copyInvite} className="w-full bg-white border border-dashed border-[#C4673A] rounded-2xl py-3 text-sm text-[#C4673A] font-medium mb-4">
-                📋 Kopier invitasjonslenke
-              </button>
+              <div className="flex gap-2 mb-4">
+                <button onClick={copyInvite} className="flex-1 bg-white border border-dashed border-[#C4673A] rounded-2xl py-3 text-sm text-[#C4673A] font-medium">
+                  📋 Kopier invitasjonslenke
+                </button>
+                <Link href={`/community/${id}/share`}>
+                  <button className="bg-white border border-[#E8DDD0] rounded-2xl py-3 px-4 text-sm text-[#6B4226] font-medium">
+                    Del ting
+                  </button>
+                </Link>
+              </div>
             )}
             {items.length === 0 ? (
               <div className="text-center py-16 text-[#9C7B65]">
@@ -253,8 +294,18 @@ if (!myRole && membershipStatus === 'pending') return (
                         <div className="w-full h-36 bg-[#E8DDD0] flex items-center justify-center text-3xl">📦</div>
                       )}
                       <div className="p-3">
-                        <p className="font-semibold text-[#2C1A0E] text-sm">{item.name}</p>
-                        <p className="text-xs text-[#4A7C59] mt-1">{item.profiles?.name || item.profiles?.email?.split('@')[0]}</p>
+                        <p className="font-semibold text-[#2C1A0E] text-sm truncate">{item.name}</p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <div className="w-4 h-4 rounded-full bg-[#E8DDD0] flex items-center justify-center overflow-hidden flex-shrink-0">
+                            {item.profiles?.avatar_url
+                              ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
+                              : <span className="text-xs font-bold text-[#6B4226]" style={{ fontSize: '8px' }}>{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>
+                            }
+                          </div>
+                          <p className="text-xs text-[#4A7C59] truncate">
+                            {item.profiles?.name || item.profiles?.email?.split('@')[0]}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </Link>
@@ -269,21 +320,33 @@ if (!myRole && membershipStatus === 'pending') return (
           <div className="flex flex-col gap-2">
             {members.map(m => (
               <div key={m.id} className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
-                <div className="w-9 h-9 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226]">
-                  {(m.profiles?.name || m.profiles?.email)?.[0]?.toUpperCase()}
+                <div className="w-9 h-9 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
+                  {m.profiles?.avatar_url
+                    ? <img src={m.profiles.avatar_url} className="w-full h-full object-cover" />
+                    : (m.profiles?.name || m.profiles?.email)?.[0]?.toUpperCase()}
                 </div>
                 <div className="flex-1">
-                  <p className="text-[#2C1A0E] font-medium text-sm">{m.profiles?.name || m.profiles?.email?.split('@')[0]}</p>
-                  {m.role === 'admin' && <span className="text-xs text-[#C4673A] font-medium">Admin</span>}
+                  <p className="text-[#2C1A0E] font-medium text-sm">
+                    {m.profiles?.name || m.profiles?.email?.split('@')[0]}
+                  </p>
+                  {m.role === 'admin' && (
+                    <span className="text-xs text-[#C4673A] font-medium">Admin</span>
+                  )}
                 </div>
                 {isAdmin && m.user_id !== user?.id && (
                   <div className="flex gap-2">
                     {m.role !== 'admin' && (
-                      <button onClick={() => promoteToAdmin(m.id)} className="text-xs text-[#C4673A] border border-[#C4673A] rounded-full px-2 py-1">
+                      <button
+                        onClick={() => promoteToAdmin(m.id)}
+                        className="text-xs text-[#C4673A] border border-[#C4673A] rounded-full px-2 py-1"
+                      >
                         Gjør admin
                       </button>
                     )}
-                    <button onClick={() => removeMember(m.id)} className="text-xs text-[#9C7B65] border border-[#E8DDD0] rounded-full px-2 py-1">
+                    <button
+                      onClick={() => removeMember(m.id)}
+                      className="text-xs text-[#9C7B65] border border-[#E8DDD0] rounded-full px-2 py-1"
+                    >
                       Fjern
                     </button>
                   </div>
@@ -300,19 +363,35 @@ if (!myRole && membershipStatus === 'pending') return (
               Ventende forespørsler {pending.length > 0 && <span className="text-[#C4673A]">({pending.length})</span>}
             </h2>
             {pending.length === 0 ? (
-              <div className="bg-white rounded-2xl p-5 text-center text-[#9C7B65] text-sm">Ingen ventende forespørsler</div>
+              <div className="bg-white rounded-2xl p-5 text-center text-[#9C7B65] text-sm">
+                Ingen ventende forespørsler
+              </div>
             ) : (
               pending.map(m => (
                 <div key={m.id} className="bg-white rounded-2xl px-4 py-4 shadow-sm">
                   <div className="flex items-center gap-3 mb-3">
-                    <div className="w-9 h-9 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226]">
-                      {(m.profiles?.name || m.profiles?.email)?.[0]?.toUpperCase()}
+                    <div className="w-9 h-9 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
+                      {m.profiles?.avatar_url
+                        ? <img src={m.profiles.avatar_url} className="w-full h-full object-cover" />
+                        : (m.profiles?.name || m.profiles?.email)?.[0]?.toUpperCase()}
                     </div>
-                    <p className="font-medium text-[#2C1A0E] text-sm">{m.profiles?.name || m.profiles?.email?.split('@')[0]}</p>
+                    <p className="font-medium text-[#2C1A0E] text-sm">
+                      {m.profiles?.name || m.profiles?.email?.split('@')[0]}
+                    </p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => approveMember(m.id, true)} className="flex-1 bg-[#4A7C59] text-white rounded-xl py-2 text-sm font-medium">✓ Godta</button>
-                    <button onClick={() => approveMember(m.id, false)} className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-2 text-sm">Avslå</button>
+                    <button
+                      onClick={() => approveMember(m.id, true)}
+                      className="flex-1 bg-[#4A7C59] text-white rounded-xl py-2 text-sm font-medium"
+                    >
+                      ✓ Godta
+                    </button>
+                    <button
+                      onClick={() => approveMember(m.id, false)}
+                      className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-2 text-sm"
+                    >
+                      Avslå
+                    </button>
                   </div>
                 </div>
               ))

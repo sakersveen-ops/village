@@ -14,44 +14,46 @@ export default function NewCommunityPage() {
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
+  e.preventDefault()
+  setLoading(true)
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) { router.push('/login'); return }
 
-    const { data: community, error } = await supabase
-      .from('communities')
-      .insert({
-        name,
-        description,
-        avatar_emoji: emoji,
-        created_by: user.id,
-        is_public: isPublic,
-      })
+  const inviteCode = Math.random().toString(36).substring(2, 8)
 
-      const { data: mine } = await supabase
-        .from('community_members')
-        .select('role, status, communities(*)')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
+  const { data: community, error } = await supabase
+    .from('communities')
+    .insert({
+      name,
+      description,
+      avatar_emoji: emoji,
+      created_by: user.id,
+      is_public: isPublic,
+      invite_code: inviteCode,
+    })
+    .select()
+    .single()
 
-      console.log('mine:', mine) // ← legg til denne
+  if (error || !community) {
+    console.error('community error:', error)
+    setLoading(false)
+    return
+  }
 
-      .select()
-      .single()
-
-    if (error || !community) { setLoading(false); return }
-
-    await supabase.from('community_members').insert({
+  const { error: memberError } = await supabase
+    .from('community_members')
+    .insert({
       community_id: community.id,
       user_id: user.id,
       role: 'admin',
       status: 'active',
     })
 
-    router.push(`/community/${community.id}/share`)
-  }
+  console.log('member insert error:', memberError)
+
+  router.push(`/community/${community.id}/created`)
+}
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-10 pb-24">

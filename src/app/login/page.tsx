@@ -17,16 +17,17 @@ export default function LoginPage() {
     const supabase = createClient()
 
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
-    console.log('signIn error:', signInError)
-
+    
     if (signInError) {
         const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
-        console.log('signUp result:', data, signUpError)
         if (signUpError) { setError(signUpError.message); setLoading(false); return }
+        alert('SignUp result: ' + JSON.stringify(data?.user?.email))
+    } else {
+        alert('SignIn OK!')
     }
 
     const { data: { user } } = await supabase.auth.getUser()
-    console.log('user etter login:', user)
+    alert('User: ' + JSON.stringify(user?.email))
 
     window.location.href = '/'
     }

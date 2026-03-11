@@ -56,27 +56,18 @@ export default function ItemPage() {
   }, [id])
 
   const sendRequest = async () => {
-    if (!message.trim()) return
-    const supabase = createClient()
-    const { data: newLoan } = await supabase.from('loans').insert({
-      item_id: id,
-      borrower_id: user.id,
-      owner_id: item.owner_id,
-      message,
-      start_date: startDate,
-      due_date: dueDate || null,
-      status: 'pending',
-    }).select().single()
-
-    await supabase.from('notifications').insert({
-      user_id: item.owner_id,
-      type: 'loan_request',
-      title: 'Ny låneforespørsel',
-      body: `${user.email?.split('@')[0]} vil låne "${item.name}"`,
-      loan_id: newLoan?.id,
-    })
-    setSent(true)
-  }
+  if (!message.trim()) return
+  const supabase = createClient()
+  const { data: newLoan } = await supabase.from('loans').insert({
+    item_id: id,
+    borrower_id: user.id,
+    owner_id: item.owner_id,
+    message,
+    start_date: startDate,
+    due_date: dueDate || null,
+    status: 'pending',
+    community_id: item.community_id || null,
+  }).select().single()
 
   const respondToLoan = async (loanId: string, accept: boolean) => {
     const supabase = createClient()

@@ -12,43 +12,53 @@ export default function LoginPage() {
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    const supabase = createClient()
+  e.preventDefault()
+  setLoading(true)
+  setError('')
+  const supabase = createClient()
 
-    if (mode === 'login') {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-        setError('Feil e-post eller passord')
-        setLoading(false)
-        return
-      }
-    } else {
-      const { error } = await supabase.auth.signUp({ email, password })
-      if (error) {
-        setError(error.message)
-        setLoading(false)
-        return
-      }
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.from('profiles').upsert({
-          id: user.id,
-          email,
-          name: email.split('@')[0],
-        })
-      }
+  if (mode === 'login') {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      setError('Feil e-post eller passord')
+      setLoading(false)
+      return
     }
-
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('name')
+      .eq('id', user!.id)
+      .single()
     const redirect = sessionStorage.getItem('redirectAfterLogin')
     if (redirect) {
       sessionStorage.removeItem('redirectAfterLogin')
       window.location.href = redirect
+    } else if (!profile?.name) {
+      router.push('/onboarding')
     } else {
-      window.location.href = '/'
+      router.push('/')
     }
+  } else {
+    const { error } = await supabase.auth.signUp({ email, password })
+    if (error) {
+      setError(error.message)
+      setLoading(false)
+      return
+    }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      await supabase.from('profiles').upsert({
+        id: user.id,
+        email,
+        name: '',
+      })
+    }
+    router.push('/onboarding')
   }
+
+  setLoading(false)
+}
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(160deg, #2C1A0E 0%, #6B4226 60%, #C4673A 100%)' }}>

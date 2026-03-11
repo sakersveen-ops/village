@@ -11,6 +11,7 @@ export default function ProfilePage() {
   const [friends, setFriends] = useState<any[]>([])
   const [loanHistory, setLoanHistory] = useState<any[]>([])
   const [pendingRequests, setPendingRequests] = useState<any[]>([])
+  const [sentRequests, setSentRequests] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [mutualMap, setMutualMap] = useState<Record<string, any[]>>({})
@@ -55,6 +56,14 @@ export default function ProfilePage() {
         .eq('status', 'pending')
       setPendingRequests(incoming || [])
 
+      // Sendte venneforespørsler (venter på svar)
+      const { data: sent } = await supabase
+        .from('friend_requests')
+        .select('*, profiles!friend_requests_to_id_fkey(id, name, email, avatar_url)')
+        .eq('from_id', user.id)
+        .eq('status', 'pending')
+      setSentRequests(sent || [])
+
       // Lånehistorikk
       const { data: loans } = await supabase
         .from('loans')
@@ -96,6 +105,12 @@ export default function ProfilePage() {
     setPendingRequests(prev => prev.filter(r => r.id !== requestId))
   }
 
+  const cancelFriendRequest = async (requestId: string) => {
+    const supabase = createClient()
+    await supabase.from('friend_requests').delete().eq('id', requestId)
+    setSentRequests(prev => prev.filter(r => r.id !== requestId))
+  }
+
   const searchUsers = async (q: string) => {
     setSearchQuery(q)
     if (q.trim().length < 2) { setSearchResults([]); return }
@@ -109,22 +124,15 @@ export default function ProfilePage() {
       .limit(10)
 
     const friendIds = new Set(friends.map((f: any) => f.user_b))
-
-    // Sjekk sendte forespørsler
-    const { data: sentReqs } = await supabase
-      .from('friend_requests')
-      .select('to_id, status')
-      .eq('from_id', user.id)
-    const sentMap = new Map((sentReqs || []).map(r => [r.to_id, r.status]))
+    const sentIds = new Set(sentRequests.map((r: any) => r.to_id))
 
     const results = (data || []).map(p => ({
       ...p,
       isFriend: friendIds.has(p.id),
-      requestSent: sentMap.get(p.id) === 'pending',
+      requestSent: sentIds.has(p.id),
     }))
     setSearchResults(results)
 
-    // Felles venner
     const myFriendIds = friends.map((f: any) => f.user_b)
     const mutual: Record<string, any[]> = {}
     for (const result of results) {
@@ -140,7 +148,11 @@ export default function ProfilePage() {
 
   const sendFriendRequest = async (toId: string) => {
     const supabase = createClient()
-    await supabase.from('friend_requests').insert({ from_id: user.id, to_id: toId })
+    const { data: newReq } = await supabase
+      .from('friend_requests')
+      .insert({ from_id: user.id, to_id: toId })
+      .select('*, profiles!friend_requests_to_id_fkey(id, name, email, avatar_url)')
+      .single()
     await supabase.from('notifications').insert({
       user_id: toId,
       type: 'friend_request',
@@ -148,6 +160,7 @@ export default function ProfilePage() {
       body: `${profile?.name || user.email?.split('@')[0]} vil bli venner`,
     })
     setSearchResults(prev => prev.map(r => r.id === toId ? { ...r, requestSent: true } : r))
+    if (newReq) setSentRequests(prev => [...prev, newReq])
   }
 
   const signOut = async () => {
@@ -178,7 +191,14 @@ export default function ProfilePage() {
       <div className="bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-6">
         <div className="flex justify-between items-start mb-4">
           <Link href="/" className="text-[#C4673A] text-sm">← Feed</Link>
-          <button onClick={signOut} className="text-sm text-[#9C7B65]">Logg ut</button>
+          <div className="flex items-center gap-3">
+            <Link href="/settings">
+              <button className="flex items-center gap-1.5 bg-white border border-[#E8DDD0] rounded-full px-3 py-1.5 text-sm text-[#6B4226] shadow-sm">
+                ⚙️ Innstillinger
+              </button>
+            </Link>
+            <button onClick={signOut} className="text-sm text-[#9C7B65]">Logg ut</button>
+          </div>
         </div>
 
         <div className="flex items-center gap-4">
@@ -283,6 +303,38 @@ export default function ProfilePage() {
                   </p>
                   <button onClick={() => respondToFriendRequest(req.id, req.from_id, true)} className="text-xs bg-[#4A7C59] text-white rounded-full px-3 py-1.5 font-medium">✓ Godta</button>
                   <button onClick={() => respondToFriendRequest(req.id, req.from_id, false)} className="text-xs border border-[#E8DDD0] text-[#9C7B65] rounded-full px-3 py-1.5">Avslå</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Sendte venneforespørsler */}
+        {sentRequests.length > 0 && (
+          <div>
+            <h2 className="text-base font-bold text-[#2C1A0E] mb-3">
+              Venter på svar <span className="text-[#9C7B65] font-normal text-sm">({sentRequests.length})</span>
+            </h2>
+            <div className="flex flex-col gap-2">
+              {sentRequests.map(req => (
+                <div key={req.id} className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
+                  <div className="w-10 h-10 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
+                    {req.profiles?.avatar_url
+                      ? <img src={req.profiles.avatar_url} className="w-full h-full object-cover" />
+                      : (req.profiles?.name || req.profiles?.email)?.[0]?.toUpperCase()}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-[#2C1A0E] text-sm">
+                      {req.profiles?.name || req.profiles?.email?.split('@')[0]}
+                    </p>
+                    <p className="text-xs text-[#9C7B65] mt-0.5">Forespørsel sendt</p>
+                  </div>
+                  <button
+                    onClick={() => cancelFriendRequest(req.id)}
+                    className="text-xs border border-[#E8DDD0] text-[#9C7B65] rounded-full px-3 py-1.5"
+                  >
+                    Trekk tilbake
+                  </button>
                 </div>
               ))}
             </div>
@@ -401,7 +453,7 @@ export default function ProfilePage() {
                       <img src={item.image_url} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
                     ) : (
                       <div className="w-12 h-12 rounded-xl bg-[#E8DDD0] flex items-center justify-center text-xl flex-shrink-0">
-                        {item.category === 'baby' ? '🍼' : item.category === 'kjole' ? '👗' : item.category === 'verktøy' ? '🔧' : item.category === 'bok' ? '📚' : '📦'}
+                        {item.category === 'barn' ? '🧸' : item.category === 'kjole' ? '👗' : item.category === 'verktøy' ? '🔧' : item.category === 'bok' ? '📚' : '📦'}
                       </div>
                     )}
                     <div className="flex-1 min-w-0">

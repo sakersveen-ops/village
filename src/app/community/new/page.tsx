@@ -41,7 +41,7 @@ export default function NewCommunityPage() {
       status: 'active',
     })
 
-    router.push(`/community/${community.id}`)
+    router.push(`/community/${community.id}/share`)
   }
 
   return (

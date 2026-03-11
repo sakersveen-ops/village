@@ -225,7 +225,7 @@ export default function FeedPage() {
 
       {/* FAB */}
       <Link href="/add">
-        <button className="fixed bottom-20 right-6 bg-[#C4673A] text-white w-14 h-14 rounded-full shadow-lg text-2xl flex items-center justify-center">
+        <button className="fixed bottom-20 right-6 bg-[#C4673A] text-white w-14 h-14 rounded-full shadow-lg text-2xl flex items-center justify-center border-4 border-white ring-2 ring-[#C4673A]">
           +
         </button>
       </Link>

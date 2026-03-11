@@ -220,6 +220,20 @@ export default function ItemPage() {
           </div>
         )}
 
+        {isOwner && (
+          <button
+            onClick={async () => {
+              if (!confirm('Sikker på at du vil slette denne gjenstanden?')) return
+              const supabase = createClient()
+              await supabase.from('items').delete().eq('id', id)
+              router.push('/')
+            }}
+            className="w-full bg-white border border-red-200 text-red-400 rounded-xl py-3 font-medium text-sm"
+          >
+            🗑 Slett gjenstand
+          </button>
+        )}
+
         {/* LÅNTAKER: allerede forespurt */}
         {!isOwner && loan?.status === 'pending' && (
           <div className="bg-[#FFF0E6] rounded-2xl p-4 text-center">

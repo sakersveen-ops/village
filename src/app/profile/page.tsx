@@ -142,22 +142,35 @@ export default function ProfilePage() {
           ) : (
             <div className="flex flex-col gap-2">
               {myItems.map(item => (
-                <Link key={item.id} href={`/items/${item.id}`}>
-                  <div className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
+                <div key={item.id} className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
+                  <Link href={`/items/${item.id}`} className="flex items-center gap-3 flex-1 min-w-0">
                     {item.image_url ? (
-                      <img src={item.image_url} className="w-12 h-12 rounded-xl object-cover" />
+                      <img src={item.image_url} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
                     ) : (
-                      <div className="w-12 h-12 rounded-xl bg-[#E8DDD0] flex items-center justify-center text-xl">
+                      <div className="w-12 h-12 rounded-xl bg-[#E8DDD0] flex items-center justify-center text-xl flex-shrink-0">
                         {item.category === 'baby' ? '🍼' : item.category === 'kjole' ? '👗' : item.category === 'verktøy' ? '🔧' : item.category === 'bok' ? '📚' : '📦'}
                       </div>
                     )}
-                    <div className="flex-1">
-                      <p className="text-[#2C1A0E] font-medium text-sm">{item.name}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[#2C1A0E] font-medium text-sm truncate">{item.name}</p>
                       <p className="text-xs text-[#9C7B65] mt-0.5 capitalize">{item.category}</p>
                     </div>
+                  </Link>
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <div className={`w-2 h-2 rounded-full ${item.available ? 'bg-[#4A7C59]' : 'bg-[#9C7B65]'}`} />
+                    <button
+                      onClick={async () => {
+                        if (!confirm('Slett denne gjenstanden?')) return
+                        const supabase = createClient()
+                        await supabase.from('items').delete().eq('id', item.id)
+                        setMyItems(prev => prev.filter(i => i.id !== item.id))
+                      }}
+                      className="text-red-300 hover:text-red-500 text-lg px-1"
+                    >
+                      🗑
+                    </button>
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           )}

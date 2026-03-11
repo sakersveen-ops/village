@@ -101,9 +101,83 @@ export default function CommunityPage() {
   const inviteUrl = typeof window !== 'undefined' ? `${window.location.origin}/community/join/${community?.invite_code}` : ''
 
   const copyInvite = () => navigator.clipboard.writeText(inviteUrl)
+  const isMember = myRole !== null
+  const isPending = members === null // håndteres under 
+  
+  // Legg til state øverst:
+  const [membershipStatus, setMembershipStatus] = useState<string | null>(null)
 
+  
   if (loading) return <div className="flex items-center justify-center min-h-screen text-[#9C7B65]">Laster…</div>
-  if (!community) return <div className="p-8 text-center text-[#9C7B65]">Fant ikke community</div>
+  // Sjekk pending-status for ikke-medlemmer
+  const { data: myMembership } = await supabase
+  .from('community_members')
+  .select('status, role')
+  .eq('community_id', id)
+  .eq('user_id', user.id)
+  .single()
+  setMembershipStatus(myMembership?.status || null)
+  if (myMembership) setMyRole(myMembership.role)
+    
+  const requestMembership = async () => {
+    const supabase = createClient()
+    await supabase.from('community_members').insert({
+        community_id: id,
+        user_id: user?.id,
+        role: 'member',
+        status: 'pending',
+    })
+    const { data: admins } = await supabase
+        .from('community_members')
+        .select('user_id')
+        .eq('community_id', id)
+        .eq('role', 'admin')
+        .eq('status', 'active')
+    if (admins) {
+        await supabase.from('notifications').insert(
+        admins.map((a: any) => ({
+            user_id: a.user_id,
+            type: 'join_request',
+            title: 'Ny forespørsel om å bli med',
+            body: `${user?.email?.split('@')[0]} vil bli med i ${community.name}`,
+        }))
+        )
+    }
+    setMembershipStatus('pending')
+    }
+
+// Vis for ikke-medlemmer:
+if (!myRole && membershipStatus !== 'pending') return (
+  <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
+    <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
+      <div className="text-5xl mb-3">{community.avatar_emoji}</div>
+      <h1 className="text-xl font-bold text-[#2C1A0E] mb-1">{community.name}</h1>
+      {community.description && <p className="text-[#9C7B65] text-sm mb-4">{community.description}</p>}
+      {community.is_public ? (
+        <>
+          <p className="text-xs text-[#9C7B65] mb-6">Send en forespørsel – en admin godkjenner deg.</p>
+          <button onClick={requestMembership} className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium">
+            Be om å bli med
+          </button>
+        </>
+      ) : (
+        <p className="text-sm text-[#9C7B65]">🔒 Denne kretsen er privat. Du trenger en invitasjonslenke.</p>
+      )}
+    </div>
+  </div>
+)
+
+if (!myRole && membershipStatus === 'pending') return (
+  <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
+    <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
+      <div className="text-5xl mb-4">📬</div>
+      <h1 className="text-xl font-bold text-[#2C1A0E] mb-2">Forespørsel sendt!</h1>
+      <p className="text-[#9C7B65] text-sm mb-6">Venter på godkjenning fra en admin i {community.name}.</p>
+      <button onClick={() => router.push('/')} className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium">Tilbake til feeden</button>
+    </div>
+  </div>
+)
+
 
   const isAdmin = myRole === 'admin'
 

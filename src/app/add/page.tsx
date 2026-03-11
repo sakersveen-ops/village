@@ -11,6 +11,8 @@ export default function AddPage() {
   const [preview, setPreview] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const [price, setPrice] = useState('')
+  const [vipps, setVipps] = useState('')
 
   const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -20,35 +22,36 @@ export default function AddPage() {
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
+  e.preventDefault()
+  setLoading(true)
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) { router.push('/login'); return }
 
-    let image_url = ''
-    if (image) {
-        const ext = image.name.split('.').pop()
-        const path = `${user.id}/${Date.now()}.${ext}`
-        const { error: uploadError } = await supabase.storage.from('item-images').upload(path, image)
-        console.log('upload error:', uploadError)
-        if (!uploadError) {
-        const { data } = supabase.storage.from('item-images').getPublicUrl(path)
-        image_url = data.publicUrl
-        console.log('image_url:', image_url)
-        }
+  let image_url = ''
+  if (image) {
+    const ext = image.name.split('.').pop()
+    const path = `${user.id}/${Date.now()}.${ext}`
+    const { error: uploadError } = await supabase.storage.from('item-images').upload(path, image)
+    if (!uploadError) {
+      const { data } = supabase.storage.from('item-images').getPublicUrl(path)
+      image_url = data.publicUrl
     }
+  }
 
-    const { error } = await supabase.from('items').insert({
-        owner_id: user.id,
-        name,
-        description,
-        category,
-        image_url,
-    })
-    console.log('insert error:', error)
-    router.push('/')
-    }
+  const { error } = await supabase.from('items').insert({
+    owner_id: user.id,
+    name,
+    description,
+    category,
+    image_url,
+    price: price ? parseInt(price) : null,
+    vipps_number: vipps || null,
+  })
+
+  console.log('insert error:', error)
+  router.push('/')
+}
 
   const categories = ['baby', 'kjole', 'verktøy', 'bok', 'annet']
 

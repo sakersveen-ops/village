@@ -44,42 +44,37 @@ export default function FeedPage() {
 
   return (
     <div className="max-w-lg mx-auto pb-24">
-      {/* Header */}
       <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-8 pb-3 z-10">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-[#2C1A0E]">Village</h1>
-            <p className="text-xs text-[#9C7B65]">Lån og lån bort i kretsen din</p>
-          </div>
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[#2C1A0E]">Village</h1>
+          <p className="text-xs text-[#9C7B65]">Lån og lån bort i kretsen din</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/invite">
+            <button className="text-sm text-[#C4673A] font-medium border border-[#C4673A] rounded-full px-3 py-1">
+              + Inviter
+            </button>
+          </Link>
           <div className="w-9 h-9 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold text-sm">
             {user?.email?.[0]?.toUpperCase()}
           </div>
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {categories.map(c => (
-            <button
-              key={c}
-              onClick={() => setFilter(c)}
-              className={`px-4 py-1.5 rounded-full text-sm whitespace-nowrap border transition-colors ${
-                filter === c
-                  ? 'bg-[#C4673A] text-white border-transparent'
-                  : 'bg-white text-[#6B4226] border-[#E8DDD0]'
-              }`}
-            >
-              {c === 'alle' ? 'Alle' : c === 'baby' ? '🍼 Baby' : c === 'kjole' ? '👗 Kjoler' : c === 'verktøy' ? '🔧 Verktøy' : c === 'bok' ? '📚 Bøker' : 'Annet'}
-            </button>
-          ))}
-        </div>
       </div>
-
-      <div className="flex items-center gap-2">
-      <Link href="/invite">
-        <button className="text-sm text-[#C4673A] font-medium border border-[#C4673A] rounded-full px-3 py-1">
-          + Inviter
-        </button>
-      </Link>
-      <div className="w-9 h-9 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold text-sm">
-        {user?.email?.[0]?.toUpperCase()}
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {categories.map(c => (
+          <button
+            key={c}
+            onClick={() => setFilter(c)}
+            className={`px-4 py-1.5 rounded-full text-sm whitespace-nowrap border transition-colors ${
+              filter === c
+                ? 'bg-[#C4673A] text-white border-transparent'
+                : 'bg-white text-[#6B4226] border-[#E8DDD0]'
+            }`}
+          >
+            {c === 'alle' ? 'Alle' : c === 'baby' ? '🍼 Baby' : c === 'kjole' ? '👗 Kjoler' : c === 'verktøy' ? '🔧 Verktøy' : c === 'bok' ? '📚 Bøker' : 'Annet'}
+          </button>
+        ))}
       </div>
     </div>
 

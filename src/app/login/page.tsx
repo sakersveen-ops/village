@@ -16,17 +16,20 @@ export default function LoginPage() {
     setError('')
     const supabase = createClient()
 
-    // Prøv innlogging først, hvis ikke – registrer
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
-    
+    console.log('signIn error:', signInError)
+
     if (signInError) {
-      const { error: signUpError } = await supabase.auth.signUp({ email, password })
-      if (signUpError) { setError(signUpError.message); setLoading(false); return }
-      await supabase.from('profiles').upsert({ id: (await supabase.auth.getUser()).data.user?.id, email, name: email.split('@')[0] })
+        const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
+        console.log('signUp result:', data, signUpError)
+        if (signUpError) { setError(signUpError.message); setLoading(false); return }
     }
 
+    const { data: { user } } = await supabase.auth.getUser()
+    console.log('user etter login:', user)
+
     window.location.href = '/'
-  }
+    }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-6">

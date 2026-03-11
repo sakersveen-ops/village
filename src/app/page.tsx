@@ -36,7 +36,7 @@ export default function FeedPage() {
         setItems(data || [])
         setLoading(false)
       })
-  }, [])
+  }, []) // <-- tom array, kjør kun én gang
 
   const categories = ['alle', 'baby', 'kjole', 'verktøy', 'bok', 'annet']
   const [filter, setFilter] = useState('alle')

@@ -28,25 +28,27 @@ export default function AddPage() {
 
     let image_url = ''
     if (image) {
-      const ext = image.name.split('.').pop()
-      const path = `${user.id}/${Date.now()}.${ext}`
-      const { error } = await supabase.storage.from('item-images').upload(path, image)
-      if (!error) {
+        const ext = image.name.split('.').pop()
+        const path = `${user.id}/${Date.now()}.${ext}`
+        const { error: uploadError } = await supabase.storage.from('item-images').upload(path, image)
+        console.log('upload error:', uploadError)
+        if (!uploadError) {
         const { data } = supabase.storage.from('item-images').getPublicUrl(path)
         image_url = data.publicUrl
-      }
+        console.log('image_url:', image_url)
+        }
     }
 
-    await supabase.from('items').insert({
-      owner_id: user.id,
-      name,
-      description,
-      category,
-      image_url,
+    const { error } = await supabase.from('items').insert({
+        owner_id: user.id,
+        name,
+        description,
+        category,
+        image_url,
     })
-
+    console.log('insert error:', error)
     router.push('/')
-  }
+    }
 
   const categories = ['baby', 'kjole', 'verktøy', 'bok', 'annet']
 

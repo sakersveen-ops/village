@@ -1,536 +1,334 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+
+type Item = {
+  id: string
+  name: string
+  image_url: string
+  category: string
+  subcategory?: string
+  available: boolean
+  owner_id: string
+  created_at: string
+  profiles: { name: string; email: string; avatar_url?: string }
+}
 
 const CATEGORIES = [
-  { id: 'barn', label: 'Barn', emoji: '🧸' },
-  { id: 'kjole', label: 'Kjoler', emoji: '👗' },
-  { id: 'verktøy', label: 'Verktøy', emoji: '🔧' },
-  { id: 'bok', label: 'Bøker', emoji: '📚' },
-  { id: 'annet', label: 'Annet', emoji: '📦' },
+  {
+    id: 'barn',
+    label: 'Barn',
+    emoji: '🧸',
+    subcategories: ['Spise', 'Leke', 'Tur', 'Stelle', 'Sove', 'Bade', 'Klær'],
+  },
+  { id: 'kjole', label: 'Kjoler', emoji: '👗', subcategories: [] },
+  { id: 'verktøy', label: 'Verktøy', emoji: '🔧', subcategories: [] },
+  { id: 'bok', label: 'Bøker', emoji: '📚', subcategories: [] },
+  { id: 'annet', label: 'Annet', emoji: '📦', subcategories: [] },
 ]
 
-const BARN_SUBCATEGORIES = ['Spise', 'Leke', 'Tur', 'Stelle', 'Sove', 'Bade', 'Klær']
-
-type BookCandidate = {
-  title: string
-  author: string
-  image_url: string
-  selected: boolean
-}
-
-type Mode = 'choose' | 'manual' | 'url' | 'bookshelf'
-
-export default function AddPage() {
-  const [mode, setMode] = useState<Mode>('choose')
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [category, setCategory] = useState('annet')
-  const [subcategory, setSubcategory] = useState('')
-  const [price, setPrice] = useState('')
-  const [vipps, setVipps] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  // URL-modus
-  const [url, setUrl] = useState('')
-  const [urlLoading, setUrlLoading] = useState(false)
-  const [urlFetched, setUrlFetched] = useState(false)
-
-  // Bokhylle-modus
-  const [shelfImage, setShelfImage] = useState<File | null>(null)
-  const [shelfPreview, setShelfPreview] = useState('')
-  const [scanning, setScanning] = useState(false)
-  const [books, setBooks] = useState<BookCandidate[]>([])
-  const [savingBooks, setSavingBooks] = useState(false)
-
-  const fileRef = useRef<HTMLInputElement>(null)
-  const shelfRef = useRef<HTMLInputElement>(null)
+export default function FeedPage() {
+  const [items, setItems] = useState<Item[]>([])
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null)
   const router = useRouter()
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setImageFile(file)
-    setImagePreview(URL.createObjectURL(file))
-  }
+  useEffect(() => {
+    const load = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
+      setUser(user)
 
-  const handleShelfImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setShelfImage(file)
-    setShelfPreview(URL.createObjectURL(file))
-  }
+      // Hent brukerens sosiale graf
+      const { data: friendships } = await supabase
+        .from('friendships')
+        .select('user_b')
+        .eq('user_a', user.id)
+      const friendIds = (friendships || []).map((f: any) => f.user_b)
 
-  // URL-gjenkjenning via Claude
-  const fetchFromUrl = async () => {
-    if (!url.trim()) return
-    setUrlLoading(true)
-    try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY!,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 500,
-          messages: [{
-            role: 'user',
-            content: `Fra denne URL-en: ${url}
-            
-Prøv å gjette hva slags produkt dette er basert på URL-en og domenet.
-Svar KUN med et JSON-objekt, ingen annen tekst:
-{
-  "name": "produktnavn",
-  "description": "kort beskrivelse 1-2 setninger",
-  "category": "barn|kjole|verktøy|bok|annet"
-}`
-          }]
-        })
-      })
-      const data = await response.json()
-      const text = data.content?.[0]?.text || ''
-      const clean = text.replace(/```json|```/g, '').trim()
-      const parsed = JSON.parse(clean)
-      setName(parsed.name || '')
-      setDescription(parsed.description || '')
-      setCategory(parsed.category || 'annet')
-      setUrlFetched(true)
-    } catch (err) {
-      console.error(err)
-    }
-    setUrlLoading(false)
-  }
-
-  // Bokhylle-skanning via Claude + Google Books
-  const scanBookshelf = async () => {
-    if (!shelfImage) return
-    setScanning(true)
-    try {
-      const base64 = await new Promise<string>((res, rej) => {
-        const r = new FileReader()
-        r.onload = () => res((r.result as string).split(',')[1])
-        r.onerror = () => rej(new Error('Read failed'))
-        r.readAsDataURL(shelfImage)
-      })
-
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': process.env.NEXT_PUBLIC_ANTHROPIC_API_KEY!,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [{
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: shelfImage.type, data: base64 }
-              },
-              {
-                type: 'text',
-                text: `Se på dette bildet av en bokhylle. List opp alle bøkene du kan lese tittelen på.
-Svar KUN med et JSON-array, ingen annen tekst:
-[{"title": "tittel", "author": "forfatter eller ukjent"}]`
-              }
-            ]
-          }]
-        })
-      })
-
-      const data = await response.json()
-      const text = data.content?.[0]?.text || ''
-      const clean = text.replace(/```json|```/g, '').trim()
-      const recognized: { title: string; author: string }[] = JSON.parse(clean)
-
-      // Hent fra Google Books
-      const candidates: BookCandidate[] = []
-      for (const book of recognized.slice(0, 12)) {
-        try {
-          const q = encodeURIComponent(`${book.title} ${book.author}`)
-          const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1`)
-          const gdata = await res.json()
-          const vol = gdata.items?.[0]?.volumeInfo
-          candidates.push({
-            title: vol?.title || book.title,
-            author: vol?.authors?.[0] || book.author,
-            image_url: vol?.imageLinks?.thumbnail?.replace('http:', 'https:') || '',
-            selected: true,
-          })
-        } catch {
-          candidates.push({ title: book.title, author: book.author, image_url: '', selected: true })
-        }
+      // Venners venner
+      let friendsOfFriendIds: string[] = []
+      if (friendIds.length > 0) {
+        const { data: fof } = await supabase
+          .from('friendships')
+          .select('user_b')
+          .in('user_a', friendIds)
+          .neq('user_b', user.id)
+        friendsOfFriendIds = [...new Set((fof || []).map((f: any) => f.user_b))]
       }
-      setBooks(candidates)
-    } catch (err) {
-      console.error(err)
+
+      // Nære venner
+      const { data: closeFriendRows } = await supabase
+        .from('close_friends')
+        .select('friend_id')
+        .eq('user_id', user.id)
+      const closeFriendIds = (closeFriendRows || []).map((f: any) => f.friend_id)
+
+      // Mine kretser
+      const { data: myMemberships } = await supabase
+        .from('community_members')
+        .select('community_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+      const myCommunityIds = (myMemberships || []).map((m: any) => m.community_id)
+
+      // Hent alle items med tilgangsregler
+      const { data: allItems } = await supabase
+        .from('items')
+        .select('*, profiles(name, email, avatar_url), item_access(*)')
+        .order('created_at', { ascending: false })
+
+      // Filtrer basert på tilgang
+      const visible = (allItems || []).filter((item: any) => {
+        // Egne ting vises alltid
+        if (item.owner_id === user.id) return true
+
+        const access: any[] = item.item_access || []
+
+        // Ingen tilgangsregler = vis for alle
+        if (access.length === 0) return true
+
+        // Sjekk om noen regel gir tilgang
+        return access.some((rule: any) => {
+          if (rule.access_type === 'public') return true
+          if (rule.access_type === 'close_friends' && closeFriendIds.includes(item.owner_id)) return true
+          if (rule.access_type === 'friends' && friendIds.includes(item.owner_id)) return true
+          if (rule.access_type === 'friends_of_friends' &&
+            (friendIds.includes(item.owner_id) || friendsOfFriendIds.includes(item.owner_id))) return true
+          if (rule.access_type === 'community' && rule.community_id && myCommunityIds.includes(rule.community_id)) return true
+          return false
+        })
+      })
+
+      setItems(visible)
+      setLoading(false)
     }
-    setScanning(false)
+    load()
+  }, [])
+
+  const isNew = (item: Item) => {
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+    return new Date(item.created_at) > sevenDaysAgo
   }
 
-  const toggleBook = (i: number) => {
-    setBooks(prev => prev.map((b, idx) => idx === i ? { ...b, selected: !b.selected } : b))
-  }
+  const countFor = (categoryId: string) =>
+    items.filter(i => (i.category === categoryId || (categoryId === 'barn' && i.category === 'baby')) && i.available).length
 
-  const saveBooks = async () => {
-  setSavingBooks(true)
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
+  const cat = CATEGORIES.find(c => c.id === activeCategory)
 
-  const selected = books.filter(b => b.selected)
-  for (const book of selected) {
-    await supabase.from('items').insert({
-      owner_id: user.id,
-      name: book.title,
-      description: `Forfatter: ${book.author}`,
-      category: 'bok',
-      image_url: book.image_url,
-      available: true,
-    })
-  }
-  router.push('/profile')
-}
+  const filteredItems = activeCategory
+    ? items.filter(i => {
+        const matchCat = i.category === activeCategory || (activeCategory === 'barn' && i.category === 'baby')
+        const matchSub = activeSubcategory ? i.subcategory === activeSubcategory : true
+        return matchCat && matchSub
+      })
+    : []
 
-  // Lagre enkelt item
-  const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault()
-  setSaving(true)
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
-
-  let image_url = ''
-  if (imageFile) {
-    const ext = imageFile.name.split('.').pop()
-    const path = `items/${user.id}/${Date.now()}.${ext}`
-    await supabase.storage.from('item-images').upload(path, imageFile)
-    const { data } = supabase.storage.from('item-images').getPublicUrl(path)
-    image_url = data.publicUrl
-  }
-
-  const { data: newItem } = await supabase.from('items').insert({
-    owner_id: user.id,
-    name,
-    description,
-    category,
-    subcategory: subcategory || null,
-    image_url,
-    available: true,
-    price: price ? parseInt(price) : null,
-    vipps_number: vipps || null,
-  }).select().single()
-
-  router.push(`/items/access?item=${newItem?.id}`)
-}
-
-  // ── VELG MODUS ──
-  if (mode === 'choose') {
+  // ── STEG 2: filtrert kategori-feed ──
+  if (activeCategory && cat) {
     return (
-      <div className="max-w-lg mx-auto px-4 pt-10 pb-24">
-        <button onClick={() => router.back()} className="text-[#C4673A] mb-6 text-sm">← Tilbake</button>
-        <h1 className="text-2xl font-bold text-[#2C1A0E] mb-2">Legg ut gjenstand</h1>
-        <p className="text-sm text-[#9C7B65] mb-8">Hvordan vil du legge til?</p>
-
-        <div className="flex flex-col gap-3">
+      <div className="max-w-lg mx-auto pb-24">
+        <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-3 z-10">
           <button
-            onClick={() => setMode('manual')}
-            className="bg-white rounded-2xl p-5 flex items-center gap-4 shadow-sm text-left"
+            onClick={() => { setActiveCategory(null); setActiveSubcategory(null) }}
+            className="text-[#C4673A] text-sm mb-2 block"
           >
-            <span className="text-3xl">✏️</span>
-            <div>
-              <p className="font-bold text-[#2C1A0E]">Manuelt</p>
-              <p className="text-sm text-[#9C7B65] mt-0.5">Fyll inn navn, bilde og info selv</p>
-            </div>
+            ← Tilbake
           </button>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xl">{cat.emoji}</span>
+            <h1 className="text-xl font-bold text-[#2C1A0E]">{cat.label}</h1>
+            <span className="text-sm text-[#9C7B65] ml-1">
+              {filteredItems.filter(i => i.available).length} tilgjengelig
+            </span>
+          </div>
 
-          <button
-            onClick={() => setMode('url')}
-            className="bg-white rounded-2xl p-5 flex items-center gap-4 shadow-sm text-left"
-          >
-            <span className="text-3xl">🔗</span>
-            <div>
-              <p className="font-bold text-[#2C1A0E]">Fra URL</p>
-              <p className="text-sm text-[#9C7B65] mt-0.5">Lim inn en lenke, vi fyller inn automatisk</p>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setMode('bookshelf')}
-            className="bg-white rounded-2xl p-5 flex items-center gap-4 shadow-sm text-left"
-          >
-            <span className="text-3xl">📚</span>
-            <div>
-              <p className="font-bold text-[#2C1A0E]">Bokhylle-skanning</p>
-              <p className="text-sm text-[#9C7B65] mt-0.5">Ta bilde av bokhyllen, AI gjenkjenner titlene</p>
-            </div>
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // ── BOKHYLLE ──
-  if (mode === 'bookshelf') {
-    return (
-      <div className="max-w-lg mx-auto px-4 pt-10 pb-32">
-        <button onClick={() => { setMode('choose'); setBooks([]); setShelfPreview('') }} className="text-[#C4673A] mb-6 text-sm">← Tilbake</button>
-        <h1 className="text-2xl font-bold text-[#2C1A0E] mb-2">Bokhylle-skanning</h1>
-        <p className="text-sm text-[#9C7B65] mb-6">Ta bilde av bokhyllen din, så gjenkjenner AI titlene og legger dem til automatisk</p>
-
-        {!shelfPreview ? (
-          <button
-            onClick={() => shelfRef.current?.click()}
-            className="w-full bg-white border-2 border-dashed border-[#E8DDD0] rounded-2xl py-12 flex flex-col items-center gap-3 text-[#9C7B65]"
-          >
-            <span className="text-4xl">📸</span>
-            <p className="text-sm font-medium">Ta bilde eller velg fra bibliotek</p>
-            <input ref={shelfRef} type="file" accept="image/*" capture="environment" onChange={handleShelfImage} className="hidden" />
-          </button>
-        ) : (
-          <div className="flex flex-col gap-4">
-            <div className="relative">
-              <img src={shelfPreview} className="w-full rounded-2xl object-cover max-h-64" />
+          {cat.subcategories.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
               <button
-                onClick={() => { setShelfPreview(''); setShelfImage(null); setBooks([]) }}
-                className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm"
-              >✕</button>
-            </div>
-
-            {books.length === 0 && !scanning && (
-              <button
-                onClick={scanBookshelf}
-                className="bg-[#C4673A] text-white rounded-xl py-3 font-medium"
+                onClick={() => setActiveSubcategory(null)}
+                className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${
+                  !activeSubcategory ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
+                }`}
               >
-                🔍 Skann bokhylle
+                Alle
               </button>
-            )}
-
-            {scanning && (
-              <div className="bg-white rounded-2xl p-6 text-center">
-                <div className="text-3xl mb-2 animate-pulse">🔍</div>
-                <p className="text-[#9C7B65] text-sm">Claude analyserer bildet…</p>
-              </div>
-            )}
-
-            {books.length > 0 && (
-              <>
-                <div className="flex justify-between items-center">
-                  <p className="font-bold text-[#2C1A0E]">{books.filter(b => b.selected).length} av {books.length} valgt</p>
-                  <button
-                    onClick={() => setBooks(prev => {
-                      const allSelected = prev.every(b => b.selected)
-                      return prev.map(b => ({ ...b, selected: !allSelected }))
-                    })}
-                    className="text-sm text-[#C4673A] font-medium"
-                  >
-                    {books.every(b => b.selected) ? 'Fjern alle' : 'Velg alle'}
-                  </button>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  {books.map((book, i) => (
-                    <button
-                      key={i}
-                      onClick={() => toggleBook(i)}
-                      className={`flex items-center gap-3 rounded-2xl px-4 py-3 shadow-sm text-left transition-colors ${
-                        book.selected ? 'bg-[#FFF0E6] border border-[#C4673A]' : 'bg-white border border-transparent'
-                      }`}
-                    >
-                      {book.image_url ? (
-                        <img src={book.image_url} className="w-12 h-16 rounded-lg object-cover flex-shrink-0" />
-                      ) : (
-                        <div className="w-12 h-16 rounded-lg bg-[#E8DDD0] flex items-center justify-center text-2xl flex-shrink-0">📚</div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-[#2C1A0E] text-sm leading-tight">{book.title}</p>
-                        <p className="text-xs text-[#9C7B65] mt-0.5">{book.author}</p>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                        book.selected ? 'bg-[#C4673A] border-[#C4673A]' : 'border-[#E8DDD0]'
-                      }`}>
-                        {book.selected && <span className="text-white text-xs">✓</span>}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {books.filter(b => b.selected).length > 0 && (
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#FAF7F2] border-t border-[#E8DDD0]">
-            <button
-              onClick={saveBooks}
-              disabled={savingBooks}
-              className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium disabled:opacity-50"
-            >
-              {savingBooks ? 'Lagrer…' : `Legg til ${books.filter(b => b.selected).length} bøker`}
-            </button>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  // ── MANUELT OG URL ──
-  return (
-    <div className="max-w-lg mx-auto px-4 pt-10 pb-32">
-      <button onClick={() => { setMode('choose'); setUrlFetched(false) }} className="text-[#C4673A] mb-6 text-sm">← Tilbake</button>
-      <h1 className="text-2xl font-bold text-[#2C1A0E] mb-6">
-        {mode === 'url' ? 'Fra URL' : 'Legg ut manuelt'}
-      </h1>
-
-      {/* URL-søk */}
-      {mode === 'url' && !urlFetched && (
-        <div className="flex flex-col gap-3 mb-6">
-          <input
-            value={url}
-            onChange={e => setUrl(e.target.value)}
-            placeholder="https://www.finn.no/..."
-            className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
-          />
-          <button
-            onClick={fetchFromUrl}
-            disabled={urlLoading || !url}
-            className="bg-[#C4673A] text-white rounded-xl py-3 font-medium disabled:opacity-50"
-          >
-            {urlLoading ? '🔍 Henter info…' : 'Hent produktinfo'}
-          </button>
-        </div>
-      )}
-
-      {(mode === 'manual' || urlFetched) && (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-
-          {/* Bilde */}
-          <div>
-            <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide mb-2 block">Bilde</label>
-            {imagePreview ? (
-              <div className="relative">
-                <img src={imagePreview} className="w-full h-48 object-cover rounded-2xl" />
-                <button type="button" onClick={() => { setImagePreview(''); setImageFile(null) }} className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm">✕</button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => fileRef.current?.click()} className="w-full bg-white border-2 border-dashed border-[#E8DDD0] rounded-2xl py-8 flex flex-col items-center gap-2 text-[#9C7B65]">
-                <span className="text-3xl">📷</span>
-                <p className="text-sm">Legg til bilde</p>
-              </button>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
-          </div>
-
-          {/* Navn */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Navn</label>
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Hva heter gjenstanden?"
-              required
-              className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A]"
-            />
-          </div>
-
-          {/* Beskrivelse */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Beskrivelse</label>
-            <textarea
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Litt info om gjenstanden…"
-              rows={3}
-              className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A] resize-none"
-            />
-          </div>
-
-          {/* Kategori */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Kategori</label>
-            <div className="flex gap-2 flex-wrap">
-              {CATEGORIES.map(c => (
+              {cat.subcategories.map(sub => (
                 <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => { setCategory(c.id); setSubcategory('') }}
-                  className={`px-3 py-2 rounded-xl text-sm border transition-colors ${
-                    category === c.id ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
+                  key={sub}
+                  onClick={() => setActiveSubcategory(activeSubcategory === sub ? null : sub)}
+                  className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${
+                    activeSubcategory === sub ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
                   }`}
                 >
-                  {c.emoji} {c.label}
+                  {sub}
                 </button>
               ))}
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Underkategori for barn */}
-          {category === 'barn' && (
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Underkategori</label>
-              <div className="flex gap-2 flex-wrap">
-                {BARN_SUBCATEGORIES.map(sub => (
-                  <button
-                    key={sub}
-                    type="button"
-                    onClick={() => setSubcategory(subcategory === sub ? '' : sub)}
-                    className={`px-3 py-1.5 rounded-xl text-xs border transition-colors ${
-                      subcategory === sub ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
-                    }`}
-                  >
-                    {sub}
-                  </button>
-                ))}
+        <div className="grid grid-cols-2 gap-3 p-4">
+          {filteredItems.length === 0 ? (
+            <div className="col-span-2 text-center py-16 text-[#9C7B65]">
+              <div className="text-4xl mb-2">{cat.emoji}</div>
+              <p>Ingen {cat.label.toLowerCase()} tilgjengelig for deg</p>
+            </div>
+          ) : (
+            filteredItems.map(item => (
+              <Link key={item.id} href={`/items/${item.id}`}>
+                <div className="bg-white rounded-2xl overflow-hidden shadow-sm relative">
+                  {isNew(item) && (
+                    <div className="absolute top-2 left-2 z-10 bg-[#C4673A] text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                      Ny
+                    </div>
+                  )}
+                  {item.image_url ? (
+                    <img src={item.image_url} alt={item.name} className="w-full h-36 object-cover" />
+                  ) : (
+                    <div className="w-full h-36 bg-[#E8DDD0] flex items-center justify-center text-3xl">
+                      {cat.emoji}
+                    </div>
+                  )}
+                  {!item.available && (
+                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                      <span className="text-white text-xs font-bold tracking-wide">UTLÅNT</span>
+                    </div>
+                  )}
+                  <div className="p-3">
+                    <p className="font-semibold text-[#2C1A0E] text-sm leading-tight truncate">{item.name}</p>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <div className="w-5 h-5 rounded-full bg-[#E8DDD0] flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {item.profiles?.avatar_url
+                          ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
+                          : <span className="text-xs font-bold text-[#6B4226]">{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>
+                        }
+                      </div>
+                      <p className="text-xs text-[#4A7C59] font-medium truncate">
+                        {item.profiles?.name || item.profiles?.email?.split('@')[0]}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ── STEG 1: kategori-grid ──
+  return (
+    <div className="max-w-lg mx-auto pb-24">
+      <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-4 z-10">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold text-[#2C1A0E]">Village</h1>
+            <p className="text-xs text-[#9C7B65]">Lån og lån bort i kretsen din</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/invite">
+              <button className="text-sm text-[#C4673A] font-medium border border-[#C4673A] rounded-full px-3 py-1">
+                + Inviter
+              </button>
+            </Link>
+            <Link href="/profile">
+              <div className="w-9 h-9 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold text-sm cursor-pointer overflow-hidden">
+                {user?.user_metadata?.avatar_url
+                  ? <img src={user.user_metadata.avatar_url} className="w-full h-full object-cover" />
+                  : user?.email?.[0]?.toUpperCase()}
               </div>
-            </div>
-          )}
-
-          {/* Pris */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Pris per dag (valgfritt)</label>
-            <input
-              type="number"
-              placeholder="eks. 100 – la stå tom for gratis"
-              value={price}
-              onChange={e => setPrice(e.target.value)}
-              className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A]"
-            />
+            </Link>
           </div>
+        </div>
+      </div>
 
-          {/* Vipps */}
-          {price && (
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Vipps-nummer</label>
-              <input
-                type="tel"
-                placeholder="eks. 98765432"
-                value={vipps}
-                onChange={e => setVipps(e.target.value)}
-                className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A]"
-              />
+      <div className="p-4">
+        {loading ? (
+          <div className="grid grid-cols-2 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl h-28 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              {CATEGORIES.map(cat => {
+                const count = countFor(cat.id)
+                const newCount = items.filter(i =>
+                  (i.category === cat.id || (cat.id === 'barn' && i.category === 'baby')) && isNew(i)
+                ).length
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setActiveCategory(cat.id)}
+                    className="bg-white rounded-2xl p-4 shadow-sm text-left flex flex-col gap-2 active:scale-95 transition-transform"
+                  >
+                    <span className="text-2xl">{cat.emoji}</span>
+                    <div>
+                      <p className="font-bold text-[#2C1A0E] text-sm">{cat.label}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-xs text-[#9C7B65]">{count} tilgjengelig</p>
+                        {newCount > 0 && (
+                          <span className="bg-[#FFF0E6] text-[#C4673A] text-xs font-bold px-1.5 py-0.5 rounded-full">
+                            {newCount} ny
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={saving || !name}
-            className="bg-[#C4673A] text-white rounded-xl py-3 font-medium disabled:opacity-50 mt-2"
-          >
-            {saving ? 'Lagrer…' : 'Legg ut'}
-          </button>
-        </form>
-      )}
+            {items.filter(isNew).length > 0 && (
+              <div className="mt-4">
+                <p className="text-sm font-bold text-[#2C1A0E] mb-3">🆕 Nylig lagt ut</p>
+                <div className="flex flex-col gap-2">
+                  {items.filter(isNew).slice(0, 3).map(item => {
+                    const cat = CATEGORIES.find(c => c.id === item.category || (c.id === 'barn' && item.category === 'baby'))
+                    return (
+                      <Link key={item.id} href={`/items/${item.id}`}>
+                        <div className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
+                          {item.image_url ? (
+                            <img src={item.image_url} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl bg-[#E8DDD0] flex items-center justify-center text-xl flex-shrink-0">
+                              {cat?.emoji}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-[#2C1A0E] text-sm truncate">{item.name}</p>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <div className="w-4 h-4 rounded-full bg-[#E8DDD0] flex items-center justify-center overflow-hidden flex-shrink-0">
+                                {item.profiles?.avatar_url
+                                  ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
+                                  : <span className="font-bold text-[#6B4226]" style={{ fontSize: '8px' }}>{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>
+                                }
+                              </div>
+                              <p className="text-xs text-[#4A7C59] truncate">
+                                {item.profiles?.name || item.profiles?.email?.split('@')[0]}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="text-sm flex-shrink-0">{cat?.emoji}</span>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

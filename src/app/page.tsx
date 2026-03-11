@@ -58,9 +58,11 @@ export default function FeedPage() {
                 + Inviter
               </button>
             </Link>
-            <div className="w-9 h-9 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold text-sm">
-              {user?.email?.[0]?.toUpperCase()}
-            </div>
+            <Link href="/profile">
+              <div className="w-9 h-9 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold text-sm cursor-pointer">
+                {user?.email?.[0]?.toUpperCase()}
+              </div>
+            </Link>
           </div>
         </div>
 

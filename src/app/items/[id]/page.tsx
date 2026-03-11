@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
+import Link from 'next/link'
 
 export default function ItemPage() {
   const [item, setItem] = useState<any>(null)
@@ -32,7 +33,6 @@ export default function ItemPage() {
       setItem(item)
       setMessage(`Hei! Kan jeg låne "${item?.name}"? 😊`)
 
-      // Alle lån (for kalender)
       const { data: loans } = await supabase
         .from('loans')
         .select('*, profiles!loans_borrower_id_fkey(name, email, avatar_url)')
@@ -41,11 +41,9 @@ export default function ItemPage() {
         .order('start_date', { ascending: true })
       setAllLoans(loans || [])
 
-      // Mitt aktive lån
       const myLoan = (loans || []).find(l => l.borrower_id === user.id)
       setLoan(myLoan || null)
 
-      // Eier: innkommende forespørsler
       if (item?.owner_id === user.id) {
         setPendingLoans((loans || []).filter(l => l.status === 'pending'))
       }
@@ -56,18 +54,28 @@ export default function ItemPage() {
   }, [id])
 
   const sendRequest = async () => {
-  if (!message.trim()) return
-  const supabase = createClient()
-  const { data: newLoan } = await supabase.from('loans').insert({
-    item_id: id,
-    borrower_id: user.id,
-    owner_id: item.owner_id,
-    message,
-    start_date: startDate,
-    due_date: dueDate || null,
-    status: 'pending',
-    community_id: item.community_id || null,
-  }).select().single()
+    if (!message.trim()) return
+    const supabase = createClient()
+    const { data: newLoan } = await supabase.from('loans').insert({
+      item_id: id,
+      borrower_id: user.id,
+      owner_id: item.owner_id,
+      message,
+      start_date: startDate,
+      due_date: dueDate || null,
+      status: 'pending',
+      community_id: item.community_id || null,
+    }).select().single()
+
+    await supabase.from('notifications').insert({
+      user_id: item.owner_id,
+      type: 'loan_request',
+      title: 'Ny låneforespørsel',
+      body: `${user.email?.split('@')[0]} vil låne "${item.name}"`,
+      loan_id: newLoan?.id,
+    })
+    setSent(true)
+  }
 
   const respondToLoan = async (loanId: string, accept: boolean) => {
     const supabase = createClient()
@@ -102,7 +110,6 @@ export default function ItemPage() {
   }
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
-
   const isOverdue = (due: string) => due && new Date(due) < new Date()
   const isDueSoon = (due: string) => {
     if (!due) return false
@@ -119,14 +126,13 @@ export default function ItemPage() {
 
   return (
     <div className="max-w-lg mx-auto pb-32">
-      {/* Bilde */}
       <div className="relative">
         <button onClick={() => router.back()} className="absolute top-6 left-4 bg-white/80 rounded-full w-9 h-9 flex items-center justify-center text-[#2C1A0E] shadow-sm z-10">←</button>
         {item.image_url ? (
           <img src={item.image_url} alt={item.name} className="w-full h-64 object-cover" />
         ) : (
           <div className="w-full h-64 bg-[#E8DDD0] flex items-center justify-center text-6xl">
-            {item.category === 'baby' ? '🍼' : item.category === 'kjole' ? '👗' : item.category === 'verktøy' ? '🔧' : item.category === 'bok' ? '📚' : '📦'}
+            {item.category === 'barn' ? '🧸' : item.category === 'kjole' ? '👗' : item.category === 'verktøy' ? '🔧' : item.category === 'bok' ? '📚' : '📦'}
           </div>
         )}
         {!item.available && (
@@ -137,7 +143,6 @@ export default function ItemPage() {
       </div>
 
       <div className="px-4 pt-5 flex flex-col gap-4">
-        {/* Tittel og pris */}
         <div className="flex justify-between items-start">
           <h1 className="text-2xl font-bold text-[#2C1A0E] flex-1">{item.name}</h1>
           {item.price ? (
@@ -147,7 +152,6 @@ export default function ItemPage() {
           )}
         </div>
 
-        {/* Tilgjengelighetsstatus */}
         {item.available ? (
           <div className="bg-[#EEF4F0] rounded-2xl px-4 py-3 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[#4A7C59] inline-block"></span>
@@ -192,7 +196,6 @@ export default function ItemPage() {
 
         {item.description && <p className="text-[#6B4226]">{item.description}</p>}
 
-        {/* Eier */}
         <div className="bg-white rounded-2xl p-4 flex items-center gap-3 shadow-sm">
           <div className="w-10 h-10 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold overflow-hidden">
             {item.profiles?.avatar_url
@@ -205,7 +208,6 @@ export default function ItemPage() {
           </div>
         </div>
 
-        {/* Kalender / bookede perioder */}
         {allLoans.length > 0 && (
           <div className="bg-white rounded-2xl p-4 shadow-sm">
             <p className="font-semibold text-[#2C1A0E] mb-3 text-sm">📅 Opptatte perioder</p>
@@ -214,8 +216,7 @@ export default function ItemPage() {
                 <div key={l.id} className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full flex-shrink-0 ${l.status === 'active' ? 'bg-[#C4673A]' : 'bg-[#E8DDD0]'}`} />
                   <p className="text-sm text-[#6B4226]">
-                    {formatDate(l.start_date)}
-                    {l.due_date ? ` → ${formatDate(l.due_date)}` : ' →'}
+                    {formatDate(l.start_date)}{l.due_date ? ` → ${formatDate(l.due_date)}` : ' →'}
                   </p>
                   <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${l.status === 'active' ? 'bg-[#FFF0E6] text-[#C4673A]' : 'bg-[#FAF7F2] text-[#9C7B65]'}`}>
                     {l.status === 'active' ? 'Utlånt' : 'Forespurt'}
@@ -226,7 +227,6 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* EIER: innkommende forespørsler */}
         {isOwner && pendingLoans.length > 0 && (
           <div className="flex flex-col gap-3">
             <h2 className="font-bold text-[#2C1A0E]">Innkommende forespørsler</h2>
@@ -257,7 +257,6 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* EIER: ingen forespørsler og tilgjengelig */}
         {isOwner && item.available && pendingLoans.length === 0 && (
           <div className="flex gap-2">
             <div className="flex-1 bg-[#FFF0E6] rounded-2xl p-4 text-center">
@@ -272,21 +271,19 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* LÅNTAKER: venter */}
         {!isOwner && loan?.status === 'pending' && (
           <div className="bg-[#FFF0E6] rounded-2xl p-4 text-center">
             <p className="text-[#C4673A] font-medium">⏳ Venter på svar fra {ownerName}</p>
           </div>
         )}
 
-        {/* LÅNTAKER: godtatt */}
         {!isOwner && loan?.status === 'active' && (
           <div className="bg-[#EEF4F0] rounded-2xl p-4">
             <p className="text-[#4A7C59] font-medium mb-1">✓ Du låner denne nå!</p>
             {loan.due_date && <p className="text-sm text-[#9C7B65]">Returner innen {formatDate(loan.due_date)}</p>}
             {item.price && item.vipps_number && (
               
-                <a href={`https://qr.vipps.no/28/2/01/031/${item.vipps_number}?amount=${item.price}&message=Leie+${encodeURIComponent(item.name)}`}
+                href={`https://qr.vipps.no/28/2/01/031/${item.vipps_number}?amount=${item.price}&message=Leie+${encodeURIComponent(item.name)}`}
                 target="_blank"
                 className="mt-3 flex items-center justify-center gap-2 bg-[#FF5B24] text-white rounded-xl py-2.5 text-sm font-medium w-full"
               >
@@ -296,7 +293,6 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* LÅNTAKER: send forespørsel */}
         {!isOwner && !loan && item.available && (
           <div className="flex flex-col gap-3">
             <h2 className="font-bold text-[#2C1A0E]">Send låneforespørsel</h2>
@@ -342,7 +338,6 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* LÅNTAKER: ikke tilgjengelig */}
         {!isOwner && !loan && !item.available && (
           <div className="bg-[#FAF7F2] rounded-2xl p-4 text-center">
             <p className="text-[#9C7B65]">Denne er utlånt akkurat nå</p>

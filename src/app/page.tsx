@@ -38,20 +38,77 @@ export default function FeedPage() {
   const router = useRouter()
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) { router.push('/login'); return }
-      setUser(data.user)
-    })
+    const load = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
+      setUser(user)
 
-    supabase
-      .from('items')
-      .select('*, profiles(name, email, avatar_url)')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setItems(data || [])
-        setLoading(false)
+      // Hent brukerens sosiale graf
+      const { data: friendships } = await supabase
+        .from('friendships')
+        .select('user_b')
+        .eq('user_a', user.id)
+      const friendIds = (friendships || []).map((f: any) => f.user_b)
+
+      // Venners venner
+      let friendsOfFriendIds: string[] = []
+      if (friendIds.length > 0) {
+        const { data: fof } = await supabase
+          .from('friendships')
+          .select('user_b')
+          .in('user_a', friendIds)
+          .neq('user_b', user.id)
+        friendsOfFriendIds = [...new Set((fof || []).map((f: any) => f.user_b))]
+      }
+
+      // Nære venner
+      const { data: closeFriendRows } = await supabase
+        .from('close_friends')
+        .select('friend_id')
+        .eq('user_id', user.id)
+      const closeFriendIds = (closeFriendRows || []).map((f: any) => f.friend_id)
+
+      // Mine kretser
+      const { data: myMemberships } = await supabase
+        .from('community_members')
+        .select('community_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+      const myCommunityIds = (myMemberships || []).map((m: any) => m.community_id)
+
+      // Hent alle items med tilgangsregler
+      const { data: allItems } = await supabase
+        .from('items')
+        .select('*, profiles(name, email, avatar_url), item_access(*)')
+        .order('created_at', { ascending: false })
+
+      // Filtrer basert på tilgang
+      const visible = (allItems || []).filter((item: any) => {
+        // Egne ting vises alltid
+        if (item.owner_id === user.id) return true
+
+        const access: any[] = item.item_access || []
+
+        // Ingen tilgangsregler = vis for alle
+        if (access.length === 0) return true
+
+        // Sjekk om noen regel gir tilgang
+        return access.some((rule: any) => {
+          if (rule.access_type === 'public') return true
+          if (rule.access_type === 'close_friends' && closeFriendIds.includes(item.owner_id)) return true
+          if (rule.access_type === 'friends' && friendIds.includes(item.owner_id)) return true
+          if (rule.access_type === 'friends_of_friends' &&
+            (friendIds.includes(item.owner_id) || friendsOfFriendIds.includes(item.owner_id))) return true
+          if (rule.access_type === 'community' && rule.community_id && myCommunityIds.includes(rule.community_id)) return true
+          return false
+        })
       })
+
+      setItems(visible)
+      setLoading(false)
+    }
+    load()
   }, [])
 
   const isNew = (item: Item) => {
@@ -78,7 +135,10 @@ export default function FeedPage() {
     return (
       <div className="max-w-lg mx-auto pb-24">
         <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-3 z-10">
-          <button onClick={() => { setActiveCategory(null); setActiveSubcategory(null) }} className="text-[#C4673A] text-sm mb-2 block">
+          <button
+            onClick={() => { setActiveCategory(null); setActiveSubcategory(null) }}
+            className="text-[#C4673A] text-sm mb-2 block"
+          >
             ← Tilbake
           </button>
           <div className="flex items-center gap-2 mb-3">
@@ -89,9 +149,8 @@ export default function FeedPage() {
             </span>
           </div>
 
-          {/* Underkategorier */}
           {cat.subcategories.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+            <div className="flex gap-2 overflow-x-auto pb-1">
               <button
                 onClick={() => setActiveSubcategory(null)}
                 className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${
@@ -119,7 +178,7 @@ export default function FeedPage() {
           {filteredItems.length === 0 ? (
             <div className="col-span-2 text-center py-16 text-[#9C7B65]">
               <div className="text-4xl mb-2">{cat.emoji}</div>
-              <p>Ingen {cat.label.toLowerCase()} i kretsen ennå</p>
+              <p>Ingen {cat.label.toLowerCase()} tilgjengelig for deg</p>
             </div>
           ) : (
             filteredItems.map(item => (
@@ -229,7 +288,6 @@ export default function FeedPage() {
               })}
             </div>
 
-            {/* Siste aktivitet */}
             {items.filter(isNew).length > 0 && (
               <div className="mt-4">
                 <p className="text-sm font-bold text-[#2C1A0E] mb-3">🆕 Nylig lagt ut</p>
@@ -252,7 +310,7 @@ export default function FeedPage() {
                               <div className="w-4 h-4 rounded-full bg-[#E8DDD0] flex items-center justify-center overflow-hidden flex-shrink-0">
                                 {item.profiles?.avatar_url
                                   ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
-                                  : <span className="text-xs font-bold text-[#6B4226]" style={{ fontSize: '8px' }}>{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>
+                                  : <span className="font-bold text-[#6B4226]" style={{ fontSize: '8px' }}>{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>
                                 }
                               </div>
                               <p className="text-xs text-[#4A7C59] truncate">

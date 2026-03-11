@@ -8,6 +8,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [mode, setMode] = useState<'login' | 'register'>('login')
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -16,44 +17,91 @@ export default function LoginPage() {
     setError('')
     const supabase = createClient()
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
-    
-    // Redirect til invitasjonslenke hvis den finnes
+    if (mode === 'login') {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) {
+        setError('Feil e-post eller passord')
+        setLoading(false)
+        return
+      }
+    } else {
+      const { error } = await supabase.auth.signUp({ email, password })
+      if (error) {
+        setError(error.message)
+        setLoading(false)
+        return
+      }
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        await supabase.from('profiles').upsert({
+          id: user.id,
+          email,
+          name: email.split('@')[0],
+        })
+      }
+    }
+
     const redirect = sessionStorage.getItem('redirectAfterLogin')
     if (redirect) {
       sessionStorage.removeItem('redirectAfterLogin')
       window.location.href = redirect
-      return
-    }
-    window.location.href = '/'
-
-    if (signInError) {
-        const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
-        if (signUpError) { setError(signUpError.message); setLoading(false); return }
-        alert('SignUp result: ' + JSON.stringify(data?.user?.email))
     } else {
-        alert('SignIn OK!')
+      window.location.href = '/'
     }
-
-    const { data: { user } } = await supabase.auth.getUser()
-    alert('User: ' + JSON.stringify(user?.email))
-
-    window.location.href = '/'
-    }
+  }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen px-6">
-      <div className="w-full max-w-sm">
-        <h1 className="text-3xl font-bold text-[#2C1A0E] mb-1">Village</h1>
-        <p className="text-[#9C7B65] mb-8">Lån og lån bort i kretsen din</p>
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl p-6 shadow-sm flex flex-col gap-4">
+    <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(160deg, #2C1A0E 0%, #6B4226 60%, #C4673A 100%)' }}>
+
+      {/* Top section */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 pt-16 pb-8">
+        <div className="text-center mb-10">
+          <div className="text-6xl mb-4">🏘️</div>
+          <h1 className="text-4xl font-bold text-white mb-2">Village</h1>
+          <p className="text-white/60 text-lg">Lån og lån bort i kretsen din</p>
+        </div>
+
+        {/* Features */}
+        <div className="flex flex-col gap-3 w-full max-w-xs mb-10">
+          {[
+            { emoji: '👗', text: 'Lån kjoler til bryllup' },
+            { emoji: '🍼', text: 'Del babyutstyr med andre foreldre' },
+            { emoji: '🔧', text: 'Del en god bok med bedre venner' },
+          ].map(f => (
+            <div key={f.text} className="flex items-center gap-3">
+              <span className="text-xl">{f.emoji}</span>
+              <span className="text-white/80 text-sm">{f.text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom card */}
+      <div className="bg-[#FAF7F2] rounded-t-3xl px-6 pt-8 pb-10">
+        {/* Mode toggle */}
+        <div className="flex bg-[#E8DDD0] rounded-xl p-1 mb-6">
+          <button
+            onClick={() => setMode('login')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'login' ? 'bg-white text-[#2C1A0E] shadow-sm' : 'text-[#9C7B65]'}`}
+          >
+            Logg inn
+          </button>
+          <button
+            onClick={() => setMode('register')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'register' ? 'bg-white text-[#2C1A0E] shadow-sm' : 'text-[#9C7B65]'}`}
+          >
+            Registrer
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <input
             type="email"
-            placeholder="din@epost.no"
+            placeholder="E-postadresse"
             value={email}
             onChange={e => setEmail(e.target.value)}
             required
-            className="border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A]"
+            className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] transition-colors"
           />
           <input
             type="password"
@@ -61,18 +109,29 @@ export default function LoginPage() {
             value={password}
             onChange={e => setPassword(e.target.value)}
             required
-            className="border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A]"
+            className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] transition-colors"
           />
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <p className="text-red-600 text-sm">{error}</p>
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={loading}
-            className="bg-[#C4673A] text-white rounded-xl py-3 font-medium disabled:opacity-50"
+            disabled={loading || !email || !password}
+            className="bg-[#C4673A] text-white rounded-xl py-3.5 font-semibold disabled:opacity-50 mt-1 transition-opacity"
           >
-            {loading ? 'Logger inn…' : 'Logg inn / Registrer'}
+            {loading ? '…' : mode === 'login' ? 'Logg inn' : 'Opprett konto'}
           </button>
-          <p className="text-xs text-center text-[#9C7B65]">Ny bruker? Bare skriv inn e-post og passord så opprettes kontoen automatisk.</p>
         </form>
+
+        {mode === 'register' && (
+          <p className="text-xs text-center text-[#9C7B65] mt-4">
+            Ved å registrere deg godtar du våre vilkår og personvernpolicy.
+          </p>
+        )}
       </div>
     </div>
   )

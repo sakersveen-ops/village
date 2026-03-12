@@ -74,7 +74,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
   }, [openProposal])
 
   const loadMessages = async () => {
-    console.log('loadMessages called, loan.id:', loan?.id)
     setLoading(true)
     const supabase = createClient()
     const { data } = await supabase
@@ -151,12 +150,18 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     })
     setNewMessage('')
 
-    const { data: msg } = await supabase
+    const { data: msg, error: msgErr } = await supabase
       .from('loan_messages')
       .insert({ loan_id: loan.id, sender_id: user.id, type: 'chat', body })
       .select('*, profiles(id, name, email, avatar_url)')
       .single()
 
+    if (msgErr) {
+      console.error('sendChat error:', msgErr)
+      setMessages(prev => prev.filter(m => m.id !== tmpId))
+      setSending(false)
+      return
+    }
     setMessages(prev => prev.map(m => m.id === tmpId ? (msg || m) : m))
 
     const recipientId = isOwner ? loan.borrower_id : item.owner_id
@@ -197,12 +202,18 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
       _sending: true,
     })
 
-    const { data: msg } = await supabase
+    const { data: msg, error: msgErr } = await supabase
       .from('loan_messages')
       .insert({ loan_id: loan.id, sender_id: user.id, type: 'change_proposal', body: propNote, metadata: meta })
       .select('*, profiles(id, name, email, avatar_url)')
       .single()
 
+    if (msgErr) {
+      console.error('sendProposal error:', msgErr)
+      setMessages(prev => prev.filter(m => m.id !== tmpId))
+      setSubmitting(false)
+      return
+    }
     setMessages(prev => prev.map(m => m.id === tmpId ? (msg || m) : m))
     await supabase.from('loans').update({ status: 'change_proposed' }).eq('id', loan.id)
     onLoanUpdated({ ...loan, status: 'change_proposed' })
@@ -401,42 +412,43 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
             : `rounded-2xl ${!prevSameSender ? 'rounded-tl-md' : ''} ${!nextSameSender ? 'rounded-bl-md' : ''}`
 
           return (
-            <div key={msg.id} className={`flex gap-2 ${mine ? 'flex-row-reverse' : 'flex-row'} ${prevSameSender ? 'mt-0.5' : 'mt-3'}`}>
-              {/* Avatar – shown on both sides, first message in group only */}
-              <div className="w-7 flex-shrink-0 flex flex-col justify-end">
-                {!prevSameSender && (
-                  <Link href={`/profile/${msg.profiles?.id}`}>
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs overflow-hidden ${mine ? 'bg-[#C4673A] text-white' : 'bg-[#E8DDD0] text-[#6B4226]'}`}>
-                      {msg.profiles?.avatar_url
-                        ? <img src={msg.profiles.avatar_url} className="w-full h-full object-cover" />
-                        : senderName(msg)[0]?.toUpperCase()}
-                    </div>
+            <div key={msg.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'} ${prevSameSender ? 'mt-0.5' : 'mt-3'}`}>
+              {/* Sender name + community */}
+              {showSender && (
+                <div className={`flex items-center gap-1.5 mb-0.5 px-1 ${mine ? 'flex-row-reverse' : ''}`}>
+                  <Link href={`/profile/${msg.profiles?.id}`} className="text-[11px] text-[#8E8E93] hover:underline">
+                    {senderName(msg)}
                   </Link>
-                )}
-              </div>
-
-              <div className={`flex flex-col max-w-[72%] ${mine ? 'items-end' : 'items-start'}`}>
-                {showSender && (
-                  <div className="flex items-center gap-1.5 mb-0.5 px-1">
-                    <Link href={`/profile/${msg.profiles?.id}`} className="text-[11px] text-[#8E8E93] hover:underline">
-                      {senderName(msg)}
+                  {!isMe(msg) && msg.profiles?.id !== item.owner_id && !isFriend && borrowerCommunity && (
+                    <span className="text-[10px] text-[#C4A882]">· {borrowerCommunity}</span>
+                  )}
+                </div>
+              )}
+              {/* Avatar sits beside the bubble only, not beside timestamp */}
+              <div className={`flex items-end gap-2 ${mine ? 'flex-row-reverse' : 'flex-row'}`}>
+                {/* Avatar: only first in group */}
+                <div className="w-7 flex-shrink-0">
+                  {!prevSameSender ? (
+                    <Link href={`/profile/${msg.profiles?.id}`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs overflow-hidden ${mine ? 'bg-[#C4673A] text-white' : 'bg-[#E8DDD0] text-[#6B4226]'}`}>
+                        {msg.profiles?.avatar_url
+                          ? <img src={msg.profiles.avatar_url} className="w-full h-full object-cover" />
+                          : senderName(msg)[0]?.toUpperCase()}
+                      </div>
                     </Link>
-                    {!isMe(msg) && msg.profiles?.id !== item.owner_id && !isFriend && borrowerCommunity && (
-                      <span className="text-[10px] text-[#C4A882]">· {borrowerCommunity}</span>
-                    )}
-                  </div>
-                )}
-                <div className={`px-3.5 py-2 text-[15px] leading-relaxed ${br} ${
+                  ) : <div className="w-7" />}
+                </div>
+                <div className={`px-3.5 py-2 text-[15px] leading-relaxed max-w-[260px] ${br} ${
                   mine ? 'bg-[#C4673A] text-white' : 'bg-white text-[#2C1A0E]'
                 } ${msg._sending ? 'opacity-60' : ''}`}>
                   {msg.body}
                 </div>
-                {showTimestamp && (
-                  <span className="text-[11px] text-[#8E8E93] mt-0.5 px-1">
-                    {msg._sending ? 'Sender…' : (isLast && mine ? 'Sendt' : fmtTime(msg.created_at))}
-                  </span>
-                )}
               </div>
+              {showTimestamp && (
+                <span className={`text-[11px] text-[#8E8E93] mt-0.5 ${mine ? 'pr-1' : 'pl-9'}`}>
+                  {msg._sending ? 'Sender…' : (isLast && mine ? 'Sendt' : fmtTime(msg.created_at))}
+                </span>
+              )}
             </div>
           )
         })}

@@ -131,6 +131,7 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated }:
       .insert({ loan_id: loan.id, sender_id: user.id, type: 'chat', body })
       .select('*, profiles(name, email, avatar_url)')
       .single()
+      
 
     if (msg) setMessages(prev => [...prev, msg])
 

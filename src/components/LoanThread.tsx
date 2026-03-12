@@ -140,7 +140,12 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     addLocal({
       id: tmpId, loan_id: loan.id, sender_id: user.id, type: 'chat', body,
       created_at: new Date().toISOString(),
-      profiles: { id: user.id, name: user.user_metadata?.name, email: user.email },
+      profiles: {
+        id: user.id,
+        name: user.user_metadata?.name || user.user_metadata?.full_name,
+        email: user.email,
+        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+      },
       _sending: true,
     })
     setNewMessage('')
@@ -182,7 +187,12 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
       type: 'change_proposal', body: propNote,
       metadata: JSON.stringify(meta),
       created_at: new Date().toISOString(),
-      profiles: { id: user.id, name: user.user_metadata?.name, email: user.email },
+      profiles: {
+        id: user.id,
+        name: user.user_metadata?.name || user.user_metadata?.full_name,
+        email: user.email,
+        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
+      },
       _sending: true,
     })
 
@@ -200,9 +210,10 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     await supabase.from('notifications').insert({
       user_id: recipientId,
       type: 'loan_change_proposal',
-      title: isOwner ? `Utleier foreslår ny dato for «${item.name}»` : `Låntaker ber om å endre datoer for «${item.name}»`,
-      body: `${fmt(propStart)} → ${fmt(propEnd)}`,
+      title: isOwner ? `📅 Utleier foreslår ny dato for «${item.name}»` : `📅 Låntaker vil endre datoer for «${item.name}»`,
+      body: `${fmt(propStart)} → ${fmt(propEnd)} – svar i meldingstråden`,
       loan_id: loan.id,
+      action_url: `/items/${item.id}`,
     })
 
     setPropStart(''); setPropEnd(''); setPropNote('')
@@ -299,15 +310,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
   return (
     <div className="flex flex-col bg-[#F5F5F5] rounded-2xl overflow-hidden">
 
-      {/* Header */}
-      <div className="bg-white px-4 py-3 border-b border-[#F0EAE2] flex items-center gap-2">
-        <span className="text-sm">💬</span>
-        <h3 className="font-semibold text-[#2C1A0E] text-sm">Meldingstråd</h3>
-        {loan.start_date && loan.due_date && (
-          <span className="ml-auto text-xs text-[#9C7B65]">{fmt(loan.start_date)} → {fmt(loan.due_date)}</span>
-        )}
-      </div>
-
       {/* Messages */}
       <div className="flex flex-col px-3 py-4 min-h-[200px] max-h-[440px] overflow-y-auto gap-0.5">
         {loading ? (
@@ -399,11 +401,11 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
 
           return (
             <div key={msg.id} className={`flex gap-2 ${mine ? 'flex-row-reverse' : 'flex-row'} ${prevSameSender ? 'mt-0.5' : 'mt-3'}`}>
-              {/* Avatar space */}
-              <div className={`w-7 flex-shrink-0 ${mine ? 'hidden' : ''}`}>
+              {/* Avatar – shown on both sides, first message in group only */}
+              <div className="w-7 flex-shrink-0 flex flex-col justify-end">
                 {!prevSameSender && (
                   <Link href={`/profile/${msg.profiles?.id}`}>
-                    <div className="w-7 h-7 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-xs text-[#6B4226] overflow-hidden self-end">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs overflow-hidden ${mine ? 'bg-[#C4673A] text-white' : 'bg-[#E8DDD0] text-[#6B4226]'}`}>
                       {msg.profiles?.avatar_url
                         ? <img src={msg.profiles.avatar_url} className="w-full h-full object-cover" />
                         : senderName(msg)[0]?.toUpperCase()}

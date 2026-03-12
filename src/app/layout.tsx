@@ -3,8 +3,9 @@ import './globals.css'
 import NavBar from '@/components/NavBar'
 
 export const metadata: Metadata = {
-  title: 'Village',
+  title: 'It takes a village',
   description: 'Lån og lån bort i kretsen din',
+  
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

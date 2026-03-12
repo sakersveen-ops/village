@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-const ACTION_TYPES = ['loan_request', 'friend_request', 'join_request']
+const ACTION_TYPES = ['loan_request', 'friend_request', 'join_request', 'friend_accepted']
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([])
@@ -63,11 +63,41 @@ export default function NotificationsPage() {
       minute: '2-digit',
     })
 
-  const linkFor = (n: any) => {
-    if (n.type === 'friend_request') return '/profile'
-    if (n.type === 'join_request' && n.loans?.community_id) return `/community/${n.loans.community_id}`
-    if (n.loans?.item_id) return `/items/${n.loans.item_id}`
-    return '#'
+  const [handledRequests, setHandledRequests] = useState<Set<string>>(new Set())
+
+  const handleFriendRequest = async (n: any, accept: boolean) => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    // Finn forespørselen
+    const { data: req } = await supabase
+      .from('friend_requests')
+      .select('id, from_id')
+      .eq('to_id', user.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+
+    if (!req) return
+
+    await supabase.from('friend_requests').update({ status: accept ? 'accepted' : 'declined' }).eq('id', req.id)
+
+    if (accept) {
+      await supabase.from('friendships').insert([
+        { user_a: user.id, user_b: req.from_id },
+        { user_a: req.from_id, user_b: user.id },
+      ])
+      await supabase.from('notifications').insert({
+        user_id: req.from_id,
+        type: 'friend_accepted',
+        title: '✓ Venneforespørsel godtatt!',
+        body: 'Dere er nå venner',
+      })
+    }
+
+    setHandledRequests(prev => new Set([...prev, n.id]))
   }
 
   const groupByDate = (list: any[]) => {
@@ -93,32 +123,57 @@ export default function NotificationsPage() {
   const current = tab === 'actions' ? actions : updates
   const groups = groupByDate(current)
 
-  const NotifCard = ({ n }: { n: any }) => (
-    <Link href={linkFor(n)}>
+  const NotifCard = ({ n }: { n: any }) => {
+    const handled = handledRequests.has(n.id)
+
+    if (n.type === 'friend_request') {
+      return (
+        <div className={`bg-white rounded-2xl px-4 py-3 flex items-start gap-3 shadow-sm ${!n.read ? 'border-l-4 border-[#C4673A]' : ''}`}>
+          <span className="text-xl mt-0.5 flex-shrink-0">👋</span>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-[#2C1A0E] text-sm">{n.title}</p>
+            <p className="text-xs text-[#9C7B65] mt-0.5">{n.body}</p>
+            <p className="text-xs text-[#9C7B65] mt-1">{formatDate(n.created_at)}</p>
+            {!handled ? (
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => handleFriendRequest(n, true)}
+                  className="bg-[#4A7C59] text-white text-xs rounded-full px-3 py-1.5 font-medium"
+                >
+                  ✓ Godta
+                </button>
+                <button
+                  onClick={() => handleFriendRequest(n, false)}
+                  className="border border-[#E8DDD0] text-[#9C7B65] text-xs rounded-full px-3 py-1.5"
+                >
+                  Avslå
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-[#4A7C59] mt-2 font-medium">✓ Håndtert</p>
+            )}
+          </div>
+        </div>
+      )
+    }
+
+  return (
+    <Link href={n.type === 'join_request' && n.loans?.community_id ? `/community/${n.loans.community_id}` : n.loans?.item_id ? `/items/${n.loans.item_id}` : '#'}>
       <div className={`bg-white rounded-2xl px-4 py-3 flex items-start gap-3 shadow-sm ${!n.read ? 'border-l-4 border-[#C4673A]' : ''}`}>
         <span className="text-xl mt-0.5 flex-shrink-0">{icon(n.type)}</span>
         <div className="flex-1 min-w-0">
           <p className="font-medium text-[#2C1A0E] text-sm">{n.title}</p>
           <p className="text-xs text-[#9C7B65] mt-0.5">{n.body}</p>
-          {n.type === 'loan_request' && n.loans?.communities && (
-            <div className="flex items-center gap-1 mt-1.5">
-              <span className="text-xs">{n.loans.communities.avatar_emoji}</span>
-              <span className="text-xs text-[#C4673A] font-medium">
-                Funnet via {n.loans.communities.name}
-              </span>
-            </div>
-          )}
           {n.loans?.items?.name && (
             <p className="text-xs text-[#9C7B65] mt-0.5 italic">{n.loans.items.name}</p>
           )}
           <p className="text-xs text-[#9C7B65] mt-1">{formatDate(n.created_at)}</p>
         </div>
-        {!n.read && (
-          <div className="w-2 h-2 rounded-full bg-[#C4673A] flex-shrink-0 mt-1.5" />
-        )}
+        {!n.read && <div className="w-2 h-2 rounded-full bg-[#C4673A] flex-shrink-0 mt-1.5" />}
       </div>
     </Link>
   )
+}
 
   return (
     <div className="max-w-lg mx-auto pb-24">

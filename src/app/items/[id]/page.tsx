@@ -17,9 +17,11 @@ export default function ItemPage() {
   const [startDate, setStartDate] = useState('')
   const [dueDate, setDueDate] = useState('')
   const [sent, setSent] = useState(false)
-  const [loading, setLoading] = useState(true)
-  // Which loan's thread is open (for owner with multiple pending)
+  const [sentRange, setSentRange] = useState<{ start: string; end: string } | null>(null)
   const [openThreadLoanId, setOpenThreadLoanId] = useState<string | null>(null)
+  // Which loan is showing inline proposal form (owner clicks "Foreslå endring" on a request card)
+  const [proposingForLoanId, setProposingForLoanId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
   const { id } = useParams()
 
@@ -46,21 +48,20 @@ export default function ItemPage() {
         .order('start_date', { ascending: true })
       setAllLoans(loans || [])
 
-      const myLoan = (loans || []).find(l => l.borrower_id === user.id)
+      const myLoan = (loans || []).find((l: any) => l.borrower_id === user.id)
       setLoan(myLoan || null)
 
       if (item?.owner_id === user.id) {
-        const pending = (loans || []).filter(l => l.status === 'pending' || l.status === 'change_proposed')
+        const pending = (loans || []).filter((l: any) =>
+          l.status === 'pending' || l.status === 'change_proposed'
+        )
         setPendingLoans(pending)
-        // Auto-open thread for the first pending loan
         if (pending.length > 0) setOpenThreadLoanId(pending[0].id)
       }
 
       const { data: blocked } = await supabase
-        .from('item_blocked_dates')
-        .select('date')
-        .eq('item_id', id)
-      setBlockedDates((blocked || []).map(b => b.date))
+        .from('item_blocked_dates').select('date').eq('item_id', id)
+      setBlockedDates((blocked || []).map((b: any) => b.date))
 
       setLoading(false)
     }
@@ -85,20 +86,20 @@ export default function ItemPage() {
   }
 
   const sendRequest = async () => {
-    if (!message.trim()) return
+    if (!message.trim() || !startDate || !dueDate) return
     const supabase = createClient()
     const { data: newLoan } = await supabase.from('loans').insert({
       item_id: id,
       borrower_id: user.id,
       owner_id: item.owner_id,
       message,
-      start_date: startDate || new Date().toISOString().split('T')[0],
-      due_date: dueDate || null,
+      start_date: startDate,
+      due_date: dueDate,
       status: 'pending',
       community_id: item.community_id || null,
     }).select().single()
 
-    // Seed the thread with the initial request message
+    // Seed initial message into thread immediately
     if (newLoan?.id) {
       await supabase.from('loan_messages').insert({
         loan_id: newLoan.id,
@@ -116,10 +117,12 @@ export default function ItemPage() {
       loan_id: newLoan?.id,
     })
 
+    setSentRange({ start: startDate, end: dueDate })
     setLoan(newLoan)
     setSent(true)
   }
 
+  // Owner: accept or decline a loan request
   const respondToLoan = async (loanId: string, accept: boolean) => {
     const supabase = createClient()
     await supabase.from('loans').update({
@@ -133,23 +136,21 @@ export default function ItemPage() {
 
     const targetLoan = pendingLoans.find(l => l.id === loanId)
 
-    // Post system message into the thread
+    // Post system message into thread immediately
     await supabase.from('loan_messages').insert({
       loan_id: loanId,
       sender_id: user.id,
       type: 'system',
       body: accept
-        ? `✅ Forespørselen ble godtatt${targetLoan?.start_date ? ` – ${formatDate(targetLoan.start_date)}${targetLoan?.due_date ? ` → ${formatDate(targetLoan.due_date)}` : ''}` : ''}`
-        : `❌ Forespørselen ble avslått`,
+        ? `✅ Forespørsel godtatt${targetLoan?.start_date ? ` – ${formatDate(targetLoan.start_date)}${targetLoan?.due_date ? ` → ${formatDate(targetLoan.due_date)}` : ''}` : ''}`
+        : `❌ Forespørsel avslått`,
     })
 
     await supabase.from('notifications').insert({
       user_id: targetLoan?.borrower_id,
       type: accept ? 'loan_accepted' : 'loan_declined',
       title: accept ? '✓ Forespørsel godtatt!' : 'Forespørsel avslått',
-      body: accept
-        ? `Lånet av «${item.name}» er godkjent`
-        : `Forespørselen om «${item.name}» ble avslått`,
+      body: accept ? `Lånet av «${item.name}» er godkjent` : `Forespørselen om «${item.name}» ble avslått`,
       loan_id: loanId,
     })
 
@@ -185,12 +186,13 @@ export default function ItemPage() {
 
   return (
     <div className="max-w-lg mx-auto pb-32">
-      {/* Bilde */}
+
+      {/* ── Hero image ─────────────────────────────────────────────────────── */}
       <div className="relative">
-        <button
-          onClick={() => router.back()}
-          className="absolute top-6 left-4 bg-white/80 rounded-full w-9 h-9 flex items-center justify-center text-[#2C1A0E] shadow-sm z-10"
-        >←</button>
+        <button onClick={() => router.back()}
+          className="absolute top-6 left-4 bg-white/80 rounded-full w-9 h-9 flex items-center justify-center text-[#2C1A0E] shadow-sm z-10">
+          ←
+        </button>
         {item.image_url ? (
           <img src={item.image_url} alt={item.name} className="w-full h-64 object-cover" />
         ) : (
@@ -206,7 +208,8 @@ export default function ItemPage() {
       </div>
 
       <div className="px-4 pt-5 flex flex-col gap-4">
-        {/* Tittel og pris */}
+
+        {/* ── Title + price ──────────────────────────────────────────────────── */}
         <div className="flex justify-between items-start">
           <h1 className="text-2xl font-bold text-[#2C1A0E] flex-1">{item.name}</h1>
           {item.price ? (
@@ -216,10 +219,10 @@ export default function ItemPage() {
           )}
         </div>
 
-        {/* Status */}
+        {/* ── Status banner ──────────────────────────────────────────────────── */}
         {item.available ? (
           <div className="bg-[#EEF4F0] rounded-2xl px-4 py-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#4A7C59] inline-block"></span>
+            <span className="w-2 h-2 rounded-full bg-[#4A7C59] inline-block" />
             <p className="text-[#4A7C59] font-medium text-sm">Tilgjengelig nå</p>
           </div>
         ) : activeLoan ? (
@@ -246,10 +249,8 @@ export default function ItemPage() {
               </div>
             </div>
             {isOwner && (
-              <button
-                onClick={() => markReturned(activeLoan.id)}
-                className="mt-3 w-full bg-[#4A7C59] text-white rounded-xl py-2 text-sm font-medium"
-              >
+              <button onClick={() => markReturned(activeLoan.id)}
+                className="mt-3 w-full bg-[#4A7C59] text-white rounded-xl py-2 text-sm font-medium">
                 ✓ Bekreft at {activeLoan.profiles?.name || activeLoan.profiles?.email?.split('@')[0]} har levert tilbake
               </button>
             )}
@@ -258,7 +259,7 @@ export default function ItemPage() {
 
         {item.description && <p className="text-[#6B4226]">{item.description}</p>}
 
-        {/* Eier */}
+        {/* ── Owner card ─────────────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl p-4 flex items-center gap-3 shadow-sm">
           <div className="w-10 h-10 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold overflow-hidden">
             {item.profiles?.avatar_url
@@ -271,17 +272,22 @@ export default function ItemPage() {
           </div>
         </div>
 
-        {/* Kalender */}
+        {/* ── Calendar ───────────────────────────────────────────────────────── */}
         <ItemCalendar
           loans={allLoans}
           blockedDates={blockedDates}
+          requestedRange={sentRange}
           onToggleBlock={isOwner ? toggleBlock : undefined}
           onSelectRange={!isOwner && !loan && item.available ? handleSelectRange : undefined}
           isOwner={isOwner}
         />
 
-        {/* ─── Eier: ingen forespørsler ─────────────────────────────────────── */}
-        {isOwner && item.available && pendingLoans.length === 0 && (
+        {/* ═══════════════════════════════════════════════════════════════════
+            OWNER VIEWS
+        ════════════════════════════════════════════════════════════════════ */}
+
+        {/* Owner: no pending, no active loan */}
+        {isOwner && item.available && pendingLoans.length === 0 && !activeLoan && (
           <div className="flex gap-2">
             <div className="flex-1 bg-[#FFF0E6] rounded-2xl p-4 text-center">
               <p className="text-[#C4673A] text-sm font-medium">Dette er din gjenstand</p>
@@ -295,7 +301,7 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* ─── Eier: aktiv lån – tråd ──────────────────────────────────────── */}
+        {/* Owner: active loan thread */}
         {isOwner && activeLoan && (
           <div className="flex flex-col gap-2">
             <h2 className="font-bold text-[#2C1A0E]">Meldingstråd</h2>
@@ -303,15 +309,13 @@ export default function ItemPage() {
               loan={activeLoan}
               item={item}
               user={user}
-              isOwner={isOwner}
-              onLoanUpdated={updated => {
-                setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))
-              }}
+              isOwner={true}
+              onLoanUpdated={updated => setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))}
             />
           </div>
         )}
 
-        {/* ─── Eier: innkommende forespørsler ──────────────────────────────── */}
+        {/* Owner: incoming requests */}
         {isOwner && pendingLoans.length > 0 && (
           <div className="flex flex-col gap-3">
             <h2 className="font-bold text-[#2C1A0E]">
@@ -320,10 +324,11 @@ export default function ItemPage() {
             </h2>
 
             {pendingLoans.map(l => (
-              <div key={l.id} className="flex flex-col gap-0">
+              <div key={l.id} className="flex flex-col">
                 {/* Request card */}
-                <div className={`bg-white rounded-2xl ${openThreadLoanId === l.id ? 'rounded-b-none border-b-0' : ''} p-4 shadow-sm`}>
-                  <div className="flex items-center gap-2 mb-2">
+                <div className={`bg-white p-4 shadow-sm ${openThreadLoanId === l.id ? 'rounded-t-2xl' : 'rounded-2xl'}`}>
+                  {/* Borrower info row */}
+                  <div className="flex items-center gap-2 mb-3">
                     <div className="w-8 h-8 rounded-full bg-[#E8DDD0] flex items-center justify-center text-sm font-bold text-[#6B4226] overflow-hidden">
                       {l.profiles?.avatar_url
                         ? <img src={l.profiles.avatar_url} className="w-full h-full object-cover" />
@@ -337,7 +342,7 @@ export default function ItemPage() {
                     </span>
                   </div>
 
-                  {/* Status badge for change_proposed */}
+                  {/* change_proposed badge */}
                   {l.status === 'change_proposed' && (
                     <div className="bg-[#FFF0E6] rounded-xl px-3 py-2 mb-3 flex items-center gap-2">
                       <span className="text-sm">📅</span>
@@ -345,43 +350,52 @@ export default function ItemPage() {
                     </div>
                   )}
 
+                  {/* Three action buttons */}
                   <div className="flex gap-2">
                     {l.status !== 'change_proposed' && (
                       <>
-                        <button
-                          onClick={() => respondToLoan(l.id, true)}
-                          className="flex-1 bg-[#4A7C59] text-white rounded-xl py-2 text-sm font-medium"
-                        >
+                        <button onClick={() => respondToLoan(l.id, true)}
+                          className="flex-1 bg-[#4A7C59] text-white rounded-xl py-2 text-sm font-medium">
                           ✓ Godta
                         </button>
                         <button
-                          onClick={() => respondToLoan(l.id, false)}
-                          className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-2 text-sm font-medium"
-                        >
+                          onClick={() => {
+                            setProposingForLoanId(l.id)
+                            setOpenThreadLoanId(l.id)
+                          }}
+                          className="flex-1 bg-[#FFF0E6] border border-[#F5D5C0] text-[#C4673A] rounded-xl py-2 text-sm font-medium">
+                          📅 Foreslå endring
+                        </button>
+                        <button onClick={() => respondToLoan(l.id, false)}
+                          className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-2 text-sm font-medium">
                           Avslå
                         </button>
                       </>
                     )}
                     <button
-                      onClick={() => setOpenThreadLoanId(openThreadLoanId === l.id ? null : l.id)}
-                      className={`${l.status === 'change_proposed' ? 'flex-1' : ''} bg-white border border-[#E8DDD0] text-[#6B4226] rounded-xl py-2 px-3 text-sm font-medium`}
-                    >
-                      {openThreadLoanId === l.id ? '↑ Lukk tråd' : '💬 Se tråd'}
+                      onClick={() => {
+                        setOpenThreadLoanId(openThreadLoanId === l.id ? null : l.id)
+                        if (openThreadLoanId === l.id) setProposingForLoanId(null)
+                      }}
+                      className={`${l.status === 'change_proposed' ? 'flex-1' : ''} bg-white border border-[#E8DDD0] text-[#6B4226] rounded-xl py-2 px-3 text-sm font-medium`}>
+                      {openThreadLoanId === l.id ? '↑ Lukk' : '💬 Tråd'}
                     </button>
                   </div>
                 </div>
 
-                {/* Thread – attached below the card */}
+                {/* Thread attached below card */}
                 {openThreadLoanId === l.id && (
-                  <div className="rounded-b-2xl overflow-hidden border-t-0 shadow-sm">
+                  <div className="rounded-b-2xl overflow-hidden shadow-sm">
                     <LoanThread
                       loan={l}
                       item={item}
                       user={user}
-                      isOwner={isOwner}
+                      isOwner={true}
                       onLoanUpdated={updated => {
                         setPendingLoans(prev => prev.map(p => p.id === updated.id ? updated : p))
                         setAllLoans(prev => prev.map(a => a.id === updated.id ? updated : a))
+                        // If proposal form was triggered from card, open it in thread
+                        if (proposingForLoanId === updated.id) setProposingForLoanId(null)
                       }}
                     />
                   </div>
@@ -391,23 +405,22 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* ─── Låntaker: venter på svar ─────────────────────────────────────── */}
+        {/* ═══════════════════════════════════════════════════════════════════
+            BORROWER VIEWS
+        ════════════════════════════════════════════════════════════════════ */}
+
+        {/* Borrower: pending */}
         {!isOwner && loan?.status === 'pending' && (
           <div className="flex flex-col gap-3">
             <div className="bg-[#FFF0E6] rounded-2xl p-4 text-center">
               <p className="text-[#C4673A] font-medium">⏳ Venter på svar fra {ownerName}</p>
             </div>
-            <LoanThread
-              loan={loan}
-              item={item}
-              user={user}
-              isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)}
-            />
+            <LoanThread loan={loan} item={item} user={user} isOwner={false}
+              onLoanUpdated={updated => setLoan(updated)} />
           </div>
         )}
 
-        {/* ─── Låntaker: endringsforslag mottatt ───────────────────────────── */}
+        {/* Borrower: change proposed */}
         {!isOwner && loan?.status === 'change_proposed' && (
           <div className="flex flex-col gap-3">
             <div className="bg-[#FFF0E6] border border-[#F5D5C0] rounded-2xl p-4 flex items-center gap-3">
@@ -417,45 +430,31 @@ export default function ItemPage() {
                 <p className="text-xs text-[#9C7B65] mt-0.5">Se meldingstråden og svar på forslaget</p>
               </div>
             </div>
-            <LoanThread
-              loan={loan}
-              item={item}
-              user={user}
-              isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)}
-            />
+            <LoanThread loan={loan} item={item} user={user} isOwner={false}
+              onLoanUpdated={updated => setLoan(updated)} />
           </div>
         )}
 
-        {/* ─── Låntaker: godtatt ────────────────────────────────────────────── */}
+        {/* Borrower: active */}
         {!isOwner && loan?.status === 'active' && (
           <div className="flex flex-col gap-3">
             <div className="bg-[#EEF4F0] rounded-2xl p-4">
               <p className="text-[#4A7C59] font-medium mb-1">✓ Du låner denne nå!</p>
-              {loan.due_date && (
-                <p className="text-sm text-[#9C7B65]">Returner innen {formatDate(loan.due_date)}</p>
-              )}
+              {loan.due_date && <p className="text-sm text-[#9C7B65]">Returner innen {formatDate(loan.due_date)}</p>}
               {item.price && item.vipps_number && (
-                <a
-                  href={`https://qr.vipps.no/28/2/01/031/${item.vipps_number}?amount=${item.price}&message=Leie+${encodeURIComponent(item.name)}`}
+                <a href={`https://qr.vipps.no/28/2/01/031/${item.vipps_number}?amount=${item.price}&message=Leie+${encodeURIComponent(item.name)}`}
                   target="_blank"
-                  className="mt-3 flex items-center justify-center gap-2 bg-[#FF5B24] text-white rounded-xl py-2.5 text-sm font-medium w-full"
-                >
+                  className="mt-3 flex items-center justify-center gap-2 bg-[#FF5B24] text-white rounded-xl py-2.5 text-sm font-medium w-full">
                   Betal via Vipps 💸
                 </a>
               )}
             </div>
-            <LoanThread
-              loan={loan}
-              item={item}
-              user={user}
-              isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)}
-            />
+            <LoanThread loan={loan} item={item} user={user} isOwner={false}
+              onLoanUpdated={updated => setLoan(updated)} />
           </div>
         )}
 
-        {/* ─── Låntaker: send forespørsel ───────────────────────────────────── */}
+        {/* Borrower: send request form */}
         {!isOwner && !loan && item.available && (
           <div className="flex flex-col gap-3">
             <h2 className="font-bold text-[#2C1A0E]">Send låneforespørsel</h2>
@@ -465,13 +464,8 @@ export default function ItemPage() {
                   <p className="text-[#4A7C59] font-medium">✓ Forespørsel sendt til {ownerName}!</p>
                 </div>
                 {loan && (
-                  <LoanThread
-                    loan={loan}
-                    item={item}
-                    user={user}
-                    isOwner={false}
-                    onLoanUpdated={updated => setLoan(updated)}
-                  />
+                  <LoanThread loan={loan} item={item} user={user} isOwner={false}
+                    onLoanUpdated={updated => setLoan(updated)} />
                 )}
               </div>
             ) : (
@@ -479,40 +473,27 @@ export default function ItemPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Fra</label>
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={e => setStartDate(e.target.value)}
+                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
                       min={new Date().toISOString().split('T')[0]}
-                      className="bg-white border border-[#E8DDD0] rounded-xl px-3 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
-                    />
+                      className="bg-white border border-[#E8DDD0] rounded-xl px-3 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm" />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Til</label>
-                    <input
-                      type="date"
-                      value={dueDate}
-                      onChange={e => setDueDate(e.target.value)}
+                    <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
                       min={startDate || new Date().toISOString().split('T')[0]}
-                      className="bg-white border border-[#E8DDD0] rounded-xl px-3 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
-                    />
+                      className="bg-white border border-[#E8DDD0] rounded-xl px-3 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm" />
                   </div>
                 </div>
                 {startDate && dueDate && (
                   <div className="bg-[#EEF4F0] rounded-xl px-3 py-2 text-xs text-[#4A7C59]">
-                    ✓ Valgt fra kalender: {formatDate(startDate)} → {formatDate(dueDate)}
+                    ✓ {formatDate(startDate)} → {formatDate(dueDate)}
                   </div>
                 )}
-                <textarea
-                  value={message}
-                  onChange={e => setMessage(e.target.value)}
-                  rows={3}
-                  className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A] resize-none"
-                />
-                <button
-                  onClick={sendRequest}
-                  className="bg-[#C4673A] text-white rounded-xl py-3 font-medium"
-                >
+                <textarea value={message} onChange={e => setMessage(e.target.value)} rows={3}
+                  className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A] resize-none" />
+                <button onClick={sendRequest}
+                  disabled={!startDate || !dueDate}
+                  className="bg-[#C4673A] text-white rounded-xl py-3 font-medium disabled:opacity-40">
                   Send forespørsel
                 </button>
               </>
@@ -520,12 +501,13 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* ─── Låntaker: ikke tilgjengelig ─────────────────────────────────── */}
+        {/* Borrower: unavailable */}
         {!isOwner && !loan && !item.available && (
           <div className="bg-[#FAF7F2] rounded-2xl p-4 text-center">
             <p className="text-[#9C7B65]">Denne er utlånt akkurat nå</p>
           </div>
         )}
+
       </div>
     </div>
   )

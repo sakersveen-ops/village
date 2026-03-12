@@ -1,4 +1,5 @@
 'use client'
+console.log('search page rendrer')
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'

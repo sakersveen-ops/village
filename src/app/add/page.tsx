@@ -78,6 +78,13 @@ export default function AddPage() {
   }
 
   const handleShelfImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleShelfImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    console.log('fil valgt:', file.name, file.type, file.size)
+    setShelfLoading(true)
+    setShelfStep('upload')
+    // ... resten
     const file = e.target.files?.[0]
     if (!file) return
     setShelfLoading(true)
@@ -101,7 +108,7 @@ export default function AddPage() {
           messages: [{
             role: 'user',
             content: [
-              { type: 'image', source: { type: 'base64', media_type: file.type, data: base64 } },
+              { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 } },
               { type: 'text', text: 'Se på bokhyllen. List opp alle bøkene du kan se. Returner KUN et JSON-array med objekter: [{title, author}]. Gjett forfatter hvis du ikke er sikker.' }
             ]
           }]

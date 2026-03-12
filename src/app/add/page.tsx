@@ -109,9 +109,13 @@ export default function AddPage() {
           }]
         })
       })
+
       const claudeData = await claudeRes.json()
-      const claudeText = claudeData.content?.[0]?.text || '[]'
-      const cleanClaude = claudeText.replace(/```json|```/g, '').trim()
+      console.log('Claude svar:', JSON.stringify(claudeData))
+      const rawText = claudeData.content?.[0]?.text || '[]'
+      console.log('Claude tekst:', rawText)
+      const cleanClaude = rawText.replace(/```json|```/g, '').trim()
+      console.log('Renset tekst:', cleanClaude)
       const recognized: { title: string; author: string }[] = JSON.parse(cleanClaude)
 
       const results: BookResult[] = []
@@ -137,14 +141,6 @@ export default function AddPage() {
           results.push({ title: book.title, author: book.author, description: '', genre: '', isbn: '', image_url: '', selected: true })
         }
       }
-
-      const claudeData = await claudeRes.json()
-      console.log('Claude svar:', JSON.stringify(claudeData))
-      const rawText = claudeData.content?.[0]?.text || '[]'
-      console.log('Claude tekst:', rawText)
-      const cleanClaude = rawText.replace(/```json|```/g, '').trim()
-      console.log('Renset tekst:', cleanClaude)
-      const recognized: { title: string; author: string }[] = JSON.parse(cleanClaude)
 
       setBooks(results)
       setShelfStep('results')

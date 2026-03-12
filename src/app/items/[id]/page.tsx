@@ -12,6 +12,7 @@ export default function ItemPage() {
   const [loan, setLoan]               = useState<any>(null)
   const [allLoans, setAllLoans]       = useState<any[]>([])
   const [pendingLoans, setPendingLoans] = useState<any[]>([])
+  const [proposalLoanId, setProposalLoanId] = useState<string | null>(null)
   const [blockedDates, setBlockedDates] = useState<string[]>([])
   const [message, setMessage]         = useState('')
   const [startDate, setStartDate]     = useState('')
@@ -337,6 +338,16 @@ export default function ItemPage() {
                         className="flex-1 bg-[#4A7C59] text-white rounded-xl py-2 text-sm font-medium">
                         ✓ Godta
                       </button>
+                      <button
+                        onClick={() => {
+                          setProposalLoanId(l.id)
+                          setTimeout(() => {
+                            document.getElementById(`proposal-${l.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                          }, 80)
+                        }}
+                        className="flex-1 bg-[#FFF0E6] border border-[#F5D5C0] text-[#C4673A] rounded-xl py-2 text-sm font-medium">
+                        📅 Foreslå endring
+                      </button>
                       <button onClick={() => respondToLoan(l.id, false)}
                         className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-2 text-sm font-medium">
                         Avslå
@@ -345,13 +356,15 @@ export default function ItemPage() {
                   )}
                 </div>
 
-                {/* Thread always visible below card, no toggle needed */}
-                <div className="rounded-b-2xl overflow-hidden shadow-sm">
+                {/* Thread always visible below card */}
+                <div id={`proposal-${l.id}`} className="rounded-b-2xl overflow-hidden shadow-sm">
                   <LoanThread
                     loan={l}
                     item={item}
                     user={user}
                     isOwner={true}
+                    openProposal={proposalLoanId === l.id}
+                    onProposalOpened={() => setProposalLoanId(null)}
                     onLoanUpdated={updated => {
                       setPendingLoans(prev => prev.map(p => p.id === updated.id ? updated : p))
                       setAllLoans(prev => prev.map(a => a.id === updated.id ? updated : a))

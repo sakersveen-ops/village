@@ -5,8 +5,11 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 
 const CATEGORIES = [
-  { id: 'barn', emoji: '🧸' }, { id: 'kjole', emoji: '👗' },
-  { id: 'verktøy', emoji: '🔧' }, { id: 'bok', emoji: '📚' }, { id: 'annet', emoji: '📦' },
+  { id: 'barn', label: 'Barn', emoji: '🧸' },
+  { id: 'kjole', label: 'Kjoler', emoji: '👗' },
+  { id: 'verktøy', label: 'Verktøy', emoji: '🔧' },
+  { id: 'bok', label: 'Bøker', emoji: '📚' },
+  { id: 'annet', label: 'Annet', emoji: '📦' },
 ]
 
 type AccessLevel = 'self' | 'friend' | 'friend_of_friend' | 'community' | 'stranger'
@@ -21,7 +24,10 @@ export default function UserProfilePage() {
   const [friendRequestSent, setFriendRequestSent] = useState(false)
   const [isFriend, setIsFriend] = useState(false)
   const [sharedCommunities, setSharedCommunities] = useState<any[]>([])
+  const [publicCommunities, setPublicCommunities] = useState<any[]>([])
   const [mutualFriends, setMutualFriends] = useState<any[]>([])
+  const [itemSearch, setItemSearch] = useState('')
+  const [itemCategory, setItemCategory] = useState('')
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const { userId } = useParams()
@@ -63,10 +69,18 @@ export default function UserProfilePage() {
       const { data: myMemberships } = await supabase
         .from('community_members').select('community_id').eq('user_id', user.id).eq('status', 'active')
       const { data: theirMemberships } = await supabase
-        .from('community_members').select('community_id, communities(name, avatar_emoji)').eq('user_id', userId as string).eq('status', 'active')
+        .from('community_members')
+        .select('community_id, communities(id, name, avatar_emoji, is_public)')
+        .eq('user_id', userId as string).eq('status', 'active')
       const myComIds = new Set((myMemberships || []).map((m: any) => m.community_id))
       const shared = (theirMemberships || []).filter((m: any) => myComIds.has(m.community_id))
       setSharedCommunities(shared)
+
+      // Offentlige kretser de er med i (ikke felles)
+      const publicComs = (theirMemberships || []).filter((m: any) =>
+        m.communities?.is_public && !myComIds.has(m.community_id)
+      )
+      setPublicCommunities(publicComs)
 
       // Felles venner
       const { data: myFriendsFull } = await supabase
@@ -135,6 +149,16 @@ export default function UserProfilePage() {
   const displayName = (p: any) => p?.name || p?.username || p?.email?.split('@')[0]
   const catEmoji = (cat: string) => CATEGORIES.find(c => c.id === cat)?.emoji || '📦'
 
+  const availableCategories = CATEGORIES.filter(c => items.some(i => i.category === c.id))
+
+  const filteredItems = items.filter(item => {
+    const matchSearch = itemSearch.trim().length < 2 ||
+      item.name?.toLowerCase().includes(itemSearch.toLowerCase()) ||
+      item.description?.toLowerCase().includes(itemSearch.toLowerCase())
+    const matchCat = !itemCategory || item.category === itemCategory
+    return matchSearch && matchCat
+  })
+
   if (loading) return <div className="p-8 text-center text-[#9C7B65]">Laster…</div>
   if (!profile) return <div className="p-8 text-center text-[#9C7B65]">Fant ikke brukeren</div>
 
@@ -143,8 +167,7 @@ export default function UserProfilePage() {
 
       {/* Header */}
       <div className="bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-6">
-        <button onClick={() => router.back()} className
-        ="text-[#C4673A] text-sm mb-4 block">← Tilbake</button>
+        <button onClick={() => router.back()} className="text-[#C4673A] text-sm mb-4 block">← Tilbake</button>
 
         <div className="flex items-start gap-4">
           <div className="w-16 h-16 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold text-2xl overflow-hidden flex-shrink-0">
@@ -197,14 +220,33 @@ export default function UserProfilePage() {
 
         {/* Felles kretser */}
         {sharedCommunities.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {sharedCommunities.map((m: any) => (
-              <Link key={m.community_id} href={`/community/${m.community_id}`}>
-                <span className="bg-white border border-[#E8DDD0] rounded-full px-3 py-1.5 text-xs text-[#6B4226] shadow-sm">
-                  {m.communities?.avatar_emoji} {m.communities?.name}
-                </span>
-              </Link>
-            ))}
+          <div className="mt-3">
+            <p className="text-xs text-[#9C7B65] mb-1.5">Felles kretser</p>
+            <div className="flex flex-wrap gap-2">
+              {sharedCommunities.map((m: any) => (
+                <Link key={m.community_id} href={`/community/${m.community_id}`}>
+                  <span className="bg-white border border-[#E8DDD0] rounded-full px-3 py-1.5 text-xs text-[#6B4226] shadow-sm">
+                    {m.communities?.avatar_emoji} {m.communities?.name}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Offentlige kretser */}
+        {publicCommunities.length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs text-[#9C7B65] mb-1.5">Kretser</p>
+            <div className="flex flex-wrap gap-2">
+              {publicCommunities.map((m: any) => (
+                <Link key={m.community_id} href={`/community/${m.community_id}`}>
+                  <span className="bg-[#FAF7F2] border border-[#E8DDD0] rounded-full px-3 py-1.5 text-xs text-[#6B4226]">
+                    {m.communities?.avatar_emoji} {m.communities?.name}
+                  </span>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
 
@@ -223,26 +265,64 @@ export default function UserProfilePage() {
       </div>
 
       {/* Tilgjengelige ting */}
-      <div className="px-4 pt-5 flex flex-col gap-4">
+      <div className="px-4 pt-5 flex flex-col gap-3 pb-8">
         <div className="flex items-center justify-between">
           <h2 className="font-bold text-[#2C1A0E]">
             Tilgjengelige ting
-            {items.length > 0 && <span className="text-[#9C7B65] font-normal text-sm ml-1">({items.length})</span>}
+            {filteredItems.length > 0 && <span className="text-[#9C7B65] font-normal text-sm ml-1">({filteredItems.length})</span>}
           </h2>
           {accessLevel === 'stranger' && (
-            <span className="text-xs text-[#9C7B65]">Viser offentlige ting</span>
+            <span className="text-xs text-[#9C7B65]">Offentlige ting</span>
           )}
         </div>
 
-        {items.length === 0 ? (
+        {/* Søk */}
+        {items.length > 3 && (
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm pointer-events-none">🔍</span>
+            <input
+              value={itemSearch}
+              onChange={e => setItemSearch(e.target.value)}
+              placeholder="Søk i tingene…"
+              className="w-full bg-white border border-[#E8DDD0] rounded-xl pl-10 pr-4 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
+            />
+          </div>
+        )}
+
+        {/* Kategorifilter */}
+        {availableCategories.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <button
+              onClick={() => setItemCategory('')}
+              className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${
+                !itemCategory ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
+              }`}
+            >
+              Alle
+            </button>
+            {availableCategories.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setItemCategory(itemCategory === cat.id ? '' : cat.id)}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${
+                  itemCategory === cat.id ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
+                }`}
+              >
+                {cat.emoji} {cat.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {filteredItems.length === 0 ? (
           <div className="bg-white rounded-2xl p-6 text-center text-[#9C7B65] text-sm">
-            {accessLevel === 'stranger'
-              ? 'Ingen offentlige ting tilgjengelig'
-              : 'Ingen ting tilgjengelig akkurat nå'}
+            {items.length === 0
+              ? accessLevel === 'stranger' ? 'Ingen offentlige ting tilgjengelig' : 'Ingen ting tilgjengelig akkurat nå'
+              : 'Ingen treff på søket'}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {items.map(item => (
+            {filteredItems.map(item => (
               <Link key={item.id} href={`/items/${item.id}`}>
                 <div className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
                   {item.image_url

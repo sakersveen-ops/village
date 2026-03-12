@@ -80,71 +80,78 @@ export default function AddPage() {
   }
 
   const handleShelfImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0]
-  if (!file) return
-  console.log('fil valgt:', file.name, file.type, file.size)
-  setShelfLoading(true)
-  setShelfStep('upload')
+    const file = e.target.files?.[0]
+    if (!file) return
+    console.log('fil valgt:', file.name, file.type, file.size)
+    setShelfLoading(true)
+    setShelfStep('upload')
 
-  const base64 = await new Promise<string>((res, rej) => {
-    const r = new FileReader()
-    r.onload = () => res((r.result as string).split(',')[1])
-    r.onerror = () => rej(new Error('Read failed'))
-    r.readAsDataURL(file)
-  })
-
-  try {
-    const claudeRes = await fetch('/api/claude', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 } },
-            { type: 'text', text: 'Se på bokhyllen. List opp alle bøkene du kan se. Returner KUN et JSON-array med objekter: [{title, author}]. Gjett forfatter hvis du ikke er sikker.' }
-          ]
-        }]
-      })
+    const base64 = await new Promise<string>((res, rej) => {
+      const r = new FileReader()
+      r.onload = () => res((r.result as string).split(',')[1])
+      r.onerror = () => rej(new Error('Read failed'))
+      r.readAsDataURL(file)
     })
-    const claudeData = await claudeRes.json()
-    const claudeText = claudeData.content?.[0]?.text || '[]'
-    const cleanClaude = claudeText.replace(/```json|```/g, '').trim()
-    const recognized: { title: string; author: string }[] = JSON.parse(cleanClaude)
 
-    const results: BookResult[] = []
-    for (const book of recognized.slice(0, 15)) {
-      try {
-        const q = encodeURIComponent(`${book.title} ${book.author}`)
-        const gbRes = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1`)
-        const gbData = await gbRes.json()
-        const vol = gbData.items?.[0]?.volumeInfo
-        const isbn = vol?.industryIdentifiers?.find((id: any) => id.type === 'ISBN_13')?.identifier
-          || vol?.industryIdentifiers?.find((id: any) => id.type === 'ISBN_10')?.identifier
-          || ''
-        results.push({
-          title: vol?.title || book.title,
-          author: vol?.authors?.[0] || book.author,
-          description: vol?.description?.slice(0, 300) || '',
-          genre: vol?.categories?.[0] || '',
-          isbn,
-          image_url: vol?.imageLinks?.thumbnail?.replace('http://', 'https://') || '',
-          selected: true,
+    try {
+      const claudeRes = await fetch('/api/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 } },
+              { type: 'text', text: 'Se på bokhyllen. List opp alle bøkene du kan se. Returner KUN et JSON-array med objekter: [{title, author}]. Gjett forfatter hvis du ikke er sikker.' }
+            ]
+          }]
         })
-      } catch {
-        results.push({ title: book.title, author: book.author, description: '', genre: '', isbn: '', image_url: '', selected: true })
-      }
-    }
+      })
+      const claudeData = await claudeRes.json()
+      const claudeText = claudeData.content?.[0]?.text || '[]'
+      const cleanClaude = claudeText.replace(/```json|```/g, '').trim()
+      const recognized: { title: string; author: string }[] = JSON.parse(cleanClaude)
 
-    setBooks(results)
-    setShelfStep('results')
-  } catch (e) {
-    console.error(e)
+      const results: BookResult[] = []
+      for (const book of recognized.slice(0, 15)) {
+        try {
+          const q = encodeURIComponent(`${book.title} ${book.author}`)
+          const gbRes = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1`)
+          const gbData = await gbRes.json()
+          const vol = gbData.items?.[0]?.volumeInfo
+          const isbn = vol?.industryIdentifiers?.find((id: any) => id.type === 'ISBN_13')?.identifier
+            || vol?.industryIdentifiers?.find((id: any) => id.type === 'ISBN_10')?.identifier
+            || ''
+          results.push({
+            title: vol?.title || book.title,
+            author: vol?.authors?.[0] || book.author,
+            description: vol?.description?.slice(0, 300) || '',
+            genre: vol?.categories?.[0] || '',
+            isbn,
+            image_url: vol?.imageLinks?.thumbnail?.replace('http://', 'https://') || '',
+            selected: true,
+          })
+        } catch {
+          results.push({ title: book.title, author: book.author, description: '', genre: '', isbn: '', image_url: '', selected: true })
+        }
+      }
+
+      const claudeData = await claudeRes.json()
+      console.log('Claude svar:', JSON.stringify(claudeData))
+      const claudeText = claudeData.content?.[0]?.text || '[]'
+      console.log('Claude tekst:', claudeText)
+      const cleanClaude = claudeText.replace(/```json|```/g, '').trim()
+      console.log('Renset tekst:', cleanClaude)
+
+      setBooks(results)
+      setShelfStep('results')
+    } catch (e) {
+      console.error(e)
+    }
+    setShelfLoading(false)
   }
-  setShelfLoading(false)
-}
 
   const toggleBook = (i: number) => {
     setBooks(prev => prev.map((b, idx) => idx === i ? { ...b, selected: !b.selected } : b))

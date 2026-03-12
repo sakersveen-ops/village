@@ -32,6 +32,8 @@ export default function ProfilePage() {
   const [activeCategory, setActiveCategory] = useState('all')
   const router = useRouter()
 
+  const [starred, setStarred] = useState<Set<string>>(new Set())
+
   useEffect(() => {
     const load = async () => {
       const supabase = createClient()
@@ -50,6 +52,12 @@ export default function ProfilePage() {
         .select('user_b, profiles!friendships_user_b_fkey(id, name, email, avatar_url)')
         .eq('user_a', user.id)
       setFriends(friendships || [])
+
+      const { data: starredRows } = await supabase
+        .from('starred_users')
+        .select('starred_id')
+        .eq('user_id', user.id)
+      setStarred(new Set((starredRows || []).map((s: any) => s.starred_id)))
 
       const { data: incoming } = await supabase
         .from('friend_requests')
@@ -360,100 +368,63 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Venner */}
+        {/* Venner – forhåndsvisning */}
         <div>
           <div className="flex justify-between items-center mb-3">
-            <h2 className="text-base font-bold text-[#2C1A0E]">
-              Venner {friends.length > 0 && <span className="text-[#9C7B65] font-normal text-sm">({friends.length})</span>}
-            </h2>
-            <button
-              onClick={() => {
-                setSearchQuery('')
-                const el = document.getElementById('friend-search')
-                el?.focus()
-              }}
-              className="text-sm text-[#C4673A] font-medium"
-            >
-              + Legg til
-            </button>
-          </div>
-
-          {/* Søk */}
-          <div className="relative mb-3">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm pointer-events-none">🔍</span>
-            <input
-              id="friend-search"
-              value={searchQuery}
-              onChange={e => searchUsers(e.target.value)}
-              placeholder="Søk på navn eller e-post…"
-              className="w-full bg-white border border-[#E8DDD0] rounded-xl pl-10 pr-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
-            />
-          </div>
-
-          {searchResults.length > 0 && (
-            <div className="flex flex-col gap-2 mb-3">
-              {searchResults.map(result => (
-                <div key={result.id} className="bg-white rounded-2xl px-4 py-3 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
-                      {result.avatar_url
-                        ? <img src={result.avatar_url} className="w-full h-full object-cover" />
-                        : (result.name || result.email)?.[0]?.toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-[#2C1A0E] text-sm">{result.name || result.email?.split('@')[0]}</p>
-                      {mutualMap[result.id]?.length > 0 && (
-                        <button onClick={() => setExpandedMutual(expandedMutual === result.id ? null : result.id)} className="text-xs text-[#C4673A] mt-0.5">
-                          {mutualMap[result.id].length} felles {mutualMap[result.id].length === 1 ? 'venn' : 'venner'} ↓
-                        </button>
-                      )}
-                    </div>
-                    {result.isFriend ? (
-                      <span className="text-xs text-[#4A7C59] font-medium flex-shrink-0">✓ Venn</span>
-                    ) : result.requestSent ? (
-                      <span className="text-xs text-[#9C7B65] flex-shrink-0">Forespørsel sendt</span>
-                    ) : (
-                      <button onClick={() => sendFriendRequest(result.id)} className="text-xs bg-[#C4673A] text-white rounded-full px-3 py-1.5 font-medium flex-shrink-0">
-                        + Legg til
-                      </button>
-                    )}
-                  </div>
-                  {expandedMutual === result.id && mutualMap[result.id]?.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-[#E8DDD0] flex flex-wrap gap-2">
-                      {mutualMap[result.id].map((m: any) => (
-                        <div key={m.id} className="flex items-center gap-1.5 bg-[#FAF7F2] rounded-full px-2 py-1">
-                          <div className="w-5 h-5 rounded-full bg-[#E8DDD0] flex items-center justify-center text-xs font-bold text-[#6B4226] overflow-hidden">
-                            {m.avatar_url ? <img src={m.avatar_url} className="w-full h-full object-cover" /> : (m.name || m.email)?.[0]?.toUpperCase()}
-                          </div>
-                          <span className="text-xs text-[#6B4226]">{m.name || m.email?.split('@')[0]}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+            <Link href="/friends">
+              <h2 className="text-base font-bold text-[#2C1A0E]">
+                Venner {friends.length > 0 && <span className="text-[#9C7B65] font-normal text-sm">({friends.length})</span>}
+              </h2>
+            </Link>
+            <div className="flex items-center gap-3">
+              <Link href="/friends" className="text-[#9C7B65] text-lg">🔍</Link>
+              <Link href="/friends" className="text-[#C4673A] text-lg font-bold">+</Link>
             </div>
-          )}
+          </div>
 
-          {friends.length === 0 && searchResults.length === 0 ? (
+          {friends.length === 0 ? (
             <div className="bg-white rounded-2xl p-5 text-center text-[#9C7B65] text-sm">
               Ingen venner ennå – <Link href="/invite" className="text-[#C4673A]">inviter noen!</Link>
             </div>
           ) : (
-            <div className="flex flex-col gap-2">
-              {friends.map((f: any) => (
-                <div key={f.user_b} className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
-                  <div className="w-9 h-9 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
-                    {f.profiles?.avatar_url
-                      ? <img src={f.profiles.avatar_url} className="w-full h-full object-cover" />
-                      : (f.profiles?.name || f.profiles?.email)?.[0]?.toUpperCase()}
-                  </div>
-                  <p className="text-[#2C1A0E] font-medium text-sm">
-                    {f.profiles?.name || f.profiles?.email?.split('@')[0]}
-                  </p>
+            <>
+              {/* Avatar-rad – starred først */}
+              <Link href="/friends">
+                <div className="bg-white rounded-2xl px-4 py-3 flex items-center gap-1 shadow-sm flex-wrap">
+                  {[...friends]
+                    .sort((a, b) => (starred.has(a.user_b) ? -1 : 1))
+                    .slice(0, 8)
+                    .map((f: any) => (
+                      <div key={f.user_b} className="relative">
+                        <div className="w-10 h-10 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm overflow-hidden border-2 border-white">
+                          {f.profiles?.avatar_url
+                            ? <img src={f.profiles.avatar_url} className="w-full h-full object-cover" />
+                            : <span className="text-xs text-[#6B4226]">{(f.profiles?.name || f.profiles?.email)?.[0]?.toUpperCase()}</span>}
+                        </div>
+                        {starred.has(f.user_b) && (
+                          <span className="absolute -top-0.5 -right-0.5 text-xs">❤️</span>
+                        )}
+                      </div>
+                    ))}
+                  {friends.length > 8 && (
+                    <div className="w-10 h-10 rounded-full bg-[#E8DDD0] flex items-center justify-center text-xs text-[#6B4226] font-bold border-2 border-white">
+                      +{friends.length - 8}
+                    </div>
+                  )}
                 </div>
-              ))}
-            </div>
+              </Link>
+
+              {/* Inviter-knapp når man har venner */}
+              <Link href="/invite" className="mt-2 block">
+                <div className="bg-[#C4673A] rounded-2xl p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-white font-semibold">Inviter venner</p>
+                    <p className="text-white/70 text-sm mt-0.5">Del lenken din og bygg kretsen</p>
+                  </div>
+                  <span className="text-white text-xl">→</span>
+                </div>
+              </Link>
+            </>
           )}
         </div>
 

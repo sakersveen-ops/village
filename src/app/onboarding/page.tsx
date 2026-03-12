@@ -8,6 +8,8 @@ const INTERESTS = ['Barn', 'Bøker', 'Kjoler', 'Verktøy', 'Sport', 'Musikk', 'M
 export default function OnboardingPage() {
   const [step, setStep] = useState(1)
   const [name, setName] = useState('')
+  const [username, setUsername] = useState('')
+  const [usernameError, setUsernameError] = useState('')
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
   const [interests, setInterests] = useState<string[]>([])
@@ -25,6 +27,15 @@ export default function OnboardingPage() {
     if (!file) return
     setAvatarFile(file)
     setAvatarPreview(URL.createObjectURL(file))
+  }
+
+  const checkUsername = async (val: string) => {
+    const clean = val.toLowerCase().replace(/[^a-z0-9_.]/g, '')
+    setUsername(clean)
+    if (clean.length < 3) { setUsernameError('Minst 3 tegn'); return }
+    const supabase = createClient()
+    const { data } = await supabase.from('profiles').select('id').eq('username', clean).single()
+    setUsernameError(data ? 'Brukernavnet er tatt' : '')
   }
 
   const finish = async () => {
@@ -46,6 +57,7 @@ export default function OnboardingPage() {
       id: user.id,
       email: user.email,
       name,
+      username: username || null,
       phone,
       address,
       interests,
@@ -59,23 +71,18 @@ export default function OnboardingPage() {
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-12 pb-24 min-h-screen flex flex-col">
-
-      {/* Progress */}
       <div className="flex gap-1.5 mb-8">
         {[1, 2, 3].map(s => (
           <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${s <= step ? 'bg-[#C4673A]' : 'bg-[#E8DDD0]'}`} />
         ))}
       </div>
 
-      {/* Steg 1: Navn og bilde */}
       {step === 1 && (
         <div className="flex flex-col gap-6 flex-1">
           <div>
             <h1 className="text-2xl font-bold text-[#2C1A0E]">Velkommen til Village! 👋</h1>
             <p className="text-sm text-[#9C7B65] mt-1">La oss sette opp profilen din</p>
           </div>
-
-          {/* Avatar */}
           <div className="flex flex-col items-center gap-3">
             <label className="cursor-pointer">
               <div className="w-24 h-24 rounded-full bg-[#E8DDD0] flex items-center justify-center overflow-hidden">
@@ -87,7 +94,6 @@ export default function OnboardingPage() {
             </label>
             <p className="text-xs text-[#9C7B65]">Trykk for å legge til profilbilde</p>
           </div>
-
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Navn *</label>
@@ -97,6 +103,23 @@ export default function OnboardingPage() {
                 placeholder="Hva heter du?"
                 className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A]"
               />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Brukernavn</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9C7B65] text-sm">@</span>
+                <input
+                  value={username}
+                  onChange={e => checkUsername(e.target.value)}
+                  placeholder="ditt_brukernavn"
+                  className={`w-full bg-white border rounded-xl pl-8 pr-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A] ${usernameError ? 'border-red-300' : 'border-[#E8DDD0]'}`}
+                />
+              </div>
+              {usernameError && <p className="text-xs text-red-400">{usernameError}</p>}
+              {username && !usernameError && username.length >= 3 && (
+                <p className="text-xs text-[#4A7C59]">✓ Ledig</p>
+              )}
+              <p className="text-xs text-[#9C7B65]">Kun bokstaver, tall, punktum og understrek</p>
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Telefon</label>
@@ -112,7 +135,6 @@ export default function OnboardingPage() {
         </div>
       )}
 
-      {/* Steg 2: Adresse */}
       {step === 2 && (
         <div className="flex flex-col gap-6 flex-1">
           <div>
@@ -131,7 +153,6 @@ export default function OnboardingPage() {
         </div>
       )}
 
-      {/* Steg 3: Interesser */}
       {step === 3 && (
         <div className="flex flex-col gap-6 flex-1">
           <div>
@@ -139,32 +160,23 @@ export default function OnboardingPage() {
             <p className="text-sm text-[#9C7B65] mt-1">Vi tilpasser feeden din basert på dette</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {INTERESTS.map(interest => {
-              const selected = interests.includes(interest)
-              return (
-                <button
-                  key={interest}
-                  onClick={() => toggleInterest(interest)}
-                  className={`px-4 py-2 rounded-full text-sm border transition-colors ${
-                    selected ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
-                  }`}
-                >
-                  {interest}
-                </button>
-              )
-            })}
+            {INTERESTS.map(interest => (
+              <button key={interest} onClick={() => toggleInterest(interest)}
+                className={`px-4 py-2 rounded-full text-sm border transition-colors ${interests.includes(interest) ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'}`}>
+                {interest}
+              </button>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Knapper */}
       <div className="flex gap-3 mt-8">
         <button onClick={skip} className="text-sm text-[#9C7B65] px-4 py-3">
           {step === 3 ? 'Hopp over' : 'Gjør senere'}
         </button>
         <button
           onClick={step === 3 ? finish : () => setStep(s => s + 1)}
-          disabled={step === 1 && !name}
+          disabled={(step === 1 && !name) || saving || (step === 1 && !!usernameError)}
           className="flex-1 bg-[#C4673A] text-white rounded-xl py-3 font-medium disabled:opacity-50"
         >
           {saving ? 'Lagrer…' : step === 3 ? 'Kom i gang 🎉' : 'Neste →'}

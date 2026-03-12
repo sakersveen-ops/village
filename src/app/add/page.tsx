@@ -178,24 +178,24 @@ export default function AddPage() {
     router.push('/')
   }
 
-  const matchWatches = async (item: any) => {
-  const supabase = createClient()
-  const { data: watches } = await supabase
-    .from('item_watches')
-    .select('*')
-    .neq('user_id', user?.id)
+  const matchWatches = async (item: any, userId: string) => {
+    const supabase = createClient()
+    const { data: watches } = await supabase
+      .from('item_watches')
+      .select('*')
+      .neq('user_id', userId)
 
-  if (!watches || watches.length === 0) return
+    if (!watches || watches.length === 0) return
 
-  const matches = watches.filter(w => {
-    const q = w.query.toLowerCase()
-    const nameMatch = item.name?.toLowerCase().includes(q)
-    const descMatch = item.description?.toLowerCase().includes(q)
-    if (!nameMatch && !descMatch) return false
-    if (w.category && w.category !== item.category) return false
-    if (w.max_price && item.price && item.price > w.max_price) return false
-    return true
-  })
+    const matches = watches.filter(w => {
+      const q = w.query.toLowerCase()
+      const nameMatch = item.name?.toLowerCase().includes(q)
+      const descMatch = item.description?.toLowerCase().includes(q)
+      if (!nameMatch && !descMatch) return false
+      if (w.category && w.category !== item.category) return false
+      if (w.max_price && item.price && item.price > w.max_price) return false
+      return true
+    })
 
   for (const watch of matches) {
     await supabase.from('notifications').insert({

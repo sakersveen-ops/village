@@ -24,6 +24,7 @@ export default function UserProfilePage() {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const { userId } = useParams()
+  const [mutualFriends, setMutualFriends] = useState<any[]>([])
 
   useEffect(() => {
     const load = async () => {
@@ -74,6 +75,86 @@ export default function UserProfilePage() {
       const myComIds = new Set((myMemberships || []).map((m: any) => m.community_id))
       const shared = (theirMemberships || []).filter((m: any) => myComIds.has(m.community_id))
       setSharedCommunities(shared)
+
+      <div className="bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-6">
+        <button onClick={() => router.back()} className="text-[#C4673A] text-sm mb-4 block">← Tilbake</button>
+
+        <div className="flex items-start gap-4">
+            <div className="w-16 h-16 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold text-2xl overflow-hidden flex-shrink-0">
+            {profile.avatar_url
+                ? <img src={profile.avatar_url} className="w-full h-full object-cover" />
+                : displayName(profile)?.[0]?.toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-bold text-[#2C1A0E]">{displayName(profile)}</h1>
+            {profile.username && <p className="text-sm text-[#9C7B65]">@{profile.username}</p>}
+            <p className="text-xs text-[#9C7B65] mt-1">
+                {accessLevel === 'friend' ? '👥 Dere er venner'
+                : accessLevel === 'friend_of_friend' ? '👥 Venn av venn'
+                : accessLevel === 'community' ? '🏘️ Felles krets'
+                : '👤 Ukjent'}
+            </p>
+            </div>
+            <button onClick={toggleStar} className="text-2xl flex-shrink-0 mt-1">
+            {isStarred ? '❤️' : '🤍'}
+            </button>
+        </div>
+
+        {/* Felles venner */}
+        <div className="mt-4">
+            {mutualFriends.length > 0 ? (
+            <div>
+                <p className="text-xs text-[#9C7B65] mb-2">
+                {mutualFriends.length} felles {mutualFriends.length === 1 ? 'venn' : 'venner'}
+                </p>
+                <div className="flex gap-1 flex-wrap">
+                {mutualFriends.slice(0, 5).map((m: any) => (
+                    <div key={m.id} className="flex items-center gap-1.5 bg-white border border-[#E8DDD0] rounded-full px-2 py-1">
+                    <div className="w-5 h-5 rounded-full bg-[#E8DDD0] flex items-center justify-center text-xs overflow-hidden">
+                        {m.avatar_url
+                        ? <img src={m.avatar_url} className="w-full h-full object-cover" />
+                        : displayName(m)?.[0]?.toUpperCase()}
+                    </div>
+                    <span className="text-xs text-[#6B4226]">{displayName(m)}</span>
+                    </div>
+                ))}
+                {mutualFriends.length > 5 && (
+                    <span className="text-xs text-[#9C7B65] self-center">+{mutualFriends.length - 5} til</span>
+                )}
+                </div>
+            </div>
+            ) : (
+            <p className="text-xs text-[#9C7B65]">Ingen felles venner</p>
+            )}
+        </div>
+
+        {/* Legg til som venn */}
+        {!isFriend && !friendRequestSent && (
+            <button onClick={sendFriendRequest}
+            className="mt-4 w-full bg-[#C4673A] text-white rounded-xl py-2.5 text-sm font-medium">
+            + Legg til som venn
+            </button>
+        )}
+        {friendRequestSent && (
+            <div className="mt-4 w-full bg-[#FAF7F2] border border-[#E8DDD0] rounded-xl py-2.5 text-sm text-[#9C7B65] text-center">
+            Forespørsel sendt
+            </div>
+        )}
+        </div>
+
+      // Felles venner
+        const { data: myFriendsFull } = await supabase
+        .from('friendships')
+        .select('user_b, profiles!friendships_user_b_fkey(id, name, username, avatar_url)')
+        .eq('user_a', user.id)
+        const { data: theirFriendsFull } = await supabase
+        .from('friendships')
+        .select('user_b')
+        .eq('user_a', userId as string)
+        const theirFriendSet = new Set((theirFriendsFull || []).map((f: any) => f.user_b))
+        const mutual = (myFriendsFull || []).filter((f: any) => theirFriendSet.has(f.user_b))
+        setMutualFriends(mutual.map((f: any) => f.profiles))
+
       const inSameCommunity = shared.length > 0
 
       // Sett tilgangsnivå
@@ -190,26 +271,30 @@ export default function UserProfilePage() {
           </div>
         )}
 
-        {/* Handlinger */}
-        <div className="flex gap-2 mt-4">
-          {!isFriend && !friendRequestSent && (
-            <button onClick={sendFriendRequest}
-              className="flex-1 bg-[#C4673A] text-white rounded-xl py-2.5 text-sm font-medium">
-              + Legg til som venn
-            </button>
-          )}
-          {friendRequestSent && (
-            <div className="flex-1 bg-[#FAF7F2] border border-[#E8DDD0] rounded-xl py-2.5 text-sm text-[#9C7B65] text-center">
-              Forespørsel sendt
+        
+        {/* Felles venner */}
+        {(() => {
+        // Beregn felles venner – trenger vi å hente i useEffect
+        return null
+        })()}
+
+        <div className="px-4 pt-5 flex flex-col gap-4">
+        
+        {/* Felles kretser */}
+        {sharedCommunities.length > 0 && (
+            <div>
+                <p className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide mb-2">Felles kretser</p>
+                <div className="flex flex-wrap gap-2">
+                    {sharedCommunities.map((m: any) => (
+                    <Link key={m.community_id} href={`/community/${m.community_id}`}>
+                        <span className="bg-white border border-[#E8DDD0] rounded-full px-3 py-1.5 text-xs text-[#6B4226] shadow-sm">
+                        {m.communities?.avatar_emoji} {m.communities?.name}
+                        </span>
+                    </Link>
+                    ))}
+                </div>
             </div>
-          )}
-          {isFriend && (
-            <div className="flex-1 bg-[#EEF4F0] rounded-xl py-2.5 text-sm text-[#4A7C59] font-medium text-center">
-              ✓ Dere er venner
-            </div>
-          )}
-        </div>
-      </div>
+        )}
 
       <div className="px-4 pt-5 flex flex-col gap-4">
         <div className="flex items-center justify-between">

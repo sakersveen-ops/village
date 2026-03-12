@@ -140,10 +140,11 @@ export default function AddPage() {
 
       const claudeData = await claudeRes.json()
       console.log('Claude svar:', JSON.stringify(claudeData))
-      const claudeText = claudeData.content?.[0]?.text || '[]'
-      console.log('Claude tekst:', claudeText)
-      const cleanClaude = claudeText.replace(/```json|```/g, '').trim()
+      const rawText = claudeData.content?.[0]?.text || '[]'
+      console.log('Claude tekst:', rawText)
+      const cleanClaude = rawText.replace(/```json|```/g, '').trim()
       console.log('Renset tekst:', cleanClaude)
+      const recognized: { title: string; author: string }[] = JSON.parse(cleanClaude)
 
       setBooks(results)
       setShelfStep('results')

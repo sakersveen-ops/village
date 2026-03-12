@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -13,12 +13,19 @@ export default function CommunityPage() {
   const [myRole, setMyRole] = useState<string | null>(null)
   const [membershipStatus, setMembershipStatus] = useState<string | null>(null)
   const [user, setUser] = useState<any>(null)
+  const [friends, setFriends] = useState<any[]>([])
   const [tab, setTab] = useState<'feed' | 'members' | 'admin'>('feed')
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [loading, setLoading] = useState(true)
   const [requesting, setRequesting] = useState(false)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set())
+  const [friendSearch, setFriendSearch] = useState('')
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [copySuccess, setCopySuccess] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const { id } = useParams()
 
@@ -64,7 +71,14 @@ export default function CommunityPage() {
         .order('created_at', { ascending: false })
       setItems(items || [])
 
-      // Logg for admins
+      // Load friends for invite modal
+      const { data: friendsData } = await supabase
+        .from('friendships')
+        .select('friend:profiles!friendships_friend_id_fkey(id, name, email, avatar_url)')
+        .eq('user_id', user.id)
+        .eq('status', 'accepted')
+      setFriends((friendsData || []).map((f: any) => f.friend))
+
       if (me?.role === 'admin') {
         const { data: log } = await supabase
           .from('membership_log')
@@ -89,15 +103,11 @@ export default function CommunityPage() {
       role: 'member',
       status: 'pending',
     })
-
-    // Logg
     await supabase.from('membership_log').insert({
       community_id: id,
       user_id: user?.id,
       action: 'requested',
     })
-
-    // Varsle alle admins
     const admins = members.filter(m => m.role === 'admin')
     if (admins.length > 0) {
       await supabase.from('notifications').insert(
@@ -121,22 +131,16 @@ export default function CommunityPage() {
     } else {
       await supabase.from('community_members').delete().eq('id', memberId)
     }
-
-    // Logg
     await supabase.from('membership_log').insert({
       community_id: id,
       user_id: userId,
       action: approve ? 'approved' : 'declined',
       acted_by: user?.id,
     })
-
-    // Fjern varsler hos alle andre admins for denne brukeren
     await supabase.from('notifications')
       .delete()
       .eq('type', 'join_request')
       .ilike('metadata', `%"requester_id":"${userId}"%`)
-
-    // Varsle brukeren
     await supabase.from('notifications').insert({
       user_id: userId,
       type: approve ? 'join_accepted' : 'join_declined',
@@ -145,12 +149,9 @@ export default function CommunityPage() {
         ? `Du er nå medlem av ${community.name}`
         : `Forespørselen om å bli med i ${community.name} ble avslått`,
     })
-
     const approved = pending.find(m => m.id === memberId)
     setPending(prev => prev.filter(m => m.id !== memberId))
     if (approve && approved) setMembers(prev => [...prev, { ...approved, status: 'active' }])
-
-    // Oppdater logg
     setMemberLog(prev => [{
       id: Date.now(),
       user_id: userId,
@@ -181,11 +182,66 @@ export default function CommunityPage() {
     setEditing(false)
   }
 
-  const copyInvite = () => {
-    navigator.clipboard.writeText(`${window.location.origin}/community/join/${community?.invite_code}`)
+  // FIX: Invite link copy with proper feedback
+  const copyInvite = async () => {
+    const inviteUrl = `${window.location.origin}/community/join/${community?.invite_code}`
+    try {
+      await navigator.clipboard.writeText(inviteUrl)
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 2000)
+    } catch {
+      // Fallback for browsers that block clipboard without user gesture
+      const textarea = document.createElement('textarea')
+      textarea.value = inviteUrl
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      setCopySuccess(true)
+      setTimeout(() => setCopySuccess(false), 2000)
+    }
+  }
+
+  // NEW: Invite friend directly
+  const inviteFriend = async (friendId: string) => {
+    const supabase = createClient()
+    // Send notification to the friend with invite link
+    await supabase.from('notifications').insert({
+      user_id: friendId,
+      type: 'community_invite',
+      title: `Invitasjon til ${community.name}`,
+      body: `${user?.email?.split('@')[0]} inviterer deg til å bli med i kretsen "${community.name}"`,
+      metadata: JSON.stringify({ community_id: id, invite_code: community?.invite_code }),
+    })
+    setInvitedIds(prev => new Set([...prev, friendId]))
+  }
+
+  // NEW: Upload community cover image
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingImage(true)
+    const supabase = createClient()
+    const ext = file.name.split('.').pop()
+    const path = `community-covers/${id}-${Date.now()}.${ext}`
+    const { error } = await supabase.storage.from('public').upload(path, file, { upsert: true })
+    if (!error) {
+      const { data: { publicUrl } } = supabase.storage.from('public').getPublicUrl(path)
+      await supabase.from('communities').update({ cover_image_url: publicUrl }).eq('id', id)
+      setCommunity((c: any) => ({ ...c, cover_image_url: publicUrl }))
+    }
+    setUploadingImage(false)
   }
 
   const formatDate = (d: string) => new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'short', year: 'numeric' })
+
+  const filteredFriends = friends.filter(f => {
+    const name = (f.name || f.email || '').toLowerCase()
+    return name.includes(friendSearch.toLowerCase())
+  })
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen text-[#9C7B65]">Laster…</div>
@@ -194,7 +250,6 @@ export default function CommunityPage() {
     <div className="p-8 text-center text-[#9C7B65]">Fant ikke community</div>
   )
 
-  // Ikke-medlem: pending
   if (!myRole && membershipStatus === 'pending') return (
     <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
       <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
@@ -208,7 +263,6 @@ export default function CommunityPage() {
     </div>
   )
 
-  // Ikke-medlem: be om tilgang
   if (!myRole) return (
     <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
       <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
@@ -246,8 +300,18 @@ export default function CommunityPage() {
 
         {editing ? (
           <div className="flex flex-col gap-3">
-            <input value={editName} onChange={e => setEditName(e.target.value)} className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-2 text-[#2C1A0E] text-xl font-bold outline-none focus:border-[#C4673A]" />
-            <textarea value={editDesc} onChange={e => setEditDesc(e.target.value)} rows={2} className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-2 text-[#2C1A0E] text-sm outline-none focus:border-[#C4673A] resize-none" />
+            <input
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-2 text-[#2C1A0E] text-xl font-bold outline-none focus:border-[#C4673A]"
+            />
+            <textarea
+              value={editDesc}
+              onChange={e => setEditDesc(e.target.value)}
+              rows={2}
+              placeholder="Legg til en beskrivelse av kretsen…"
+              className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-2 text-[#2C1A0E] text-sm outline-none focus:border-[#C4673A] resize-none"
+            />
             <div className="flex gap-2">
               <button onClick={saveEdits} className="flex-1 bg-[#C4673A] text-white rounded-xl py-2 text-sm font-medium">Lagre</button>
               <button onClick={() => setEditing(false)} className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-2 text-sm">Avbryt</button>
@@ -255,16 +319,55 @@ export default function CommunityPage() {
           </div>
         ) : (
           <div className="flex items-start gap-3">
-            <div className="w-14 h-14 rounded-2xl bg-[#FFF0E6] flex items-center justify-center text-3xl flex-shrink-0">
-              {community.avatar_emoji}
+            {/* Community avatar / cover image with upload option for admins */}
+            <div className="relative flex-shrink-0">
+              {community.cover_image_url ? (
+                <img
+                  src={community.cover_image_url}
+                  alt={community.name}
+                  className="w-14 h-14 rounded-2xl object-cover"
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-2xl bg-[#FFF0E6] flex items-center justify-center text-3xl">
+                  {community.avatar_emoji}
+                </div>
+              )}
+              {isAdmin && (
+                <>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingImage}
+                    className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#C4673A] rounded-full flex items-center justify-center shadow-sm"
+                    title="Bytt bilde"
+                  >
+                    {uploadingImage
+                      ? <span className="text-white text-xs animate-spin">⏳</span>
+                      : <span className="text-white text-xs">📷</span>}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                </>
+              )}
             </div>
-            <div className="flex-1">
+
+            <div className="flex-1 min-w-0">
               <h1 className="text-xl font-bold text-[#2C1A0E]">{community.name}</h1>
-              {community.description && <p className="text-sm text-[#9C7B65] mt-0.5">{community.description}</p>}
+              {/* Bio / description – always show, with friendly placeholder */}
+              <p className="text-sm text-[#9C7B65] mt-0.5">
+                {community.description
+                  ? community.description
+                  : <span className="italic opacity-70">Her kommer det en beskrivelse fra administrator av kretsen snart 🌱</span>}
+              </p>
               <p className="text-xs text-[#9C7B65] mt-1">{members.length} medlemmer</p>
             </div>
+
             {isAdmin && (
-              <button onClick={() => setEditing(true)} className="text-sm text-[#C4673A]">Rediger</button>
+              <button onClick={() => setEditing(true)} className="text-sm text-[#C4673A] flex-shrink-0">Rediger</button>
             )}
           </div>
         )}
@@ -293,12 +396,23 @@ export default function CommunityPage() {
           <>
             {isAdmin && (
               <div className="flex gap-2 mb-4">
-                <button onClick={copyInvite} className="flex-1 bg-white border border-dashed border-[#C4673A] rounded-2xl py-3 text-sm text-[#C4673A] font-medium">
-                  📋 Kopier invitasjonslenke
+                {/* FIX: Invite link with copy feedback + invite friends */}
+                <button
+                  onClick={() => setShowInviteModal(true)}
+                  className="flex-1 bg-white border border-dashed border-[#C4673A] rounded-2xl py-3 text-sm text-[#C4673A] font-medium"
+                >
+                  👥 Inviter venner
                 </button>
-                <Link href={`/community/${id}/share`}>
-                  <button className="bg-white border border-[#E8DDD0] rounded-2xl py-3 px-4 text-sm text-[#6B4226] font-medium">Del ting</button>
-                </Link>
+                <button
+                  onClick={copyInvite}
+                  className={`bg-white border rounded-2xl py-3 px-4 text-sm font-medium transition-colors ${
+                    copySuccess
+                      ? 'border-[#4A7C59] text-[#4A7C59]'
+                      : 'border-[#E8DDD0] text-[#6B4226]'
+                  }`}
+                >
+                  {copySuccess ? '✓ Kopiert!' : '📋 Lenke'}
+                </button>
               </div>
             )}
             {items.length === 0 ? (
@@ -349,6 +463,7 @@ export default function CommunityPage() {
                   <p className="text-[#2C1A0E] font-medium text-sm">{m.profiles?.name || m.profiles?.email?.split('@')[0]}</p>
                   {m.role === 'admin' && <span className="text-xs text-[#C4673A] font-medium">Admin</span>}
                 </div>
+                {/* FIX: Admin actions now in members tab too */}
                 {isAdmin && m.user_id !== user?.id && (
                   <div className="flex gap-2">
                     {m.role !== 'admin' && (
@@ -365,8 +480,6 @@ export default function CommunityPage() {
         {/* ADMIN */}
         {tab === 'admin' && isAdmin && (
           <div className="flex flex-col gap-5">
-
-            {/* Ventende forespørsler */}
             <div>
               <h2 className="font-bold text-[#2C1A0E] mb-3">
                 Ventende forespørsler {pending.length > 0 && <span className="text-[#C4673A]">({pending.length})</span>}
@@ -398,7 +511,6 @@ export default function CommunityPage() {
               )}
             </div>
 
-            {/* Medlemslogg */}
             <div>
               <h2 className="font-bold text-[#2C1A0E] mb-3">Medlemslogg</h2>
               {memberLog.length === 0 ? (
@@ -421,7 +533,7 @@ export default function CommunityPage() {
                         </p>
                         <p className="text-xs text-[#9C7B65] mt-0.5">{formatDate(log.created_at)}</p>
                       </div>
-                      <span className={`text-lg flex-shrink-0 ${log.action === 'approved' ? '✅' : log.action === 'declined' ? '❌' : '📬'}`}>
+                      <span className="text-lg flex-shrink-0">
                         {log.action === 'approved' ? '✅' : log.action === 'declined' ? '❌' : '📬'}
                       </span>
                     </div>
@@ -429,10 +541,91 @@ export default function CommunityPage() {
                 </div>
               )}
             </div>
-
           </div>
         )}
       </div>
+
+      {/* INVITE FRIENDS MODAL */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setShowInviteModal(false)}>
+          <div
+            className="bg-[#FAF7F2] rounded-t-3xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div className="px-5 pt-5 pb-3 border-b border-[#E8DDD0]">
+              <div className="w-10 h-1 rounded-full bg-[#E8DDD0] mx-auto mb-4" />
+              <h2 className="text-lg font-bold text-[#2C1A0E]">Inviter venner</h2>
+              <p className="text-sm text-[#9C7B65] mt-0.5">Velg hvem du vil invitere til {community.name}</p>
+
+              {/* Search */}
+              <div className="mt-3 bg-white border border-[#E8DDD0] rounded-xl px-3 py-2 flex items-center gap-2">
+                <span className="text-[#9C7B65]">🔍</span>
+                <input
+                  type="text"
+                  value={friendSearch}
+                  onChange={e => setFriendSearch(e.target.value)}
+                  placeholder="Søk etter venner…"
+                  className="flex-1 bg-transparent text-sm text-[#2C1A0E] outline-none placeholder:text-[#C4A882]"
+                />
+              </div>
+            </div>
+
+            {/* Friends list */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2">
+              {filteredFriends.length === 0 ? (
+                <div className="text-center py-10 text-[#9C7B65] text-sm">
+                  {friends.length === 0 ? 'Du har ingen venner å invitere ennå' : 'Ingen treff'}
+                </div>
+              ) : (
+                filteredFriends.map(friend => {
+                  const alreadyMember = members.some(m => m.user_id === friend.id)
+                  const alreadyInvited = invitedIds.has(friend.id)
+                  return (
+                    <div key={friend.id} className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
+                      <div className="w-10 h-10 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
+                        {friend.avatar_url
+                          ? <img src={friend.avatar_url} className="w-full h-full object-cover" />
+                          : (friend.name || friend.email)?.[0]?.toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-[#2C1A0E] text-sm truncate">{friend.name || friend.email?.split('@')[0]}</p>
+                        {friend.email && <p className="text-xs text-[#9C7B65] truncate">{friend.email}</p>}
+                      </div>
+                      {alreadyMember ? (
+                        <span className="text-xs text-[#4A7C59] font-medium bg-[#E8F4EC] px-3 py-1.5 rounded-full">Medlem</span>
+                      ) : alreadyInvited ? (
+                        <span className="text-xs text-[#9C7B65] bg-[#F0EDE8] px-3 py-1.5 rounded-full">✓ Sendt</span>
+                      ) : (
+                        <button
+                          onClick={() => inviteFriend(friend.id)}
+                          className="text-xs text-white bg-[#C4673A] px-3 py-1.5 rounded-full font-medium"
+                        >
+                          Inviter
+                        </button>
+                      )}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            {/* Copy link row at bottom of modal */}
+            <div className="px-4 py-4 border-t border-[#E8DDD0]">
+              <button
+                onClick={copyInvite}
+                className={`w-full border border-dashed rounded-2xl py-3 text-sm font-medium transition-colors ${
+                  copySuccess
+                    ? 'border-[#4A7C59] text-[#4A7C59] bg-[#E8F4EC]'
+                    : 'border-[#C4673A] text-[#C4673A] bg-white'
+                }`}
+              >
+                {copySuccess ? '✓ Invitasjonslenke kopiert!' : '📋 Kopier invitasjonslenke'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

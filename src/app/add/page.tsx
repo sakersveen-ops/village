@@ -178,6 +178,35 @@ export default function AddPage() {
     router.push('/')
   }
 
+  const matchWatches = async (item: any) => {
+  const supabase = createClient()
+  const { data: watches } = await supabase
+    .from('item_watches')
+    .select('*')
+    .neq('user_id', user?.id)
+
+  if (!watches || watches.length === 0) return
+
+  const matches = watches.filter(w => {
+    const q = w.query.toLowerCase()
+    const nameMatch = item.name?.toLowerCase().includes(q)
+    const descMatch = item.description?.toLowerCase().includes(q)
+    if (!nameMatch && !descMatch) return false
+    if (w.category && w.category !== item.category) return false
+    if (w.max_price && item.price && item.price > w.max_price) return false
+    return true
+  })
+
+  for (const watch of matches) {
+    await supabase.from('notifications').insert({
+      user_id: watch.user_id,
+      type: 'watch_match',
+      title: '🔍 Nytt treff på søkevarsel',
+      body: `"${item.name}" matcher søket ditt: "${watch.query}"`,
+    })
+  }
+}
+
   const saveItem = async () => {
     if (!name.trim() || !category) return
     setSaving(true)
@@ -206,6 +235,7 @@ export default function AddPage() {
       available: true,
     }).select().single()
 
+    await matchWatches(item)
     router.push(`/items/access?item=${item?.id}`)
   }
 

@@ -13,16 +13,13 @@ type Item = {
   available: boolean
   owner_id: string
   created_at: string
+  description?: string
+  price?: number
   profiles: { name: string; email: string; avatar_url?: string }
 }
 
 const CATEGORIES = [
-  {
-    id: 'barn',
-    label: 'Barn',
-    emoji: '🧸',
-    subcategories: ['Spise', 'Leke', 'Tur', 'Stelle', 'Sove', 'Bade', 'Klær'],
-  },
+  { id: 'barn', label: 'Barn', emoji: '🧸', subcategories: ['Spise', 'Leke', 'Tur', 'Stelle', 'Sove', 'Bade', 'Klær'] },
   { id: 'kjole', label: 'Kjoler', emoji: '👗', subcategories: [] },
   { id: 'verktøy', label: 'Verktøy', emoji: '🔧', subcategories: [] },
   { id: 'bok', label: 'Bøker', emoji: '📚', subcategories: [] },
@@ -35,6 +32,8 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchFocused, setSearchFocused] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -44,56 +43,34 @@ export default function FeedPage() {
       if (!user) { router.push('/login'); return }
       setUser(user)
 
-      // Hent brukerens sosiale graf
       const { data: friendships } = await supabase
-        .from('friendships')
-        .select('user_b')
-        .eq('user_a', user.id)
+        .from('friendships').select('user_b').eq('user_a', user.id)
       const friendIds = (friendships || []).map((f: any) => f.user_b)
 
-      // Venners venner
       let friendsOfFriendIds: string[] = []
       if (friendIds.length > 0) {
         const { data: fof } = await supabase
-          .from('friendships')
-          .select('user_b')
-          .in('user_a', friendIds)
-          .neq('user_b', user.id)
+          .from('friendships').select('user_b').in('user_a', friendIds).neq('user_b', user.id)
         friendsOfFriendIds = [...new Set((fof || []).map((f: any) => f.user_b))]
       }
 
-      // Nære venner
       const { data: closeFriendRows } = await supabase
-        .from('close_friends')
-        .select('friend_id')
-        .eq('user_id', user.id)
+        .from('close_friends').select('friend_id').eq('user_id', user.id)
       const closeFriendIds = (closeFriendRows || []).map((f: any) => f.friend_id)
 
-      // Mine kretser
       const { data: myMemberships } = await supabase
-        .from('community_members')
-        .select('community_id')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
+        .from('community_members').select('community_id').eq('user_id', user.id).eq('status', 'active')
       const myCommunityIds = (myMemberships || []).map((m: any) => m.community_id)
 
-      // Hent alle items med tilgangsregler
       const { data: allItems } = await supabase
         .from('items')
         .select('*, profiles(name, email, avatar_url), item_access(*)')
         .order('created_at', { ascending: false })
 
-      // Filtrer basert på tilgang
       const visible = (allItems || []).filter((item: any) => {
-        // Egne ting vises alltid
         if (item.owner_id === user.id) return true
-
         const access: any[] = item.item_access || []
-
-        // Ingen tilgangsregler = vis for alle
         if (access.length === 0) return true
-
-        // Sjekk om noen regel gir tilgang
         return access.some((rule: any) => {
           if (rule.access_type === 'public') return true
           if (rule.access_type === 'close_friends' && closeFriendIds.includes(item.owner_id)) return true
@@ -120,6 +97,51 @@ export default function FeedPage() {
   const countFor = (categoryId: string) =>
     items.filter(i => (i.category === categoryId || (categoryId === 'barn' && i.category === 'baby')) && i.available).length
 
+  const searchResults = searchQuery.trim().length >= 2
+    ? items.filter(i => {
+        const q = searchQuery.toLowerCase()
+        return i.name?.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q)
+      })
+    : []
+
+  const isSearching = searchQuery.trim().length >= 2
+
+  const ItemCard = ({ item }: { item: Item }) => {
+    const cat = CATEGORIES.find(c => c.id === item.category || (c.id === 'barn' && item.category === 'baby'))
+    return (
+      <Link href={`/items/${item.id}`}>
+        <div className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
+          {item.image_url ? (
+            <img src={item.image_url} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
+          ) : (
+            <div className="w-12 h-12 rounded-xl bg-[#E8DDD0] flex items-center justify-center text-xl flex-shrink-0">
+              {cat?.emoji || '📦'}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-[#2C1A0E] text-sm truncate">{item.name}</p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <div className="w-4 h-4 rounded-full bg-[#E8DDD0] flex items-center justify-center overflow-hidden flex-shrink-0">
+                {item.profiles?.avatar_url
+                  ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
+                  : <span className="font-bold text-[#6B4226]" style={{ fontSize: '8px' }}>{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>}
+              </div>
+              <p className="text-xs text-[#4A7C59] truncate">
+                {item.profiles?.name || item.profiles?.email?.split('@')[0]}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            <span className="text-sm">{cat?.emoji}</span>
+            {!item.available && (
+              <span className="text-xs text-[#C4673A] font-medium">Utlånt</span>
+            )}
+          </div>
+        </div>
+      </Link>
+    )
+  }
+
   const cat = CATEGORIES.find(c => c.id === activeCategory)
 
   const filteredItems = activeCategory
@@ -130,7 +152,64 @@ export default function FeedPage() {
       })
     : []
 
-  // ── STEG 2: filtrert kategori-feed ──
+  // ── SØKEVISNING ──
+  if (isSearching) {
+    return (
+      <div className="max-w-lg mx-auto pb-24">
+        <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-4 z-10">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm pointer-events-none">🔍</span>
+              <input
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                autoFocus
+                placeholder="Søk på navn eller beskrivelse…"
+                className="w-full bg-white border border-[#E8DDD0] rounded-xl pl-10 pr-4 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
+              />
+            </div>
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-sm text-[#9C7B65] px-2"
+            >
+              Avbryt
+            </button>
+          </div>
+        </div>
+
+        <div className="px-4 pt-4 flex flex-col gap-2">
+          {searchResults.length > 0 ? (
+            <>
+              <p className="text-xs text-[#9C7B65] mb-1">{searchResults.length} treff på "{searchQuery}"</p>
+              {searchResults.map(item => <ItemCard key={item.id} item={item} />)}
+              <Link href={`/watches?q=${encodeURIComponent(searchQuery)}`}>
+                <div className="mt-3 bg-white border border-dashed border-[#C4673A] rounded-2xl px-4 py-3 flex items-center gap-3">
+                  <span className="text-xl">🔔</span>
+                  <div>
+                    <p className="text-sm font-medium text-[#C4673A]">Få varsel om flere treff</p>
+                    <p className="text-xs text-[#9C7B65]">Opprett søkevarsel for "{searchQuery}"</p>
+                  </div>
+                </div>
+              </Link>
+            </>
+          ) : (
+            <div className="text-center py-12 flex flex-col items-center gap-3">
+              <div className="text-4xl">🔍</div>
+              <p className="font-medium text-[#2C1A0E]">Ingen treff på "{searchQuery}"</p>
+              <p className="text-sm text-[#9C7B65]">Vil du få varsel hvis noen legger det ut?</p>
+              <Link href={`/watches?q=${encodeURIComponent(searchQuery)}`}>
+                <button className="bg-[#C4673A] text-white rounded-xl px-6 py-2.5 text-sm font-medium mt-1">
+                  🔔 Opprett søkevarsel
+                </button>
+              </Link>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ── KATEGORI-FEED ──
   if (activeCategory && cat) {
     return (
       <div className="max-w-lg mx-auto pb-24">
@@ -148,14 +227,11 @@ export default function FeedPage() {
               {filteredItems.filter(i => i.available).length} tilgjengelig
             </span>
           </div>
-
           {cat.subcategories.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-1">
               <button
                 onClick={() => setActiveSubcategory(null)}
-                className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${
-                  !activeSubcategory ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
-                }`}
+                className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${!activeSubcategory ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'}`}
               >
                 Alle
               </button>
@@ -163,9 +239,7 @@ export default function FeedPage() {
                 <button
                   key={sub}
                   onClick={() => setActiveSubcategory(activeSubcategory === sub ? null : sub)}
-                  className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${
-                    activeSubcategory === sub ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
-                  }`}
+                  className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${activeSubcategory === sub ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'}`}
                 >
                   {sub}
                 </button>
@@ -185,16 +259,12 @@ export default function FeedPage() {
               <Link key={item.id} href={`/items/${item.id}`}>
                 <div className="bg-white rounded-2xl overflow-hidden shadow-sm relative">
                   {isNew(item) && (
-                    <div className="absolute top-2 left-2 z-10 bg-[#C4673A] text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                      Ny
-                    </div>
+                    <div className="absolute top-2 left-2 z-10 bg-[#C4673A] text-white text-xs font-bold px-2 py-0.5 rounded-full">Ny</div>
                   )}
                   {item.image_url ? (
                     <img src={item.image_url} alt={item.name} className="w-full h-36 object-cover" />
                   ) : (
-                    <div className="w-full h-36 bg-[#E8DDD0] flex items-center justify-center text-3xl">
-                      {cat.emoji}
-                    </div>
+                    <div className="w-full h-36 bg-[#E8DDD0] flex items-center justify-center text-3xl">{cat.emoji}</div>
                   )}
                   {!item.available && (
                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
@@ -207,8 +277,7 @@ export default function FeedPage() {
                       <div className="w-5 h-5 rounded-full bg-[#E8DDD0] flex items-center justify-center overflow-hidden flex-shrink-0">
                         {item.profiles?.avatar_url
                           ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
-                          : <span className="text-xs font-bold text-[#6B4226]">{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>
-                        }
+                          : <span className="text-xs font-bold text-[#6B4226]">{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>}
                       </div>
                       <p className="text-xs text-[#4A7C59] font-medium truncate">
                         {item.profiles?.name || item.profiles?.email?.split('@')[0]}
@@ -224,11 +293,11 @@ export default function FeedPage() {
     )
   }
 
-  // ── STEG 1: kategori-grid ──
+  // ── KATEGORI-GRID ──
   return (
     <div className="max-w-lg mx-auto pb-24">
       <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-4 z-10">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center mb-3">
           <div>
             <h1 className="text-2xl font-bold text-[#2C1A0E]">Village</h1>
             <p className="text-xs text-[#9C7B65]">Lån og lån bort i kretsen din</p>
@@ -247,6 +316,17 @@ export default function FeedPage() {
               </div>
             </Link>
           </div>
+        </div>
+
+        {/* Søkefelt */}
+        <div className="relative">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm pointer-events-none">🔍</span>
+          <input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Søk etter gjenstander…"
+            className="w-full bg-white border border-[#E8DDD0] rounded-xl pl-10 pr-4 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
+          />
         </div>
       </div>
 
@@ -292,37 +372,9 @@ export default function FeedPage() {
               <div className="mt-4">
                 <p className="text-sm font-bold text-[#2C1A0E] mb-3">🆕 Nylig lagt ut</p>
                 <div className="flex flex-col gap-2">
-                  {items.filter(isNew).slice(0, 3).map(item => {
-                    const cat = CATEGORIES.find(c => c.id === item.category || (c.id === 'barn' && item.category === 'baby'))
-                    return (
-                      <Link key={item.id} href={`/items/${item.id}`}>
-                        <div className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
-                          {item.image_url ? (
-                            <img src={item.image_url} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
-                          ) : (
-                            <div className="w-12 h-12 rounded-xl bg-[#E8DDD0] flex items-center justify-center text-xl flex-shrink-0">
-                              {cat?.emoji}
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-[#2C1A0E] text-sm truncate">{item.name}</p>
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <div className="w-4 h-4 rounded-full bg-[#E8DDD0] flex items-center justify-center overflow-hidden flex-shrink-0">
-                                {item.profiles?.avatar_url
-                                  ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
-                                  : <span className="font-bold text-[#6B4226]" style={{ fontSize: '8px' }}>{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>
-                                }
-                              </div>
-                              <p className="text-xs text-[#4A7C59] truncate">
-                                {item.profiles?.name || item.profiles?.email?.split('@')[0]}
-                              </p>
-                            </div>
-                          </div>
-                          <span className="text-sm flex-shrink-0">{cat?.emoji}</span>
-                        </div>
-                      </Link>
-                    )
-                  })}
+                  {items.filter(isNew).slice(0, 3).map(item => (
+                    <ItemCard key={item.id} item={item} />
+                  ))}
                 </div>
               </div>
             )}

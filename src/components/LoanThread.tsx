@@ -74,6 +74,7 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
   }, [openProposal])
 
   const loadMessages = async () => {
+    console.log('loadMessages called, loan.id:', loan?.id)
     setLoading(true)
     const supabase = createClient()
     const { data } = await supabase

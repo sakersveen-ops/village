@@ -240,7 +240,7 @@ function AccessPageInner() {
         })}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#FAF7F2] border-t border-[#E8DDD0] flex gap-3">
+      <div className="fixed bottom-16 left-0 right-0 p-4 bg-[#FAF7F2] border-t border-[#E8DDD0] flex gap-3">
         <button
           onClick={skip}
           className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-3 font-medium text-sm"

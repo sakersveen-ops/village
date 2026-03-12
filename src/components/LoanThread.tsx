@@ -9,6 +9,8 @@ interface LoanThreadProps {
   user: any
   isOwner: boolean
   onLoanUpdated: (loan: any) => void
+  openProposal?: boolean
+  onProposalOpened?: () => void
 }
 
 const fmt = (d: string) =>
@@ -19,24 +21,25 @@ const fmtTime = (d: string) =>
     day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
   })
 
-// ── Quick suggestions – shown inside proposal form ────────────────────────────
+// ── Quick suggestions – shown inside proposal form, filtered by loan status ───
+// minStatus: 'pending' = always show, 'active' = only after confirmed
 const BORROWER_SUGGESTIONS = [
-  { id: 'extend',       emoji: '📅', label: 'Forleng lånet',         type: 'proposal' as const, delta: +3,  note: (n: string) => `Hei! Kan jeg beholde «${n}» litt lenger? 🙏` },
-  { id: 'shorten',      emoji: '⏩', label: 'Lever tilbake tidligere', type: 'proposal' as const, delta: -2,  note: (n: string) => `Hei! Jeg kan levere «${n}» tilbake tidligere – passer det? 😊` },
-  { id: 'pickup',       emoji: '📍', label: 'Avtal henting',          type: 'chat'     as const, delta: 0,   note: (n: string) => `Hei! Når og hvor kan jeg hente «${n}»? 😊` },
-  { id: 'ready_return', emoji: '✅', label: 'Klar til å levere',      type: 'chat'     as const, delta: 0,   note: (n: string) => `Hei! Jeg er klar til å levere tilbake «${n}» – passer det snart?` },
-  { id: 'thanks',       emoji: '🙏', label: 'Takk for lånet',         type: 'chat'     as const, delta: 0,   note: (n: string) => `Tusen takk for lånet av «${n}»! 🙏` },
+  { id: 'extend',       emoji: '📅', label: 'Forleng lånet',          type: 'proposal' as const, delta: +3, minStatus: 'active',  note: (n: string) => `Hei! Kan jeg beholde «${n}» litt lenger? 🙏` },
+  { id: 'shorten',      emoji: '⏩', label: 'Lever tilbake tidligere', type: 'proposal' as const, delta: -2, minStatus: 'active',  note: (n: string) => `Hei! Jeg kan levere «${n}» tilbake tidligere – passer det? 😊` },
+  { id: 'pickup',       emoji: '📍', label: 'Avtal henting',           type: 'chat'     as const, delta: 0,  minStatus: 'pending', note: (n: string) => `Hei! Når og hvor kan jeg hente «${n}»? 😊` },
+  { id: 'ready_return', emoji: '✅', label: 'Klar til å levere',       type: 'chat'     as const, delta: 0,  minStatus: 'active',  note: (n: string) => `Hei! Jeg er klar til å levere tilbake «${n}» – passer det snart?` },
+  { id: 'thanks',       emoji: '🙏', label: 'Takk for lånet',          type: 'chat'     as const, delta: 0,  minStatus: 'active',  note: (n: string) => `Tusen takk for lånet av «${n}»! 🙏` },
 ]
 
 const OWNER_SUGGESTIONS = [
-  { id: 'need_back',      emoji: '🔔', label: 'Trenger den tilbake',   type: 'proposal' as const, delta: -3,  note: (n: string) => `Hei! Jeg trenger «${n}» tilbake litt tidligere – kan du levere innen ny dato?` },
-  { id: 'no_rush',        emoji: '🤝', label: 'Ingen hastverk',         type: 'proposal' as const, delta: +5,  note: (n: string) => `Hei! Ingen hastverk – du kan beholde «${n}» litt lenger 😊` },
-  { id: 'confirm_pickup', emoji: '📍', label: 'Bekreft henting',        type: 'chat'     as const, delta: 0,   note: (n: string) => `Hei! Du kan hente «${n}» hos meg – gi meg beskjed når det passer!` },
-  { id: 'remind_return',  emoji: '⏰', label: 'Påminnelse om retur',    type: 'chat'     as const, delta: 0,   note: (n: string) => `Hei! Bare en påminnelse om at «${n}» snart skal returneres 🙂` },
-  { id: 'all_good',       emoji: '👍', label: 'Alt bra?',               type: 'chat'     as const, delta: 0,   note: (n: string) => `Hei! Bare sjekker inn – er alt bra med «${n}»?` },
+  { id: 'need_back',      emoji: '🔔', label: 'Trenger den tilbake',  type: 'proposal' as const, delta: -3, minStatus: 'active',  note: (n: string) => `Hei! Jeg trenger «${n}» tilbake litt tidligere – kan du levere innen ny dato?` },
+  { id: 'no_rush',        emoji: '🤝', label: 'Ingen hastverk',        type: 'proposal' as const, delta: +5, minStatus: 'active',  note: (n: string) => `Hei! Ingen hastverk – du kan beholde «${n}» litt lenger 😊` },
+  { id: 'confirm_pickup', emoji: '📍', label: 'Bekreft henting',       type: 'chat'     as const, delta: 0,  minStatus: 'pending', note: (n: string) => `Hei! Du kan hente «${n}» hos meg – gi meg beskjed når det passer!` },
+  { id: 'remind_return',  emoji: '⏰', label: 'Påminnelse om retur',   type: 'chat'     as const, delta: 0,  minStatus: 'active',  note: (n: string) => `Hei! Bare en påminnelse om at «${n}» snart skal returneres 🙂` },
+  { id: 'all_good',       emoji: '👍', label: 'Alt bra?',              type: 'chat'     as const, delta: 0,  minStatus: 'active',  note: (n: string) => `Hei! Bare sjekker inn – er alt bra med «${n}»?` },
 ]
 
-export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated }: LoanThreadProps) {
+export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, openProposal, onProposalOpened }: LoanThreadProps) {
   const [messages, setMessages]     = useState<any[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending]       = useState(false)
@@ -52,13 +55,23 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated }:
   const [borrowerCommunity, setBorrowerCommunity] = useState<string | null>(null)
   const [isFriend, setIsFriend]                   = useState(false)
 
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const bottomRef   = useRef<HTMLDivElement>(null)
+  const proposalRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLTextAreaElement>(null)
 
-  const suggestions = isOwner ? OWNER_SUGGESTIONS : BORROWER_SUGGESTIONS
+  const isActive = loan?.status === 'active'
+  const suggestions = (isOwner ? OWNER_SUGGESTIONS : BORROWER_SUGGESTIONS)
+    .filter(s => s.minStatus === 'pending' || isActive)
 
   useEffect(() => { if (loan?.id) { loadMessages(); loadBorrowerContext() } }, [loan?.id])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  useEffect(() => {
+    if (openProposal && !showProposal) {
+      setShowProposal(true)
+      onProposalOpened?.()
+      setTimeout(() => proposalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+    }
+  }, [openProposal])
 
   const loadMessages = async () => {
     setLoading(true)
@@ -68,7 +81,24 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated }:
       .select('*, profiles(id, name, email, avatar_url)')
       .eq('loan_id', loan.id)
       .order('created_at', { ascending: true })
-    setMessages(data || [])
+
+    // If thread is empty but loan has a message, seed it now (backwards compat)
+    if ((!data || data.length === 0) && loan.message && loan.borrower_id) {
+      const { data: seeded } = await supabase
+        .from('loan_messages')
+        .insert({
+          loan_id: loan.id,
+          sender_id: loan.borrower_id,
+          type: 'chat',
+          body: loan.message,
+          created_at: loan.created_at,
+        })
+        .select('*, profiles(id, name, email, avatar_url)')
+        .single()
+      setMessages(seeded ? [seeded] : [])
+    } else {
+      setMessages(data || [])
+    }
     setLoading(false)
   }
 
@@ -412,7 +442,7 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated }:
 
       {/* ── Proposal form (with quick suggestions inside) ──────────────────── */}
       {showProposal && (
-        <div className="bg-[#FFF9F5] border-t border-[#F0EAE2] px-4 py-4 flex flex-col gap-3">
+        <div ref={proposalRef} className="bg-[#FFF9F5] border-t border-[#F0EAE2] px-4 py-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-[#2C1A0E]">📅 Foreslå nye datoer</span>
             <button onClick={() => { setShowProposal(false); setPropNote(''); setPropStart(''); setPropEnd('') }}

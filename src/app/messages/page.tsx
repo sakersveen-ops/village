@@ -1,0 +1,1 @@
+mkdir -p src/app/messages && touch src/app/messages/page.tsx

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { track } from '@/lib/track'
@@ -162,7 +162,7 @@ function AgeGroupSection({
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function OnboardingPage() {
+function OnboardingContent() {
   const [step, setStep] = useState(1)
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -851,5 +851,13 @@ export default function OnboardingPage() {
       <ProgressBar />
       {stepComponents[step]}
     </div>
+  )
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense>
+      <OnboardingContent />
+    </Suspense>
   )
 }

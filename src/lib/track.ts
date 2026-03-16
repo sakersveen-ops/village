@@ -26,6 +26,8 @@ function getSessionId(): string {
   return id
 }
 
+
+
 // ----------------------------------------------------------------
 // Timing-hjelper — bruk for å måle tid i en flyt
 //
@@ -104,6 +106,10 @@ export const Events = {
 
   // Sesjon
   SESSION_START:          'session_start',
+
+  // Feed
+  FEED_VIEWED: 'feed_viewed',
+  CATEGORY_FILTERED: 'category_filtered',
 } as const
 
 export type EventName = typeof Events[keyof typeof Events]

@@ -28,6 +28,17 @@ export default function FeedPage() {
       if (!user) { router.push('/login'); return }
       setUser(user)
 
+
+      // 👇 Legg til dette midlertidig
+      const { data: testItems, error: testError } = await supabase
+        .from('items')
+        .select('id, name, owner_id')
+        .neq('owner_id', user.id)
+        .limit(60)
+      console.log('user.id:', user.id)
+      console.log('testItems:', testItems)
+      console.log('testError:', testError)
+
       // Fetch friend IDs to know whose items to prioritise (not to filter by)
       const { data: friendships } = await supabase
         .from('friendships')

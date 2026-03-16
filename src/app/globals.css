@@ -1,97 +1,44 @@
-/* ============================================================
-   VILLAGE — LIQUID GLASS DESIGN SYSTEM
-   globals.css — full replacement / extension
-   ============================================================ */
-
-/* --- GOOGLE FONTS ------------------------------------------ */
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&display=swap');
 @import "tailwindcss";
 
-@theme {
-  --font-display: 'Fraunces', Georgia, serif;
-  --color-terra: #C4673A;
-  --color-terra-dark: #2C1A0E;
-  --color-terra-mid: #9C7B65;
-  --color-terra-green: #4A7C59;
-}
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&display=swap');
 
-/* --- TAILWIND BASE ----------------------------------------- */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* --- DESIGN TOKENS ----------------------------------------- */
+/* ── Design tokens ─────────────────────────────────────────── */
 :root {
-  /* Terracotta palette */
-  --terra:        #C4673A;
-  --terra-dark:   #2C1A0E;
-  --terra-mid:    #9C7B65;
-  --terra-green:  #4A7C59;
+  --terra:       #C4673A;
+  --terra-dark:  #2C1A0E;
+  --terra-mid:   #9C7B65;
+  --terra-green: #4A7C59;
 
-  /* Glass tints */
-  --glass-bg:         rgba(255, 248, 243, 0.55);
-  --glass-bg-heavy:   rgba(255, 248, 243, 0.72);
-  --glass-bg-card:    rgba(255, 248, 243, 0.45);
-  --glass-border:     rgba(196, 103, 58, 0.18);
-  --glass-border-hover: rgba(196, 103, 58, 0.30);
-  --glass-inset:      rgba(255, 255, 255, 0.70);
-  --glass-shadow:     0 2px 24px rgba(44, 26, 14, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  --glass-shadow-hover: 0 4px 32px rgba(44, 26, 14, 0.10), inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --glass-bg:           rgba(255, 248, 243, 0.65);
+  --glass-bg-heavy:     rgba(255, 248, 243, 0.82);
+  --glass-border:       rgba(196, 103, 58, 0.18);
+  --glass-border-hover: rgba(196, 103, 58, 0.32);
+  --glass-shadow:       0 2px 24px rgba(44, 26, 14, 0.08), inset 0 1px 0 rgba(255,255,255,0.75);
+  --glass-shadow-hover: 0 4px 32px rgba(44, 26, 14, 0.13), inset 0 1px 0 rgba(255,255,255,0.9);
 
-  /* Typography */
   --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
-  --font-body:    -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-/* --- GLOBAL RESETS ----------------------------------------- */
-*,
-*::before,
-*::after {
+/* ── Base ──────────────────────────────────────────────────── */
+*, *::before, *::after {
   box-sizing: border-box;
   font-feature-settings: "kern" 1, "liga" 1;
 }
 
-/* Body text */
 body {
-  font-family: var(--font-body);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   color: var(--terra-dark);
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Optical sizing + tight tracking on larger text */
-h1, h2, h3, h4, h5, h6,
-.text-lg, .text-xl, .text-2xl, .text-3xl,
-[class*="text-"] {
-  font-optical-sizing: auto;
-}
-
-/* Apply letter-spacing to all text ≥ 16px (1rem) */
-@media screen {
-  .text-base, .text-lg, .text-xl, .text-2xl, .text-3xl, .text-4xl, .text-5xl,
-  h1, h2, h3, h4 {
-    letter-spacing: -0.01em;
-  }
-}
-
-/* Display font class — apply to page titles, item names */
+/* ── Display font ──────────────────────────────────────────── */
 .font-display {
-  font-family: var(--font-display);
+  font-family: var(--font-display) !important;
   font-optical-sizing: auto;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
 }
 
-/* ============================================================
-   GLASS SURFACE — THE CORE PRIMITIVE
-   ============================================================
-   Apply .glass (or @apply glass via Tailwind plugin) to:
-   - Bottom nav bar
-   - Page / sticky headers
-   - Modal overlays & drawers
-   - Category pills (inactive state)
-   - Calendar wrapper
-   ============================================================ */
-
+/* ── GLASS — core primitive ────────────────────────────────── */
 .glass {
   background: var(--glass-bg);
   backdrop-filter: blur(20px) saturate(1.4);
@@ -101,21 +48,10 @@ h1, h2, h3, h4, h5, h6,
   transition: box-shadow 200ms ease, background 200ms ease, border-color 200ms ease;
 }
 
-/* Fallback: Safari < 15, Firefox (no backdrop-filter support) */
 @supports not (backdrop-filter: blur(1px)) {
-  .glass {
-    background: rgba(255, 248, 243, 0.92);
-  }
+  .glass { background: rgba(255, 248, 243, 0.95); }
 }
 
-/* Hover intensification */
-.glass:hover,
-.glass-hover:hover {
-  box-shadow: var(--glass-shadow-hover);
-  border-color: var(--glass-border-hover);
-}
-
-/* Heavier glass — for modals / drawers */
 .glass-heavy {
   background: var(--glass-bg-heavy);
   backdrop-filter: blur(28px) saturate(1.5);
@@ -126,76 +62,87 @@ h1, h2, h3, h4, h5, h6,
 }
 
 @supports not (backdrop-filter: blur(1px)) {
-  .glass-heavy {
-    background: rgba(255, 248, 243, 0.96);
-  }
+  .glass-heavy { background: rgba(255, 248, 243, 0.97); }
 }
 
-/* Card tint — lighter, for item cards hover state */
-.glass-card {
-  background: var(--glass-bg-card);
-  transition: background 200ms ease;
+/* ── Page header ───────────────────────────────────────────── */
+.page-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-radius: 0 0 20px 20px;
 }
 
-.glass-card:hover {
-  background: rgba(255, 248, 243, 0.72);
+.page-header-title {
+  font-family: var(--font-display);
+  font-size: clamp(18px, 5vw, 22px);
+  font-weight: 700;
+  color: var(--terra-dark);
+  letter-spacing: -0.025em;
+  font-optical-sizing: auto;
+  margin: 0;
 }
 
-
-/* ============================================================
-   BOTTOM NAVIGATION BAR
-   ============================================================
-   Usage in layout component:
-   <nav className="bottom-nav glass">
-     <NavItem ... />
-   </nav>
-   ============================================================ */
-
+/* ── Bottom nav ────────────────────────────────────────────── */
 .bottom-nav {
   position: fixed;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  /* On mobile: full-width minus margin */
-  width: calc(100% - 24px);
-  max-width: 480px;
-  margin: 0 0 12px;
+  left: 0;
+  right: 0;
+  margin: 0 12px 12px;
   border-radius: 24px;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  z-index: 50;
   display: flex;
   justify-content: space-around;
   align-items: center;
-  z-index: 50;
-  /* Do NOT use filter: blur() on this element or any parent
-     that contains position:fixed children — breaks stacking context */
+  padding: 8px 4px;
 }
 
-/* Nav tab item */
+.nav-spacer {
+  height: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
 .nav-item {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
+  text-decoration: none;
+  padding: 4px 0;
   position: relative;
-  padding: 4px 14px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+  background: transparent !important;
+  border-radius: 16px;
 }
 
-/* Icon scale on active */
-.nav-item .nav-icon {
+.nav-icon {
+  font-size: 20px;
+  line-height: 1;
+  display: block;
   transition: transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .nav-item.active .nav-icon {
-  transform: scale(1.1);
+  transform: scale(1.15);
 }
 
-/* Terracotta dot indicator — NOT a highlight box */
+.nav-label {
+  font-size: 10px;
+  color: var(--terra-mid);
+  font-weight: 400;
+  transition: color 150ms ease;
+}
+
+.nav-item.active .nav-label {
+  color: var(--terra);
+  font-weight: 600;
+}
+
+/* Dot indicator — no highlight box */
 .nav-item::after {
   content: '';
   position: absolute;
-  bottom: 0;
+  bottom: 1px;
   left: 50%;
   transform: translateX(-50%);
   width: 4px;
@@ -210,155 +157,7 @@ h1, h2, h3, h4, h5, h6,
   opacity: 1;
 }
 
-/* Label colour */
-.nav-item .nav-label {
-  font-size: 10px;
-  color: rgba(44, 26, 14, 0.45);
-  transition: color 150ms ease;
-  letter-spacing: -0.01em;
-}
-
-.nav-item.active .nav-label {
-  color: var(--terra);
-  font-weight: 500;
-}
-
-/* Spacer so page content isn't hidden behind fixed nav */
-.nav-spacer {
-  height: calc(80px + env(safe-area-inset-bottom));
-}
-
-
-/* ============================================================
-   PAGE HEADERS & STICKY SECTION HEADERS
-   ============================================================ */
-
-.page-header {
-  position: sticky;
-  top: 0;
-  z-index: 40;
-  border-radius: 0 0 20px 20px;
-  padding: 14px 20px 12px;
-  /* IMPORTANT: do NOT apply filter: blur() here.
-     The glass effect comes from backdrop-filter on .glass.
-     Using filter:blur() on a sticky/fixed ancestor breaks
-     the stacking context for any fixed descendants. */
-}
-
-/* Title style — use .font-display + this */
-.page-header-title {
-  font-family: var(--font-display);
-  font-size: clamp(22px, 6vw, 28px);
-  font-weight: 600;
-  color: var(--terra-dark);
-  letter-spacing: -0.025em;
-  font-optical-sizing: auto;
-  line-height: 1.1;
-}
-
-/* Section titles within a page (e.g. "Tilgjengelig nå") */
-.section-header {
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 500;
-  color: var(--terra-dark);
-  letter-spacing: -0.02em;
-  font-optical-sizing: auto;
-  padding: 8px 0 4px;
-}
-
-
-/* ============================================================
-   MODAL OVERLAYS & DRAWERS
-   ============================================================
-   Apply .glass-heavy to the drawer sheet itself.
-   The backdrop overlay behind the drawer:
-   ============================================================ */
-
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(44, 26, 14, 0.25);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  z-index: 60;
-}
-
-@supports not (backdrop-filter: blur(1px)) {
-  .modal-backdrop {
-    background: rgba(44, 26, 14, 0.45);
-  }
-}
-
-.drawer-sheet {
-  /* Apply .glass-heavy alongside this */
-  border-radius: 24px 24px 0 0;
-  padding: 16px 20px calc(24px + env(safe-area-inset-bottom));
-  width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
-}
-
-.drawer-handle {
-  width: 36px;
-  height: 4px;
-  background: rgba(44, 26, 14, 0.15);
-  border-radius: 2px;
-  margin: 0 auto 16px;
-}
-
-/* Modal dialog (centred) */
-.modal-dialog {
-  /* Apply .glass-heavy alongside this */
-  border-radius: 20px;
-  padding: 24px;
-  width: calc(100% - 40px);
-  max-width: 400px;
-  margin: 0 auto;
-}
-
-
-/* ============================================================
-   ITEM CARDS
-   ============================================================
-   Apply .glass-card to the card body, not the whole card.
-   The wrapper card should have overflow-hidden + rounded corners.
-   ============================================================ */
-
-.item-card {
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid var(--glass-border);
-  transition: box-shadow 200ms ease, transform 200ms ease;
-}
-
-.item-card:hover {
-  box-shadow: 0 8px 32px rgba(44, 26, 14, 0.10);
-  transform: translateY(-1px);
-}
-
-.item-card-body {
-  /* Apply .glass-card alongside this */
-  padding: 12px 14px 14px;
-}
-
-.item-name {
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--terra-dark);
-  letter-spacing: -0.015em;
-  font-optical-sizing: auto;
-  line-height: 1.25;
-  margin-bottom: 3px;
-}
-
-
-/* ============================================================
-   CATEGORY PILLS & FILTER TABS
-   ============================================================ */
-
-/* Inactive pill — glass surface */
+/* ── Pills ─────────────────────────────────────────────────── */
 .pill {
   display: inline-flex;
   align-items: center;
@@ -368,70 +167,29 @@ h1, h2, h3, h4, h5, h6,
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 200ms ease;
   letter-spacing: -0.01em;
   white-space: nowrap;
-  /* Glass surface for inactive pills */
+  transition: all 200ms ease;
   background: var(--glass-bg);
   backdrop-filter: blur(16px) saturate(1.3);
   -webkit-backdrop-filter: blur(16px) saturate(1.3);
   border: 1px solid var(--glass-border);
   color: var(--terra-mid);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
 }
 
-@supports not (backdrop-filter: blur(1px)) {
-  .pill { background: rgba(255, 248, 243, 0.92); }
-}
-
-.pill:hover {
-  border-color: var(--glass-border-hover);
-  color: var(--terra-dark);
-}
-
-/* Active pill — terracotta glass */
 .pill.active,
-.pill[aria-selected="true"],
 .pill[data-active="true"] {
   background: rgba(196, 103, 58, 0.12);
   border: 1.5px solid rgba(196, 103, 58, 0.45);
   color: var(--terra);
-  box-shadow: 0 1px 8px rgba(196, 103, 58, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  box-shadow: 0 1px 8px rgba(196,103,58,0.15), inset 0 1px 0 rgba(255,255,255,0.7);
 }
 
-/* Scrollable pill row — hide scrollbar, maintain feel */
-.pill-row {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 4px 0 8px;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-
-.pill-row::-webkit-scrollbar { display: none; }
-.pill-row .pill { scroll-snap-align: start; flex-shrink: 0; }
-
-
-/* ============================================================
-   CALENDAR WRAPPER (ItemCalendar.tsx)
-   ============================================================
-   Apply .glass to the outer wrapper div.
-   ============================================================ */
-
+/* ── Calendar ──────────────────────────────────────────────── */
 .calendar-wrapper {
-  /* Apply .glass alongside this */
   border-radius: 16px;
   padding: 14px;
-}
-
-/* Calendar month/navigation header */
-.cal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
 }
 
 .cal-month-title {
@@ -440,10 +198,8 @@ h1, h2, h3, h4, h5, h6,
   font-weight: 500;
   color: var(--terra-dark);
   letter-spacing: -0.01em;
-  font-optical-sizing: auto;
 }
 
-/* Day-of-week header row */
 .cal-day-header {
   font-size: 10px;
   font-weight: 600;
@@ -454,7 +210,6 @@ h1, h2, h3, h4, h5, h6,
   padding-bottom: 6px;
 }
 
-/* Individual day cell — base */
 .cal-day {
   aspect-ratio: 1;
   display: flex;
@@ -464,79 +219,24 @@ h1, h2, h3, h4, h5, h6,
   font-size: 12px;
   color: var(--terra-dark);
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
-  font-weight: 400;
-  -webkit-tap-highlight-color: transparent;
+  transition: background 120ms ease;
 }
 
-/* Selected (range start) */
-.cal-day.selected {
-  background: var(--terra);
-  color: white;
-  font-weight: 600;
-}
+.cal-day.past         { color: rgba(44,26,14,0.25); cursor: default; }
+.cal-day.selected     { background: var(--terra); color: white; font-weight: 600; }
+.cal-day.in-range     { background: rgba(196,103,58,0.10); color: var(--terra); border-radius: 0; }
+.cal-day.range-end    { background: rgba(196,103,58,0.20); color: var(--terra); font-weight: 600; }
+.cal-day.requested    { background: rgba(253,230,138,0.55); color: #92400e; }
+.cal-day.active-loan  { background: rgba(254,202,202,0.55); color: #991b1b; }
+.cal-day.pending-loan { background: rgba(253,230,138,0.45); color: #78350f; }
+.cal-day.blocked      { background: rgba(232,221,208,0.55); color: rgba(44,26,14,0.40); }
+.cal-day.empty        { cursor: default; pointer-events: none; }
 
-/* Hover / in-range state */
-.cal-day.in-range {
-  background: rgba(196, 103, 58, 0.10);
-  color: var(--terra);
-  border-radius: 0;
-}
-
-/* Range end */
-.cal-day.range-end {
-  background: rgba(196, 103, 58, 0.20);
-  color: var(--terra);
-  font-weight: 600;
-  border-radius: 8px;
-}
-
-/* Borrower's own pending request — yellow */
-.cal-day.requested {
-  background: rgba(253, 230, 138, 0.55);
-  color: #92400e;
-}
-
-/* Active loan */
-.cal-day.active-loan {
-  background: rgba(254, 202, 202, 0.55);
-  color: #991b1b;
-}
-
-/* Pending / change_proposed loan */
-.cal-day.pending-loan {
-  background: rgba(253, 230, 138, 0.45);
-  color: #78350f;
-}
-
-/* Owner-blocked */
-.cal-day.blocked {
-  background: rgba(232, 221, 208, 0.55);
-  color: rgba(44, 26, 14, 0.40);
-}
-
-/* Past */
-.cal-day.past {
-  color: rgba(44, 26, 14, 0.25);
-  cursor: default;
-}
-
-/* Empty spacer */
-.cal-day.empty {
-  cursor: default;
-  pointer-events: none;
-}
-
-/* Non-past, unoccupied hover */
 .cal-day:not(.past):not(.blocked):not(.active-loan):not(.selected):not(.empty):hover {
-  background: rgba(196, 103, 58, 0.08);
+  background: rgba(196,103,58,0.08);
 }
 
-
-/* ============================================================
-   RANGE INPUTS & SLIDERS
-   ============================================================ */
-
+/* ── Range sliders ─────────────────────────────────────────── */
 input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
@@ -545,164 +245,83 @@ input[type="range"] {
   border-radius: 100px;
   background: linear-gradient(
     to right,
-    rgba(196, 103, 58, 0.60) var(--slider-val, 50%),
-    rgba(255, 248, 243, 0.55) var(--slider-val, 50%)
+    rgba(196,103,58,0.60) var(--slider-val, 50%),
+    rgba(232,221,208,0.8) var(--slider-val, 50%)
   );
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  border: 1px solid rgba(196, 103, 58, 0.18);
-  box-shadow: inset 0 1px 3px rgba(44, 26, 14, 0.08);
+  border: 1px solid rgba(196,103,58,0.18);
   outline: none;
   cursor: pointer;
-  transition: box-shadow 200ms ease;
 }
 
-@supports not (backdrop-filter: blur(1px)) {
-  input[type="range"] {
-    background: linear-gradient(
-      to right,
-      rgba(196, 103, 58, 0.60) var(--slider-val, 50%),
-      rgba(232, 221, 208, 0.9) var(--slider-val, 50%)
-    );
-  }
-}
-
-/* Thumb — WebKit */
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 22px;
-  height: 22px;
+  width: 22px; height: 22px;
   border-radius: 50%;
   background: white;
-  border: 1.5px solid rgba(196, 103, 58, 0.40);
-  box-shadow: 0 2px 8px rgba(196, 103, 58, 0.35);
-  cursor: pointer;
-  transition: transform 150ms ease, box-shadow 150ms ease;
-  /* backdrop-filter on pseudo-elements not widely supported,
-     but the white bg serves as the visual stand-in */
-}
-
-input[type="range"]::-webkit-slider-thumb:hover {
-  transform: scale(1.12);
-  box-shadow: 0 3px 12px rgba(196, 103, 58, 0.50);
-}
-
-input[type="range"]::-webkit-slider-thumb:active {
-  transform: scale(1.05);
-  box-shadow: 0 2px 6px rgba(196, 103, 58, 0.45);
-}
-
-/* Thumb — Firefox */
-input[type="range"]::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: white;
-  border: 1.5px solid rgba(196, 103, 58, 0.40);
-  box-shadow: 0 2px 8px rgba(196, 103, 58, 0.35);
+  border: 1.5px solid rgba(196,103,58,0.40);
+  box-shadow: 0 2px 8px rgba(196,103,58,0.35);
   cursor: pointer;
   transition: transform 150ms ease;
 }
 
-input[type="range"]::-moz-range-thumb:hover {
-  transform: scale(1.12);
-}
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.12); }
 
-/* Track — Firefox */
-input[type="range"]::-moz-range-track {
-  height: 5px;
-  border-radius: 100px;
-  background: rgba(232, 221, 208, 0.9);
-}
-
-/* Focus ring (accessibility) */
-input[type="range"]:focus-visible {
-  outline: 2px solid rgba(196, 103, 58, 0.5);
-  outline-offset: 4px;
-}
-
-
-/* ============================================================
-   MICRO-INTERACTIONS & TRANSITIONS
-   ============================================================ */
-
-/* All interactive glass surfaces */
-.glass,
-.glass-heavy,
-.pill,
-.item-card,
-.btn-glass {
-  transition: box-shadow 200ms ease, background 200ms ease, border-color 200ms ease;
-}
-
-/* Button — glass style */
-.btn-glass {
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  padding: 10px 18px;
-  color: var(--terra-dark);
-  font-weight: 500;
-  font-size: 14px;
+input[type="range"]::-moz-range-thumb {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: white;
+  border: 1.5px solid rgba(196,103,58,0.40);
+  box-shadow: 0 2px 8px rgba(196,103,58,0.35);
   cursor: pointer;
-  transition: all 200ms ease;
-  letter-spacing: -0.01em;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-.btn-glass:hover {
-  background: rgba(255, 248, 243, 0.75);
-  border-color: var(--glass-border-hover);
-  box-shadow: 0 4px 16px rgba(44, 26, 14, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.85);
-}
-
-/* Primary CTA button */
-.btn-primary {
+/* ── Chat bubbles ──────────────────────────────────────────── */
+.bubble-mine {
   background: var(--terra);
   color: white;
-  border: none;
-  border-radius: 14px;
-  padding: 13px 20px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
+  border-radius: 18px 18px 4px 18px;
+  padding: 9px 14px;
+  font-size: 14px;
+  line-height: 1.45;
   letter-spacing: -0.01em;
-  transition: all 150ms ease;
-  box-shadow: 0 4px 16px rgba(196, 103, 58, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 8px rgba(196,103,58,0.28);
+  max-width: 72%;
 }
 
-.btn-primary:hover {
-  background: #b35c34;
-  box-shadow: 0 6px 20px rgba(196, 103, 58, 0.40);
-  transform: translateY(-1px);
+.bubble-theirs {
+  background: rgba(255,248,243,0.70);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(196,103,58,0.15);
+  color: var(--terra-dark);
+  border-radius: 18px 18px 18px 4px;
+  padding: 9px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+  max-width: 72%;
 }
 
-.btn-primary:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(196, 103, 58, 0.25);
+@supports not (backdrop-filter: blur(1px)) {
+  .bubble-theirs { background: rgba(255,248,243,0.95); }
 }
 
+/* ── System message ────────────────────────────────────────── */
+.system-message-pill {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  color: var(--terra-mid);
+  background: rgba(255,248,243,0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(196,103,58,0.12);
+  letter-spacing: -0.01em;
+}
 
-/* ============================================================
-   TYPOGRAPHY WCAG AA COMPLIANCE NOTES
-   ============================================================
-   - Primary text on glass: #2C1A0E (contrast ~12:1 on glass bg) ✓
-   - Secondary text on glass: #9C7B65 (contrast ~4.5:1 on glass bg) ✓
-     Use ONLY for metadata, labels, timestamps — never for body text
-   - Never use a lighter color than #9C7B65 on glass surfaces
-   - Terracotta (#C4673A) on white: ~3.1:1 — use only for UI accents,
-     never for body text at small sizes
-   - Green (#4A7C59) on white: ~4.5:1 — AA compliant for UI labels ✓
-   ============================================================ */
-
-
-/* ============================================================
-   UTILITY HELPERS
-   ============================================================ */
-
-/* System/status pill (loan status, notifications) */
+/* ── Status pills ──────────────────────────────────────────── */
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -714,98 +333,69 @@ input[type="range"]:focus-visible {
   letter-spacing: -0.01em;
 }
 
-.status-pill.pending {
-  background: rgba(253, 230, 138, 0.45);
-  color: #92400e;
-  border: 1px solid rgba(180, 117, 23, 0.25);
-}
+.status-pill.pending  { background: rgba(253,230,138,0.45); color: #92400e;            border: 1px solid rgba(180,117,23,0.25); }
+.status-pill.active   { background: rgba(74,124,89,0.12);   color: var(--terra-green); border: 1px solid rgba(74,124,89,0.25); }
+.status-pill.declined { background: rgba(196,103,58,0.10);  color: var(--terra);       border: 1px solid rgba(196,103,58,0.25); }
+.status-pill.returned { background: rgba(156,123,101,0.12); color: var(--terra-mid);   border: 1px solid rgba(156,123,101,0.25); }
 
-.status-pill.active {
-  background: rgba(74, 124, 89, 0.12);
-  color: var(--terra-green);
-  border: 1px solid rgba(74, 124, 89, 0.25);
-}
-
-.status-pill.declined {
-  background: rgba(196, 103, 58, 0.10);
-  color: var(--terra);
-  border: 1px solid rgba(196, 103, 58, 0.25);
-}
-
-.status-pill.returned {
-  background: rgba(156, 123, 101, 0.12);
-  color: var(--terra-mid);
-  border: 1px solid rgba(156, 123, 101, 0.25);
-}
-
-/* System message pill (LoanThread) */
-.system-message-pill {
-  text-align: center;
-  display: inline-block;
-  padding: 4px 14px;
-  border-radius: 20px;
-  font-size: 11px;
-  color: var(--terra-mid);
-  background: rgba(255, 248, 243, 0.55);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(196, 103, 58, 0.12);
-  letter-spacing: -0.01em;
-}
-
-/* Chat bubble — borrower (mine, right) */
-.bubble-mine {
+/* ── Buttons ───────────────────────────────────────────────── */
+.btn-primary {
   background: var(--terra);
   color: white;
-  border-radius: 18px 18px 4px 18px;
-  padding: 9px 14px;
-  font-size: 14px;
-  line-height: 1.45;
+  border: none;
+  border-radius: 14px;
+  padding: 13px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
   letter-spacing: -0.01em;
-  box-shadow: 0 2px 8px rgba(196, 103, 58, 0.28);
-  max-width: 72%;
+  transition: all 150ms ease;
+  box-shadow: 0 4px 16px rgba(196,103,58,0.30), inset 0 1px 0 rgba(255,255,255,0.15);
+  width: 100%;
 }
 
-/* Chat bubble — owner (theirs, left) */
-.bubble-theirs {
-  background: rgba(255, 248, 243, 0.70);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(196, 103, 58, 0.15);
-  color: var(--terra-dark);
-  border-radius: 18px 18px 18px 4px;
-  padding: 9px 14px;
-  font-size: 14px;
-  line-height: 1.45;
-  letter-spacing: -0.01em;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  max-width: 72%;
-}
+.btn-primary:hover  { background: #b35c34; box-shadow: 0 6px 20px rgba(196,103,58,0.40); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); box-shadow: 0 2px 8px rgba(196,103,58,0.25); }
 
-@supports not (backdrop-filter: blur(1px)) {
-  .bubble-theirs { background: rgba(255, 248, 243, 0.95); }
-}
-
-/* Proposal card (change_proposal messages) */
+/* ── Proposal card ─────────────────────────────────────────── */
 .proposal-card {
-  background: rgba(255, 248, 243, 0.60);
+  background: rgba(255,248,243,0.60);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(196, 103, 58, 0.22);
+  border: 1px solid rgba(196,103,58,0.22);
   border-radius: 16px;
   padding: 14px;
-  transition: box-shadow 200ms ease;
 }
 
 @supports not (backdrop-filter: blur(1px)) {
-  .proposal-card { background: rgba(255, 248, 243, 0.95); }
+  .proposal-card { background: rgba(255,248,243,0.95); }
 }
 
-/* Reduce motion — respect user preference */
+/* ── Modal / drawer ────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(44,26,14,0.25);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 60;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .modal-backdrop { background: rgba(44,26,14,0.50); }
+}
+
+.drawer-handle {
+  width: 36px;
+  height: 4px;
+  background: rgba(44,26,14,0.15);
+  border-radius: 2px;
+  margin: 0 auto 16px;
+}
+
+/* ── Reduced motion ────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
   }

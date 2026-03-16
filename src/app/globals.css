@@ -5,6 +5,15 @@
 
 /* --- GOOGLE FONTS ------------------------------------------ */
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-display: 'Fraunces', Georgia, serif;
+  --color-terra: #C4673A;
+  --color-terra-dark: #2C1A0E;
+  --color-terra-mid: #9C7B65;
+  --color-terra-green: #4A7C59;
+}
 
 /* --- TAILWIND BASE ----------------------------------------- */
 @tailwind base;

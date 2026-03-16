@@ -299,7 +299,7 @@ export default function FeedPage() {
       <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-4 z-10">
         <div className="flex justify-between items-center mb-3">
           <div>
-            <h1 className="text-2xl font-bold text-[#2C1A0E]">Village</h1>
+            <h1 className="text-2xl font-bold text-[#2C1A0E]">VILLAGE</h1>
             <p className="text-xs text-[#9C7B65]">Lån og lån bort i kretsen din</p>
           </div>
           <div className="flex items-center gap-2">

@@ -357,3 +357,68 @@ track(event: string, properties?: Record<string, unknown>): void
 | `v_loan_metrics` | Antall lån, completion rate, tid til godkjenning |
 | `v_item_metrics` | Antall ting lagt ut per uke |
 
+
+## Tillegg til 02_architecture.md
+
+### `src/app/schedule/page.tsx` — `SchedulePage`
+
+**Formål:** Viser alle aktive og kommende lån (begge retninger — utlån og innlån) i én integrert liste sortert på dato, med historikk dempet til slutt.
+
+**State**
+```ts
+activeLoans: Loan[]      // pending + active + change_proposed, begge retninger
+historyLoans: Loan[]     // returned + declined, begge retninger
+catFilter: string        // 'all' | kategori-id
+loading: boolean
+```
+
+**Loan-type (normalisert)**
+```ts
+type Loan = {
+  id: string
+  item_id: string
+  owner_id: string
+  borrower_id: string
+  status: string
+  start_date: string
+  due_date: string
+  role: 'lender' | 'borrower'   // lagt til ved normalisering
+  items: { name: string; image_url: string | null; category: string }
+  counterpart: { name: string | null; email: string | null; avatar_url: string | null }
+}
+```
+
+**Queries**
+```ts
+// Utlån (jeg er owner)
+SELECT loans + items + profiles!loans_borrower_id_fkey
+WHERE owner_id=$me AND status IN('pending','active','change_proposed')
+
+// Innlån (jeg er borrower)
+SELECT loans + items + profiles!loans_owner_id_fkey
+WHERE borrower_id=$me AND status IN('pending','active','change_proposed')
+
+// Historikk utlån
+SELECT ... WHERE owner_id=$me AND status IN('returned','declined')
+ORDER BY due_date DESC LIMIT 30
+
+// Historikk innlån
+SELECT ... WHERE borrower_id=$me AND status IN('returned','declined')
+ORDER BY due_date DESC LIMIT 30
+```
+
+**Normalisering**
+```ts
+// Begge rader flettes til Loan[] med role og counterpart
+const normalize = (rows, role) => rows.map(r => ({ ...r, role, counterpart: r.profiles }))
+
+// Aktive: sortert på start_date ASC
+// Historikk: sortert på due_date DESC, visuelt dempet (opacity, grayscale)
+```
+
+**Kategorifilter**
+- Vises kun hvis > 1 kategori finnes på tvers av aktive + historikk
+- Filtrerer begge lister samtidig
+
+**Routing:** `/schedule` — lenkes fra stats-boksen "avtaler" i `profile/page.tsx`
+

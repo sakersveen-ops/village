@@ -1,9 +1,9 @@
 'use client'
-console.log('search page rendrer')
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { track } from '@/lib/track'
 
 export default function CommunitiesPage() {
   const [user, setUser] = useState<any>(null)
@@ -14,7 +14,9 @@ export default function CommunitiesPage() {
   const [closeFriends, setCloseFriends] = useState<any[]>([])
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [query, setQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -72,6 +74,7 @@ export default function CommunitiesPage() {
       }
 
       setLoading(false)
+      track('communities_page_viewed')
     }
     load()
   }, [])
@@ -101,6 +104,17 @@ export default function CommunitiesPage() {
     setSearchResults(data || [])
   }
 
+  const openSearch = () => {
+    setSearchOpen(true)
+    setTimeout(() => searchInputRef.current?.focus(), 50)
+  }
+
+  const closeSearch = () => {
+    setSearchOpen(false)
+    setQuery('')
+    setSearchResults([])
+  }
+
   const sortByFavorite = (list: any[]) =>
     [...list].sort((a, b) => {
       const aF = favorites.has(a.communities?.id) ? 0 : 1
@@ -108,82 +122,266 @@ export default function CommunitiesPage() {
       return aF - bF
     })
 
-  const CommunityCard = ({ community, role, showFavorite = false }: {
-    community: any, role?: string, showFavorite?: boolean
-  }) => (
-    <div className="bg-white rounded-2xl px-4 py-4 flex items-center gap-3 shadow-sm">
-      <Link href={`/community/${community.id}`} className="flex items-center gap-3 flex-1 min-w-0">
-        <div className="w-12 h-12 rounded-2xl bg-[#FFF0E6] flex items-center justify-center text-2xl flex-shrink-0">
-          {community.avatar_emoji}
+  // Graphic community card — image-dominant with text overlay
+  const CommunityCardGraphic = ({ entry, role, showFavorite = false }: {
+    entry: any, role?: string, showFavorite?: boolean
+  }) => {
+    const community = entry.communities || entry
+    const memberCount = community.member_count ?? null
+    const itemCount = community.item_count ?? null
+
+    return (
+      <Link href={`/community/${community.id}`}>
+        <div
+          className="relative overflow-hidden rounded-[20px] aspect-[4/3] cursor-pointer group"
+          style={{
+            border: '1px solid rgba(196,103,58,0.15)',
+            boxShadow: '0 2px 20px rgba(44,26,14,0.08)',
+          }}
+        >
+          {/* Background image or gradient */}
+          {community.cover_image_url ? (
+            <img
+              src={community.cover_image_url}
+              alt={community.name}
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : (
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{
+                background: 'linear-gradient(135deg, rgba(255,240,230,1) 0%, rgba(232,221,208,1) 60%, rgba(196,103,58,0.15) 100%)',
+              }}
+            >
+              <span style={{ fontSize: '52px', opacity: 0.35 }}>{community.avatar_emoji}</span>
+            </div>
+          )}
+
+          {/* Gradient overlay for text readability */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'linear-gradient(to top, rgba(44,26,14,0.82) 0%, rgba(44,26,14,0.25) 55%, transparent 100%)',
+            }}
+          />
+
+          {/* Top row: emoji + favorite star */}
+          <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
+            {!community.cover_image_url && (
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-xl"
+                style={{ background: 'rgba(255,248,243,0.65)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.5)' }}
+              >
+                {community.avatar_emoji}
+              </div>
+            )}
+            {community.cover_image_url && <div />}
+            <div className="flex items-center gap-1.5">
+              {!community.is_public && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full font-medium"
+                  style={{ background: 'rgba(255,248,243,0.65)', backdropFilter: 'blur(10px)', color: 'var(--terra-dark)', border: '1px solid rgba(255,255,255,0.4)' }}
+                >
+                  🔒 Privat
+                </span>
+              )}
+              {showFavorite && (
+                <button
+                  onClick={e => { e.preventDefault(); toggleFavorite(community.id) }}
+                  className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
+                  style={{ background: 'rgba(255,248,243,0.65)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.4)' }}
+                >
+                  <span style={{ opacity: favorites.has(community.id) ? 1 : 0.4 }}>⭐</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom text overlay */}
+          <div
+            className="absolute bottom-0 left-0 right-0 px-3 pb-3 pt-5"
+          >
+            <p className="font-display text-white font-semibold truncate" style={{ fontSize: '15px', letterSpacing: '-0.02em', textShadow: '0 1px 6px rgba(0,0,0,0.4)' }}>
+              {community.name}
+            </p>
+            {community.description && (
+              <p className="text-white/70 text-xs truncate mt-0.5" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>
+                {community.description}
+              </p>
+            )}
+            {/* Meta row */}
+            <div className="flex items-center gap-2 mt-1.5">
+              {role && (
+                <span
+                  className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
+                  style={{ background: 'rgba(196,103,58,0.85)', color: 'white', backdropFilter: 'blur(6px)' }}
+                >
+                  {role === 'admin' ? '⭐ Admin' : 'Medlem'}
+                </span>
+              )}
+              {memberCount !== null && (
+                <span className="text-xs text-white/70 flex-shrink-0" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>
+                  👥 {memberCount}
+                </span>
+              )}
+              {itemCount !== null && (
+                <span className="text-xs text-white/70 flex-shrink-0" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>
+                  📦 {itemCount} ting
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </Link>
+    )
+  }
+
+  // Simple row card for search results & friend communities
+  const CommunityRow = ({ community, role }: { community: any, role?: string }) => (
+    <Link href={`/community/${community.id}`}>
+      <div className="glass rounded-2xl px-4 py-4 flex items-center gap-3">
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 overflow-hidden"
+          style={{ background: 'rgba(255,240,230,0.7)' }}>
+          {community.cover_image_url
+            ? <img src={community.cover_image_url} alt={community.name} className="w-full h-full object-cover" />
+            : community.avatar_emoji}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="font-semibold text-[#2C1A0E] truncate">{community.name}</p>
+            <p className="font-semibold text-[#2C1A0E] truncate" style={{ letterSpacing: '-0.01em' }}>{community.name}</p>
             {!community.is_public && (
-              <span className="text-xs bg-[#E8DDD0] text-[#6B4226] px-2 py-0.5 rounded-full flex-shrink-0">Privat</span>
+              <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0"
+                style={{ background: 'rgba(232,221,208,0.7)', color: 'var(--terra-dark)' }}>Privat</span>
             )}
           </div>
           {community.description && (
             <p className="text-xs text-[#9C7B65] mt-0.5 truncate">{community.description}</p>
           )}
           {role && (
-            <p className="text-xs mt-0.5 text-[#4A7C59] font-medium">
+            <p className="text-xs mt-0.5 font-medium" style={{ color: 'var(--terra-green)' }}>
               {role === 'admin' ? '⭐ Administrator' : 'Medlem'}
             </p>
           )}
         </div>
-      </Link>
-      {showFavorite && (
-        <button
-          onClick={() => toggleFavorite(community.id)}
-          className={`text-lg flex-shrink-0 transition-transform active:scale-90 ${favorites.has(community.id) ? 'opacity-100' : 'opacity-25'}`}
-        >
-          ⭐
-        </button>
-      )}
-    </div>
+      </div>
+    </Link>
   )
+
+  // All communities the user is part of (admin + member combined, admins first)
+  const myCommunities = [...sortByFavorite(adminCommunities).map((m: any) => ({ ...m, derivedRole: 'admin' })), ...sortByFavorite(memberCommunities).map((m: any) => ({ ...m, derivedRole: 'member' }))]
 
   return (
     <div className="max-w-lg mx-auto pb-24">
-      <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-4 z-10">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold text-[#2C1A0E]">Kretser</h1>
-          <Link href="/community/new">
-            <button className="text-sm text-[#C4673A] font-medium border border-[#C4673A] rounded-full px-3 py-1.5">
-              + Ny krets
+
+      {/* Sticky top header */}
+      <header className="page-header glass" style={{ borderRadius: '0 0 20px 20px', position: 'sticky', top: 0, zIndex: 40 }}>
+        <div className="flex items-center justify-between px-4 pt-10 pb-3">
+          <h1 className="page-header-title font-display">Kretser</h1>
+        </div>
+
+        {/* Three action buttons */}
+        <div className="px-4 pb-4 flex items-center gap-2">
+
+          {/* Search button — expands horizontally */}
+          <div
+            className="flex items-center gap-2 overflow-hidden transition-all duration-300 rounded-full"
+            style={{
+              width: searchOpen ? '100%' : '44px',
+              minWidth: searchOpen ? '0' : '44px',
+              background: 'rgba(255,248,243,0.7)',
+              border: '1px solid rgba(196,103,58,0.2)',
+              backdropFilter: 'blur(10px)',
+              flexShrink: searchOpen ? 1 : 0,
+            }}
+          >
+            <button
+              onClick={searchOpen ? undefined : openSearch}
+              className="w-10 h-10 flex items-center justify-center flex-shrink-0"
+              aria-label="Søk"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra)" strokeWidth="2.2" strokeLinecap="round">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-4.35-4.35" />
+              </svg>
             </button>
-          </Link>
-        </div>
-        <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm pointer-events-none">🔍</span>
-          <input
-            value={query}
-            onChange={e => search(e.target.value)}
-            placeholder="Søk på navn…"
-            className="w-full bg-white border border-[#E8DDD0] rounded-xl pl-10 pr-4 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
-          />
-        </div>
-      </div>
+            {searchOpen && (
+              <>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={query}
+                  onChange={e => search(e.target.value)}
+                  placeholder="Søk etter kretser…"
+                  className="flex-1 bg-transparent text-sm text-[#2C1A0E] outline-none placeholder:text-[#C4A882] pr-2"
+                  style={{ minWidth: 0 }}
+                />
+                <button onClick={closeSearch} className="w-9 h-10 flex items-center justify-center flex-shrink-0 text-[#9C7B65] text-lg pr-1">
+                  ×
+                </button>
+              </>
+            )}
+          </div>
 
-      <div className="px-4 pt-4 flex flex-col gap-6">
+          {/* "Kretser jeg administrerer" — only show if not search open */}
+          {!searchOpen && (
+            <>
+              <Link href="#mine-admin" scroll={false} onClick={e => {
+                e.preventDefault()
+                document.getElementById('mine-admin')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}
+                className="flex-1"
+              >
+                <div
+                  className="h-10 flex items-center justify-center rounded-full text-xs font-medium text-center px-2 transition-colors"
+                  style={{
+                    background: 'rgba(255,248,243,0.7)',
+                    border: '1px solid rgba(196,103,58,0.2)',
+                    backdropFilter: 'blur(10px)',
+                    color: 'var(--terra)',
+                    letterSpacing: '-0.01em',
+                    lineHeight: '1.2',
+                  }}
+                >
+                  Kun mine kretser
+                </div>
+              </Link>
 
-        {/* Søkeresultater */}
+              <Link href="/community/new" className="flex-shrink-0">
+                <div
+                  className="h-10 px-4 flex items-center justify-center rounded-full text-xs font-medium whitespace-nowrap transition-colors"
+                  style={{
+                    background: 'var(--terra)',
+                    color: 'white',
+                    letterSpacing: '-0.01em',
+                  }}
+                >
+                  + Opprett krets
+                </div>
+              </Link>
+            </>
+          )}
+        </div>
+      </header>
+
+      <div className="px-4 pt-5 flex flex-col gap-8">
+
+        {/* SEARCH RESULTS */}
         {query.length >= 2 && (
           <div>
-            <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-2">Søkeresultater</p>
+            <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">Søkeresultater</p>
             {searchResults.length === 0 ? (
-              <div className="bg-white rounded-2xl p-5 text-center text-sm text-[#9C7B65]">Ingen treff</div>
+              <div className="glass rounded-2xl p-5 text-center text-sm text-[#9C7B65]">Ingen treff for «{query}»</div>
             ) : (
               <div className="flex flex-col gap-2">
                 {searchResults.map(c => {
                   const isMine = [...adminCommunities, ...memberCommunities].some((m: any) => m.communities?.id === c.id)
                   return (
                     <div key={c.id} className="relative">
-                      <CommunityCard community={c} />
+                      <CommunityRow community={c} />
                       {isMine && (
-                        <span className="absolute top-2 right-2 text-xs bg-[#EEF4F0] text-[#4A7C59] px-2 py-0.5 rounded-full font-medium">
-                          Du er medlem
+                        <span className="absolute top-3 right-3 text-xs px-2 py-0.5 rounded-full font-medium"
+                          style={{ background: 'rgba(74,124,89,0.12)', color: 'var(--terra-green)' }}>
+                          Du er med
                         </span>
                       )}
                     </div>
@@ -196,15 +394,62 @@ export default function CommunitiesPage() {
 
         {!query && (
           <>
-            {/* Nære venner */}
-            <div className="bg-gradient-to-br from-[#FFF0E6] to-[#FAF7F2] rounded-3xl p-4 border border-[#E8DDD0]">
+            {/* === KRETSER DU ER MED I (combined — most important section) === */}
+            {myCommunities.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">
+                  Dine kretser ({myCommunities.length})
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {myCommunities.map((m: any) => (
+                    <CommunityCardGraphic
+                      key={m.communities?.id}
+                      entry={m}
+                      role={m.derivedRole}
+                      showFavorite
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* === KRETSER JEG ADMINISTRERER (anchor target) === */}
+            <div id="mine-admin">
+              {adminCommunities.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">
+                    Kun kretser jeg administrerer ({adminCommunities.length})
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {sortByFavorite(adminCommunities).map((m: any) => (
+                      <CommunityCardGraphic
+                        key={m.communities?.id}
+                        entry={m}
+                        role="admin"
+                        showFavorite
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* === NÆRE VENNER === */}
+            <div
+              className="rounded-3xl p-4"
+              style={{
+                background: 'linear-gradient(135deg, rgba(255,240,230,0.8) 0%, rgba(250,247,242,0.8) 100%)',
+                border: '1px solid rgba(196,103,58,0.15)',
+                backdropFilter: 'blur(12px)',
+              }}
+            >
               <div className="flex justify-between items-center mb-3">
                 <div>
-                  <p className="font-bold text-[#2C1A0E]">❤️ Nære venner</p>
-                  <p className="text-xs text-[#9C7B65] mt-0.5">{closeFriends.length} personer</p>
+                  <p className="font-semibold text-[#2C1A0E]" style={{ letterSpacing: '-0.01em' }}>❤️ Nære venner</p>
+                  <p className="text-xs text-[#9C7B65] mt-0.5">{closeFriends.length} {closeFriends.length === 1 ? 'person' : 'personer'}</p>
                 </div>
                 <Link href="/close-friends">
-                  <button className="text-xs text-[#C4673A] border border-[#C4673A] rounded-full px-3 py-1">Rediger</button>
+                  <button className="btn-glass text-xs px-3 py-1.5 rounded-full" style={{ fontSize: '12px' }}>Rediger</button>
                 </Link>
               </div>
               {closeFriends.length === 0 ? (
@@ -212,7 +457,7 @@ export default function CommunitiesPage() {
               ) : (
                 <div className="flex gap-2 flex-wrap">
                   {closeFriends.map((cf: any) => (
-                    <div key={cf.friend_id} className="flex items-center gap-1.5 bg-white rounded-full px-3 py-1.5 shadow-sm">
+                    <div key={cf.friend_id} className="flex items-center gap-1.5 bg-white/60 rounded-full px-3 py-1.5" style={{ backdropFilter: 'blur(8px)' }}>
                       <div className="w-6 h-6 rounded-full bg-[#E8DDD0] flex items-center justify-center text-xs font-bold text-[#6B4226] overflow-hidden">
                         {cf.profiles?.avatar_url
                           ? <img src={cf.profiles.avatar_url} className="w-full h-full object-cover" />
@@ -227,65 +472,47 @@ export default function CommunitiesPage() {
               )}
             </div>
 
-            {/* Kretser jeg administrerer */}
-            {adminCommunities.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-2">
-                  Jeg administrerer ({adminCommunities.length})
-                </p>
-                <div className="flex flex-col gap-2">
-                  {sortByFavorite(adminCommunities).map((m: any) => (
-                    <CommunityCard key={m.communities?.id} community={m.communities} role="admin" showFavorite />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Kretser jeg er medlem av */}
-            {memberCommunities.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-2">
-                  Jeg er med i ({memberCommunities.length})
-                </p>
-                <div className="flex flex-col gap-2">
-                  {sortByFavorite(memberCommunities).map((m: any) => (
-                    <CommunityCard key={m.communities?.id} community={m.communities} role="member" showFavorite />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Tom state */}
+            {/* === TOM STATE === */}
             {adminCommunities.length === 0 && memberCommunities.length === 0 && !loading && (
-              <div className="bg-white rounded-2xl p-6 text-center text-[#9C7B65] text-sm">
-                Du er ikke med i noen kretser ennå
+              <div className="glass rounded-2xl p-8 text-center">
+                <div className="text-5xl mb-3">🏘️</div>
+                <p className="font-semibold text-[#2C1A0E] mb-1" style={{ letterSpacing: '-0.01em' }}>Ingen kretser ennå</p>
+                <p className="text-sm text-[#9C7B65] mb-5">Opprett en krets eller bli invitert av en venn</p>
+                <Link href="/community/new">
+                  <button className="btn-primary w-full">+ Opprett din første krets</button>
+                </Link>
               </div>
             )}
 
-            {/* Venners kretser */}
+            {/* === VENNERS KRETSER === */}
             {friendCommunities.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-2">
+                <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">
                   Utforsk — venner er med
                 </p>
                 <div className="flex flex-col gap-2">
                   {friendCommunities.map((m: any) => (
-                    <CommunityCard key={m.communities?.id} community={m.communities} />
+                    <CommunityRow key={m.communities?.id} community={m.communities} />
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Start ny */}
-            <Link href="/community/new">
-              <div className="bg-[#C4673A] rounded-2xl p-5 flex items-center justify-between">
-                <div>
-                  <p className="text-white font-semibold">Start en ny krets</p>
-                  <p className="text-white/70 text-sm mt-0.5">For nabolaget, vennegjengen eller familien</p>
+            {/* === START NY KRETS CTA (only if already member of some) === */}
+            {myCommunities.length > 0 && (
+              <Link href="/community/new">
+                <div
+                  className="rounded-2xl p-5 flex items-center justify-between"
+                  style={{ background: 'var(--terra)' }}
+                >
+                  <div>
+                    <p className="text-white font-semibold" style={{ letterSpacing: '-0.01em' }}>Start en ny krets</p>
+                    <p className="text-white/70 text-sm mt-0.5">For nabolaget, vennegjengen eller familien</p>
+                  </div>
+                  <span className="text-white text-xl">→</span>
                 </div>
-                <span className="text-white text-xl">→</span>
-              </div>
-            </Link>
+              </Link>
+            )}
           </>
         )}
       </div>

@@ -31,7 +31,6 @@ export default function ProfilePage() {
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [activeCategory, setActiveCategory] = useState('all')
   const router = useRouter()
-
   const [starred, setStarred] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -53,10 +52,7 @@ export default function ProfilePage() {
         .eq('user_a', user.id)
       setFriends(friendships || [])
 
-      const { data: starredRows } = await supabase
-        .from('starred_users')
-        .select('starred_id')
-        .eq('user_id', user.id)
+      const { data: starredRows } = await supabase.from('starred_users').select('starred_id').eq('user_id', user.id)
       setStarred(new Set((starredRows || []).map((s: any) => s.starred_id)))
 
       const { data: incoming } = await supabase
@@ -190,41 +186,37 @@ export default function ProfilePage() {
     return '📦'
   }
 
-  const filteredItems = activeCategory === 'all'
-    ? myItems
-    : myItems.filter(i => i.category === activeCategory)
+  const filteredItems = activeCategory === 'all' ? myItems : myItems.filter(i => i.category === activeCategory)
 
-  if (loading) return <div className="p-8 text-center text-[#9C7B65]">Laster…</div>
+  if (loading) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
 
   return (
     <div className="max-w-lg mx-auto pb-24">
 
       {/* Header */}
-      <div className="bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-6">
+      <div style={{ background: '#FAF7F2', borderBottom: '1px solid #E8DDD0' }} className="px-4 pt-10 pb-6">
         <div className="flex justify-between items-start mb-4">
-          <Link href="/" className="text-[#C4673A] text-sm">← Feed</Link>
-
-          {/* Tre-prikker meny */}
+          <Link href="/" style={{ color: 'var(--terra)' }} className="text-sm">← Feed</Link>
           <div className="relative">
             <button
               onClick={() => setShowMenu(m => !m)}
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-white border border-[#E8DDD0] shadow-sm text-[#6B4226] text-lg"
+              className="w-9 h-9 flex items-center justify-center rounded-full shadow-sm text-lg"
+              style={{ background: '#fff', border: '1px solid #E8DDD0', color: '#6B4226' }}
             >
               ···
             </button>
             {showMenu && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 top-11 z-50 bg-white rounded-2xl shadow-lg border border-[#E8DDD0] overflow-hidden w-44">
+                <div className="absolute right-0 top-11 z-50 rounded-2xl shadow-lg overflow-hidden w-44"
+                  style={{ background: '#fff', border: '1px solid #E8DDD0' }}>
                   <Link href="/settings" onClick={() => setShowMenu(false)}>
-                    <div className="px-4 py-3 flex items-center gap-2 hover:bg-[#FAF7F2] text-sm text-[#2C1A0E]">
+                    <div className="px-4 py-3 flex items-center gap-2 text-sm" style={{ color: 'var(--terra-dark)' }}>
                       ⚙️ Innstillinger
                     </div>
                   </Link>
-                  <button
-                    onClick={signOut}
-                    className="w-full px-4 py-3 flex items-center gap-2 hover:bg-[#FAF7F2] text-sm text-[#C4673A] border-t border-[#E8DDD0]"
-                  >
+                  <button onClick={signOut} className="w-full px-4 py-3 flex items-center gap-2 text-sm"
+                    style={{ color: 'var(--terra)', borderTop: '1px solid #E8DDD0' }}>
                     🚪 Logg ut
                   </button>
                 </div>
@@ -233,80 +225,86 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Avatar + navn */}
+        {/* Avatar + navn — e-post er trygt å vise kun her (egen profil) */}
         <div className="flex items-center gap-4">
           <label className="relative cursor-pointer flex-shrink-0">
-            <div className="w-16 h-16 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold text-2xl overflow-hidden">
+            <div className="flex items-center justify-center text-white font-bold text-2xl overflow-hidden"
+              style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--terra)' }}>
               {profile?.avatar_url
-                ? <img src={profile.avatar_url} className="w-full h-full object-cover" />
+                ? <img src={profile.avatar_url} className="w-full h-full object-cover" alt={displayName} />
                 : displayName?.[0]?.toUpperCase()}
             </div>
-            <div className="absolute bottom-0 right-0 w-5 h-5 bg-white border border-[#E8DDD0] rounded-full flex items-center justify-center text-xs">
+            <div className="absolute bottom-0 right-0 w-5 h-5 rounded-full flex items-center justify-center text-xs"
+              style={{ background: '#fff', border: '1px solid #E8DDD0' }}>
               {avatarUploading ? '…' : '📷'}
             </div>
             <input type="file" accept="image/*" onChange={uploadAvatar} className="hidden" />
           </label>
           <div>
-            <h1 className="text-xl font-bold text-[#2C1A0E]">{displayName}</h1>
-            <p className="text-sm text-[#9C7B65]">{user?.email}</p>
+            <h1 className="font-display text-xl font-bold" style={{ color: 'var(--terra-dark)' }}>{displayName}</h1>
+            <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>{user?.email}</p>
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Stats — alle tre klikkbare, alle tre med cursor:pointer og → */}
         <div className="flex gap-2 mt-5">
-          <div className="flex-1 bg-white rounded-2xl p-3 text-center shadow-sm">
-            <p className="text-lg font-bold text-[#2C1A0E]">{myItems.length}</p>
-            <p className="text-xs text-[#9C7B65] mt-0.5 leading-tight">Delte ting</p>
-            {lentOut > 0 && <p className="text-xs text-[#C4673A] mt-0.5">{lentOut} utlånt</p>}
-          </div>
-          <button
-            onClick={() => setShowLoanHistory(true)}
-            className="flex-1 bg-white rounded-2xl p-3 text-center shadow-sm active:bg-[#FFF0E6] transition-colors"
-          >
-            <p className="text-lg font-bold text-[#2C1A0E]">{totalLoans}</p>
-            <p className="text-xs text-[#9C7B65] mt-0.5 leading-tight">Antall utlån</p>
-            <p className="text-xs text-[#C4673A] mt-0.5">Se logg →</p>
+          <Link href="/items" className="flex-1">
+            <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16, cursor: 'pointer' }}>
+              <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{myItems.length}</p>
+              <p className="text-xs mt-0.5 leading-tight" style={{ color: 'var(--terra-mid)' }}>Delte gjenstander</p>
+              {lentOut > 0 && <p className="text-xs mt-0.5" style={{ color: 'var(--terra)' }}>{lentOut} utlånt</p>}
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra)' }}>Mine gjenstander →</p>
+            </div>
+          </Link>
+          <button onClick={() => setShowLoanHistory(true)}
+            className="flex-1 glass rounded-2xl p-3 text-center"
+            style={{ borderRadius: 16, cursor: 'pointer' }}>
+            <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{totalLoans}</p>
+            <p className="text-xs mt-0.5 leading-tight" style={{ color: 'var(--terra-mid)' }}>Antall utlån</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--terra)' }}>Se logg →</p>
           </button>
-          <div className="flex-1 bg-white rounded-2xl p-3 text-center shadow-sm">
-            <p className="text-lg font-bold text-[#2C1A0E]">{friends.length}</p>
-            <p className="text-xs text-[#9C7B65] mt-0.5 leading-tight">Venner</p>
-          </div>
+          <Link href="/friends" className="flex-1">
+            <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16, cursor: 'pointer' }}>
+              <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{friends.length}</p>
+              <p className="text-xs mt-0.5 leading-tight" style={{ color: 'var(--terra-mid)' }}>Venner</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra)' }}>Mine venner →</p>
+            </div>
+          </Link>
         </div>
       </div>
 
       {/* Lånelogg modal */}
       {showLoanHistory && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
-          <div className="bg-white rounded-t-3xl w-full max-h-[80vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white px-4 pt-5 pb-3 border-b border-[#E8DDD0] flex justify-between items-center">
-              <h2 className="font-bold text-[#2C1A0E]">Lånelogg</h2>
-              <button onClick={() => setShowLoanHistory(false)} className="text-[#9C7B65] text-lg">✕</button>
+          <div className="glass-heavy rounded-t-3xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="sticky top-0 px-4 pt-5 pb-3 flex justify-between items-center"
+              style={{ background: 'rgba(255,248,243,0.92)', borderBottom: '1px solid #E8DDD0' }}>
+              <h2 className="font-bold" style={{ color: 'var(--terra-dark)' }}>Lånelogg</h2>
+              <button onClick={() => setShowLoanHistory(false)} style={{ color: 'var(--terra-mid)' }} className="text-lg">✕</button>
             </div>
             <div className="px-4 py-3 flex flex-col gap-2">
               {loanHistory.length === 0 ? (
-                <p className="text-center py-8 text-[#9C7B65] text-sm">Ingen utlån ennå</p>
-              ) : (
-                loanHistory.map(loan => {
-                  const { label, color } = loanStatusLabel(loan.status)
-                  return (
-                    <div key={loan.id} className="bg-[#FAF7F2] rounded-2xl px-4 py-3 flex items-center gap-3">
-                      {loan.items?.image_url
-                        ? <img src={loan.items.image_url} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
-                        : <div className="w-12 h-12 rounded-xl bg-[#E8DDD0] flex items-center justify-center text-xl flex-shrink-0">📦</div>}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-[#2C1A0E] text-sm truncate">{loan.items?.name}</p>
-                        <p className="text-xs text-[#9C7B65] mt-0.5">
-                          {loan.profiles?.name || loan.profiles?.email?.split('@')[0]}
-                        </p>
-                        <p className="text-xs text-[#9C7B65]">
-                          {formatDate(loan.created_at)}{loan.due_date ? ` → ${formatDate(loan.due_date)}` : ''}
-                        </p>
-                      </div>
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${color}`}>{label}</span>
+                <p className="text-center py-8 text-sm" style={{ color: 'var(--terra-mid)' }}>Ingen utlån ennå</p>
+              ) : loanHistory.map(loan => {
+                const { label, color } = loanStatusLabel(loan.status)
+                return (
+                  <div key={loan.id} className="rounded-2xl px-4 py-3 flex items-center gap-3" style={{ background: '#FAF7F2' }}>
+                    {loan.items?.image_url
+                      ? <img src={loan.items.image_url} className="rounded-xl object-cover flex-shrink-0" style={{ width: 48, height: 48 }} alt={loan.items.name} />
+                      : <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ width: 48, height: 48, background: '#E8DDD0' }}>📦</div>}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{loan.items?.name}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
+                        {loan.profiles?.name || loan.profiles?.email?.split('@')[0]}
+                      </p>
+                      <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>
+                        {formatDate(loan.created_at)}{loan.due_date ? ` → ${formatDate(loan.due_date)}` : ''}
+                      </p>
                     </div>
-                  )
-                })
-              )}
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${color}`}>{label}</span>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
@@ -317,22 +315,31 @@ export default function ProfilePage() {
         {/* Innkommende venneforespørsler */}
         {pendingRequests.length > 0 && (
           <div>
-            <h2 className="text-base font-bold text-[#2C1A0E] mb-3">
-              Venneforespørsler <span className="text-[#C4673A]">({pendingRequests.length})</span>
+            <h2 className="text-base font-bold mb-3" style={{ color: 'var(--terra-dark)' }}>
+              Venneforespørsler <span style={{ color: 'var(--terra)' }}>({pendingRequests.length})</span>
             </h2>
             <div className="flex flex-col gap-2">
               {pendingRequests.map(req => (
-                <div key={req.id} className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
-                  <div className="w-10 h-10 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
+                <div key={req.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
+                  <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
+                    style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
                     {req.profiles?.avatar_url
-                      ? <img src={req.profiles.avatar_url} className="w-full h-full object-cover" />
+                      ? <img src={req.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
                       : (req.profiles?.name || req.profiles?.email)?.[0]?.toUpperCase()}
                   </div>
-                  <p className="flex-1 font-medium text-[#2C1A0E] text-sm">
+                  <p className="flex-1 font-medium text-sm" style={{ color: 'var(--terra-dark)' }}>
                     {req.profiles?.name || req.profiles?.email?.split('@')[0]}
                   </p>
-                  <button onClick={() => respondToFriendRequest(req.id, req.from_id, true)} className="text-xs bg-[#4A7C59] text-white rounded-full px-3 py-1.5 font-medium">✓ Godta</button>
-                  <button onClick={() => respondToFriendRequest(req.id, req.from_id, false)} className="text-xs border border-[#E8DDD0] text-[#9C7B65] rounded-full px-3 py-1.5">Avslå</button>
+                  <button onClick={() => respondToFriendRequest(req.id, req.from_id, true)}
+                    className="text-xs rounded-full px-3 py-1.5 font-medium"
+                    style={{ background: 'var(--terra-green)', color: '#fff' }}>
+                    ✓ Godta
+                  </button>
+                  <button onClick={() => respondToFriendRequest(req.id, req.from_id, false)}
+                    className="text-xs rounded-full px-3 py-1.5"
+                    style={{ border: '1px solid #E8DDD0', color: 'var(--terra-mid)' }}>
+                    Avslå
+                  </button>
                 </div>
               ))}
             </div>
@@ -342,24 +349,27 @@ export default function ProfilePage() {
         {/* Sendte venneforespørsler */}
         {sentRequests.length > 0 && (
           <div>
-            <h2 className="text-base font-bold text-[#2C1A0E] mb-3">
-              Venter på svar <span className="text-[#9C7B65] font-normal text-sm">({sentRequests.length})</span>
+            <h2 className="text-base font-bold mb-3" style={{ color: 'var(--terra-dark)' }}>
+              Venter på svar <span className="font-normal text-sm" style={{ color: 'var(--terra-mid)' }}>({sentRequests.length})</span>
             </h2>
             <div className="flex flex-col gap-2">
               {sentRequests.map(req => (
-                <div key={req.id} className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
-                  <div className="w-10 h-10 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
+                <div key={req.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
+                  <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
+                    style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
                     {req.profiles?.avatar_url
-                      ? <img src={req.profiles.avatar_url} className="w-full h-full object-cover" />
+                      ? <img src={req.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
                       : (req.profiles?.name || req.profiles?.email)?.[0]?.toUpperCase()}
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium text-[#2C1A0E] text-sm">
+                    <p className="font-medium text-sm" style={{ color: 'var(--terra-dark)' }}>
                       {req.profiles?.name || req.profiles?.email?.split('@')[0]}
                     </p>
-                    <p className="text-xs text-[#9C7B65] mt-0.5">Forespørsel sendt</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Forespørsel sendt</p>
                   </div>
-                  <button onClick={() => cancelFriendRequest(req.id)} className="text-xs border border-[#E8DDD0] text-[#9C7B65] rounded-full px-3 py-1.5">
+                  <button onClick={() => cancelFriendRequest(req.id)}
+                    className="text-xs rounded-full px-3 py-1.5"
+                    style={{ border: '1px solid #E8DDD0', color: 'var(--terra-mid)' }}>
                     Trekk tilbake
                   </button>
                 </div>
@@ -368,84 +378,134 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Venner – forhåndsvisning */}
+        {/* Venner — tydelig "+ Inviter"-pill i header erstatter det dominerende banneret */}
         <div>
           <div className="flex justify-between items-center mb-3">
-            <Link href="/friends">
-              <h2 className="text-base font-bold text-[#2C1A0E]">
-                Venner {friends.length > 0 && <span className="text-[#9C7B65] font-normal text-sm">({friends.length})</span>}
-              </h2>
-            </Link>
+            <h2 className="text-base font-bold" style={{ color: 'var(--terra-dark)' }}>
+              Venner {friends.length > 0 && (
+                <span className="font-normal text-sm" style={{ color: 'var(--terra-mid)' }}>({friends.length})</span>
+              )}
+            </h2>
             <div className="flex items-center gap-3">
-              <Link href="/friends" className="text-[#9C7B65] text-lg">🔍</Link>
-              <Link href="/friends" className="text-[#C4673A] text-lg font-bold">+</Link>
+              <Link href="/friends" style={{ color: 'var(--terra-mid)' }} className="text-lg" aria-label="Søk venner">🔍</Link>
+              <Link href="/invite"
+                className="flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-full"
+                style={{ background: 'var(--terra)', color: '#fff' }}>
+                + Inviter
+              </Link>
             </div>
           </div>
 
           {friends.length === 0 ? (
-            <div className="bg-white rounded-2xl p-5 text-center text-[#9C7B65] text-sm">
-              Ingen venner ennå – <Link href="/invite" className="text-[#C4673A]">inviter noen!</Link>
+            <div className="rounded-2xl p-5 text-center text-sm" style={{ background: '#fff', color: 'var(--terra-mid)' }}>
+              Ingen venner ennå – <Link href="/invite" style={{ color: 'var(--terra)' }}>inviter noen!</Link>
             </div>
           ) : (
-            <>
-              {/* Avatar-rad – starred først */}
-              <Link href="/friends">
-                <div className="bg-white rounded-2xl px-4 py-3 flex items-center gap-1 shadow-sm flex-wrap">
-                  {[...friends]
-                    .sort((a, b) => (starred.has(a.user_b) ? -1 : 1))
-                    .slice(0, 8)
-                    .map((f: any) => (
-                      <div key={f.user_b} className="relative">
-                        <div className="w-10 h-10 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm overflow-hidden border-2 border-white">
-                          {f.profiles?.avatar_url
-                            ? <img src={f.profiles.avatar_url} className="w-full h-full object-cover" />
-                            : <span className="text-xs text-[#6B4226]">{(f.profiles?.name || f.profiles?.email)?.[0]?.toUpperCase()}</span>}
-                        </div>
-                        {starred.has(f.user_b) && (
-                          <span className="absolute -top-0.5 -right-0.5 text-xs">❤️</span>
-                        )}
+            <Link href="/friends">
+              <div className="rounded-2xl px-4 py-3 flex items-center gap-1 shadow-sm flex-wrap" style={{ background: '#fff' }}>
+                {[...friends]
+                  .sort((a, b) => (starred.has(a.user_b) ? -1 : 1))
+                  .slice(0, 8)
+                  .map((f: any) => (
+                    <div key={f.user_b} className="relative">
+                      <div className="flex items-center justify-center font-bold text-sm overflow-hidden"
+                        style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #fff' }}>
+                        {f.profiles?.avatar_url
+                          ? <img src={f.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
+                          : <span className="text-xs" style={{ color: '#6B4226' }}>{(f.profiles?.name || f.profiles?.email)?.[0]?.toUpperCase()}</span>}
                       </div>
-                    ))}
-                  {friends.length > 8 && (
-                    <div className="w-10 h-10 rounded-full bg-[#E8DDD0] flex items-center justify-center text-xs text-[#6B4226] font-bold border-2 border-white">
-                      +{friends.length - 8}
+                      {starred.has(f.user_b) && <span className="absolute -top-0.5 -right-0.5 text-xs">❤️</span>}
                     </div>
-                  )}
-                </div>
-              </Link>
-
-              {/* Inviter-knapp når man har venner */}
-              <Link href="/invite" className="mt-2 block">
-                <div className="bg-[#C4673A] rounded-2xl p-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-white font-semibold">Inviter venner</p>
-                    <p className="text-white/70 text-sm mt-0.5">Del lenken din og bygg kretsen</p>
+                  ))}
+                {friends.length > 8 && (
+                  <div className="flex items-center justify-center text-xs font-bold"
+                    style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #fff', color: '#6B4226' }}>
+                    +{friends.length - 8}
                   </div>
-                  <span className="text-white text-xl">→</span>
-                </div>
-              </Link>
-            </>
+                )}
+              </div>
+            </Link>
           )}
         </div>
 
-        {/* Mine ting */}
+        {/* Søk etter brukere */}
+        <div>
+          <h2 className="text-base font-bold mb-3" style={{ color: 'var(--terra-dark)' }}>Finn folk</h2>
+          <div className="relative mb-3">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm pointer-events-none">🔍</span>
+            <input
+              value={searchQuery}
+              onChange={e => searchUsers(e.target.value)}
+              placeholder="Søk på navn eller e-post…"
+              className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none"
+              style={{ background: '#fff', border: '1px solid #E8DDD0', color: 'var(--terra-dark)' }}
+              onFocus={e => e.currentTarget.style.borderColor = 'var(--terra)'}
+              onBlur={e => e.currentTarget.style.borderColor = '#E8DDD0'}
+            />
+          </div>
+          {searchResults.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {searchResults.map(result => (
+                <div key={result.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
+                  <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
+                    style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
+                    {result.avatar_url
+                      ? <img src={result.avatar_url} className="w-full h-full object-cover" alt="" />
+                      : (result.name || result.email)?.[0]?.toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>
+                      {result.name || result.email?.split('@')[0]}
+                    </p>
+                    {mutualMap[result.id]?.length > 0 && (
+                      <button onClick={() => setExpandedMutual(expandedMutual === result.id ? null : result.id)}
+                        className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
+                        {mutualMap[result.id].length} felles {mutualMap[result.id].length === 1 ? 'venn' : 'venner'} ↓
+                      </button>
+                    )}
+                    {expandedMutual === result.id && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {mutualMap[result.id].map((m: any) => (
+                          <span key={m.id} className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#FAF7F2', color: '#6B4226' }}>
+                            {m.name || m.email?.split('@')[0]}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {result.isFriend ? (
+                    <span className="text-xs px-3 py-1.5 rounded-full" style={{ background: '#EEF4F0', color: 'var(--terra-green)' }}>Venn ✓</span>
+                  ) : result.requestSent ? (
+                    <span className="text-xs px-3 py-1.5 rounded-full" style={{ background: '#FAF7F2', color: 'var(--terra-mid)' }}>Sendt</span>
+                  ) : (
+                    <button onClick={() => sendFriendRequest(result.id)}
+                      className="text-xs px-3 py-1.5 rounded-full font-medium"
+                      style={{ background: 'var(--terra)', color: '#fff' }}>
+                      + Legg til
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Mine gjenstander */}
         <div>
           <div className="flex justify-between items-center mb-3">
-            <h2 className="text-base font-bold text-[#2C1A0E]">Mine ting</h2>
-            <Link href="/add" className="text-sm text-[#C4673A] font-medium">+ Legg ut</Link>
+            <h2 className="text-base font-bold" style={{ color: 'var(--terra-dark)' }}>Mine gjenstander</h2>
+            <Link href="/add" className="text-sm font-medium" style={{ color: 'var(--terra)' }}>+ Legg ut</Link>
           </div>
 
-          {/* Kategorifilter */}
           {myItems.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
               {CATEGORIES.filter(c => c.id === 'all' || myItems.some(i => i.category === c.id)).map(cat => (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveCategory(cat.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${
-                    activeCategory === cat.id ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
-                  }`}
-                >
+                <button key={cat.id} onClick={() => setActiveCategory(cat.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0 transition-colors"
+                  style={activeCategory === cat.id
+                    ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
+                    : { background: '#fff', color: '#6B4226', border: '1px solid #E8DDD0' }
+                  }>
                   <span>{cat.emoji}</span>
                   <span>{cat.label}</span>
                 </button>
@@ -454,26 +514,32 @@ export default function ProfilePage() {
           )}
 
           {filteredItems.length === 0 ? (
-            <div className="bg-white rounded-2xl p-5 text-center text-[#9C7B65] text-sm">
-              {myItems.length === 0 ? 'Du har ikke lagt ut noe ennå' : 'Ingen ting i denne kategorien'}
+            <div className="rounded-2xl p-5 text-center text-sm" style={{ background: '#fff', color: 'var(--terra-mid)' }}>
+              {myItems.length === 0 ? 'Du har ikke lagt ut noe ennå' : 'Ingen gjenstander i denne kategorien'}
             </div>
           ) : (
             <div className="flex flex-col gap-2">
               {filteredItems.map(item => (
                 <Link key={item.id} href={`/items/${item.id}`}>
-                  <div className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
-                    {item.image_url ? (
-                      <img src={item.image_url} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
-                    ) : (
-                      <div className="w-12 h-12 rounded-xl bg-[#E8DDD0] flex items-center justify-center text-xl flex-shrink-0">
-                        {catEmoji(item.category)}
-                      </div>
-                    )}
+                  <div className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
+                    {item.image_url
+                      ? <img src={item.image_url} className="rounded-xl object-cover flex-shrink-0" style={{ width: 48, height: 48 }} alt={item.name} />
+                      : <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ width: 48, height: 48, background: '#E8DDD0' }}>
+                          {catEmoji(item.category)}
+                        </div>
+                    }
                     <div className="flex-1 min-w-0">
-                      <p className="text-[#2C1A0E] font-medium text-sm truncate">{item.name}</p>
-                      <p className="text-xs text-[#9C7B65] mt-0.5 capitalize">{item.category}</p>
+                      <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
+                      <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--terra-mid)' }}>{item.category}</p>
                     </div>
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${item.available ? 'bg-[#4A7C59]' : 'bg-[#C4673A]'}`} />
+                    {/* Lesbar pill i stedet for anonym farget dot */}
+                    <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
+                      style={item.available
+                        ? { background: '#EEF4F0', color: 'var(--terra-green)' }
+                        : { background: '#FFF0E6', color: 'var(--terra)' }
+                      }>
+                      {item.available ? 'Ledig' : 'Utlånt'}
+                    </span>
                   </div>
                 </Link>
               ))}
@@ -481,18 +547,17 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* Inviter */}
-        <Link href="/invite">
-          <div className="bg-[#C4673A] rounded-2xl p-4 flex items-center justify-between mb-4">
-            <div>
-              <p className="text-white font-semibold">Inviter venner</p>
-              <p className="text-white/70 text-sm mt-0.5">Del lenken din og bygg kretsen</p>
-            </div>
-            <span className="text-white text-xl">→</span>
-          </div>
+        {/* Sekundær inviter-lenke nederst — enkel outline, ikke dominant CTA */}
+        <Link href="/invite"
+          className="flex items-center justify-center gap-1.5 text-sm w-full py-2.5 rounded-xl mb-4"
+          style={{ color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.25)', background: 'rgba(196,103,58,0.04)' }}>
+          <span>👥</span>
+          <span>Inviter venner til Village</span>
         </Link>
 
       </div>
+
+      <div className="nav-spacer" />
     </div>
   )
 }

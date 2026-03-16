@@ -29,6 +29,7 @@ export default function UserProfilePage() {
   const [itemSearch, setItemSearch] = useState('')
   const [itemCategory, setItemCategory] = useState('')
   const [loading, setLoading] = useState(true)
+  const [isSelf, setIsSelf] = useState(false)
   const router = useRouter()
   const { userId } = useParams()
 
@@ -38,6 +39,8 @@ export default function UserProfilePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setViewer(user)
+
+      // If viewing own profile, redirect to /profile
       if (userId === user.id) { router.push('/profile'); return }
 
       const { data: vp } = await supabase.from('profiles').select('*').eq('id', user.id).single()
@@ -45,6 +48,9 @@ export default function UserProfilePage() {
 
       const { data: targetProfile } = await supabase.from('profiles').select('*').eq('id', userId).single()
       setProfile(targetProfile)
+
+      // Check if self (shouldn't reach here due to redirect, but guard anyway)
+      setIsSelf(userId === user.id)
 
       const { data: starredRow } = await supabase
         .from('starred_users').select('id').eq('user_id', user.id).eq('starred_id', userId).maybeSingle()
@@ -76,13 +82,11 @@ export default function UserProfilePage() {
       const shared = (theirMemberships || []).filter((m: any) => myComIds.has(m.community_id))
       setSharedCommunities(shared)
 
-      // Offentlige kretser de er med i (ikke felles)
       const publicComs = (theirMemberships || []).filter((m: any) =>
         m.communities?.is_public && !myComIds.has(m.community_id)
       )
       setPublicCommunities(publicComs)
 
-      // Felles venner
       const { data: myFriendsFull } = await supabase
         .from('friendships')
         .select('user_b, profiles!friendships_user_b_fkey(id, name, username, avatar_url)')
@@ -159,73 +163,125 @@ export default function UserProfilePage() {
     return matchSearch && matchCat
   })
 
-  if (loading) return <div className="p-8 text-center text-[#9C7B65]">Laster…</div>
-  if (!profile) return <div className="p-8 text-center text-[#9C7B65]">Fant ikke brukeren</div>
+  if (loading) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
+  if (!profile) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Fant ikke brukeren</div>
 
   return (
     <div className="max-w-lg mx-auto pb-24">
 
       {/* Header */}
-      <div className="bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-6">
-        <button onClick={() => router.back()} className="text-[#C4673A] text-sm mb-4 block">← Tilbake</button>
+      <div style={{ background: '#FAF7F2', borderBottom: '1px solid #E8DDD0' }} className="px-4 pt-10 pb-6">
+        <button onClick={() => router.back()} className="text-sm mb-4 block" style={{ color: 'var(--terra)' }}>← Tilbake</button>
 
         <div className="flex items-start gap-4">
-          <div className="w-16 h-16 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold text-2xl overflow-hidden flex-shrink-0">
+          {/* Avatar */}
+          <div
+            className="flex items-center justify-center text-white font-bold text-2xl overflow-hidden flex-shrink-0"
+            style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--terra)' }}
+          >
             {profile.avatar_url
-              ? <img src={profile.avatar_url} className="w-full h-full object-cover" />
+              ? <img src={profile.avatar_url} className="w-full h-full object-cover" alt={displayName(profile)} />
               : displayName(profile)?.[0]?.toUpperCase()}
           </div>
+
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-[#2C1A0E]">{displayName(profile)}</h1>
-            {profile.username && <p className="text-sm text-[#9C7B65]">@{profile.username}</p>}
-            <p className="text-xs text-[#9C7B65] mt-1">
+            <h1 className="font-display text-xl font-bold" style={{ color: 'var(--terra-dark)' }}>
+              {displayName(profile)}
+            </h1>
+            {profile.username && (
+              <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>@{profile.username}</p>
+            )}
+            {/* E-post vises KUN på egen profil — aldri på andres */}
+            {isSelf && viewer?.email && (
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>{viewer.email}</p>
+            )}
+            <p className="text-xs mt-1" style={{ color: 'var(--terra-mid)' }}>
               {accessLevel === 'friend' ? '👥 Dere er venner'
                 : accessLevel === 'friend_of_friend' ? '👥 Venn av venn'
                 : accessLevel === 'community' ? '🏘️ Felles krets'
                 : '👤 Ukjent'}
             </p>
           </div>
-          <button onClick={toggleStar} className="text-2xl flex-shrink-0 mt-1">
+
+          <button onClick={toggleStar} className="text-2xl flex-shrink-0 mt-1" aria-label={isStarred ? 'Fjern følger' : 'Følg bruker'}>
             {isStarred ? '❤️' : '🤍'}
           </button>
+        </div>
+
+        {/* Statistikk-bokser: ingen hover/pointer siden de ikke er klikkbare på andres profil */}
+        <div className="flex gap-3 mt-4">
+          <div
+            className="flex-1 glass text-center py-3 px-2"
+            style={{ borderRadius: 12 }}
+          >
+            <p className="font-bold text-base" style={{ color: 'var(--terra-dark)' }}>{items.length}</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>delte gjenstander</p>
+          </div>
+          <div
+            className="flex-1 glass text-center py-3 px-2"
+            style={{ borderRadius: 12 }}
+          >
+            <p className="font-bold text-base" style={{ color: 'var(--terra-dark)' }}>—</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>utlån</p>
+          </div>
+          <div
+            className="flex-1 glass text-center py-3 px-2"
+            style={{ borderRadius: 12 }}
+          >
+            <p className="font-bold text-base" style={{ color: 'var(--terra-dark)' }}>
+              {mutualFriends.length}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>felles venner</p>
+          </div>
         </div>
 
         {/* Felles venner */}
         <div className="mt-4">
           {mutualFriends.length > 0 ? (
             <div>
-              <p className="text-xs text-[#9C7B65] mb-2">
+              <p className="text-xs mb-2" style={{ color: 'var(--terra-mid)' }}>
                 {mutualFriends.length} felles {mutualFriends.length === 1 ? 'venn' : 'venner'}
               </p>
               <div className="flex gap-1 flex-wrap">
                 {mutualFriends.slice(0, 5).map((m: any) => (
-                  <div key={m.id} className="flex items-center gap-1.5 bg-white border border-[#E8DDD0] rounded-full px-2 py-1">
-                    <div className="w-5 h-5 rounded-full bg-[#E8DDD0] flex items-center justify-center text-xs overflow-hidden">
-                      {m.avatar_url
-                        ? <img src={m.avatar_url} className="w-full h-full object-cover" />
-                        : displayName(m)?.[0]?.toUpperCase()}
+                  <Link key={m.id} href={`/profile/${m.id}`}>
+                    <div
+                      className="flex items-center gap-1.5 rounded-full px-2 py-1"
+                      style={{ background: '#fff', border: '1px solid #E8DDD0' }}
+                    >
+                      <div
+                        className="flex items-center justify-center text-xs overflow-hidden flex-shrink-0"
+                        style={{ width: 20, height: 20, borderRadius: '50%', background: '#E8DDD0' }}
+                      >
+                        {m.avatar_url
+                          ? <img src={m.avatar_url} className="w-full h-full object-cover" alt={displayName(m)} />
+                          : displayName(m)?.[0]?.toUpperCase()}
+                      </div>
+                      <span className="text-xs" style={{ color: '#6B4226' }}>{displayName(m)}</span>
                     </div>
-                    <span className="text-xs text-[#6B4226]">{displayName(m)}</span>
-                  </div>
+                  </Link>
                 ))}
                 {mutualFriends.length > 5 && (
-                  <span className="text-xs text-[#9C7B65] self-center">+{mutualFriends.length - 5} til</span>
+                  <span className="text-xs self-center" style={{ color: 'var(--terra-mid)' }}>+{mutualFriends.length - 5} til</span>
                 )}
               </div>
             </div>
           ) : (
-            <p className="text-xs text-[#9C7B65]">Ingen felles venner</p>
+            <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>Ingen felles venner ennå</p>
           )}
         </div>
 
         {/* Felles kretser */}
         {sharedCommunities.length > 0 && (
           <div className="mt-3">
-            <p className="text-xs text-[#9C7B65] mb-1.5">Felles kretser</p>
+            <p className="text-xs mb-1.5" style={{ color: 'var(--terra-mid)' }}>Felles kretser</p>
             <div className="flex flex-wrap gap-2">
               {sharedCommunities.map((m: any) => (
                 <Link key={m.community_id} href={`/community/${m.community_id}`}>
-                  <span className="bg-white border border-[#E8DDD0] rounded-full px-3 py-1.5 text-xs text-[#6B4226] shadow-sm">
+                  <span
+                    className="rounded-full px-3 py-1.5 text-xs shadow-sm"
+                    style={{ background: '#fff', border: '1px solid #E8DDD0', color: '#6B4226' }}
+                  >
                     {m.communities?.avatar_emoji} {m.communities?.name}
                   </span>
                 </Link>
@@ -237,11 +293,14 @@ export default function UserProfilePage() {
         {/* Offentlige kretser */}
         {publicCommunities.length > 0 && (
           <div className="mt-3">
-            <p className="text-xs text-[#9C7B65] mb-1.5">Kretser</p>
+            <p className="text-xs mb-1.5" style={{ color: 'var(--terra-mid)' }}>Kretser</p>
             <div className="flex flex-wrap gap-2">
               {publicCommunities.map((m: any) => (
                 <Link key={m.community_id} href={`/community/${m.community_id}`}>
-                  <span className="bg-[#FAF7F2] border border-[#E8DDD0] rounded-full px-3 py-1.5 text-xs text-[#6B4226]">
+                  <span
+                    className="rounded-full px-3 py-1.5 text-xs"
+                    style={{ background: '#FAF7F2', border: '1px solid #E8DDD0', color: '#6B4226' }}
+                  >
                     {m.communities?.avatar_emoji} {m.communities?.name}
                   </span>
                 </Link>
@@ -252,27 +311,37 @@ export default function UserProfilePage() {
 
         {/* Legg til som venn */}
         {!isFriend && !friendRequestSent && (
-          <button onClick={sendFriendRequest}
-            className="mt-4 w-full bg-[#C4673A] text-white rounded-xl py-2.5 text-sm font-medium">
+          <button
+            onClick={sendFriendRequest}
+            className="btn-primary mt-4 w-full"
+            style={{ borderRadius: 12, padding: '10px 0', fontSize: 14 }}
+          >
             + Legg til som venn
           </button>
         )}
         {friendRequestSent && (
-          <div className="mt-4 w-full bg-[#FAF7F2] border border-[#E8DDD0] rounded-xl py-2.5 text-sm text-[#9C7B65] text-center">
+          <div
+            className="mt-4 w-full rounded-xl py-2.5 text-sm text-center"
+            style={{ background: '#FAF7F2', border: '1px solid #E8DDD0', color: 'var(--terra-mid)' }}
+          >
             Forespørsel sendt
           </div>
         )}
       </div>
 
-      {/* Tilgjengelige ting */}
-      <div className="px-4 pt-5 flex flex-col gap-3 pb-8">
+      {/* Delte gjenstander */}
+      <div className="px-4 pt-5 flex flex-col gap-3 pb-4">
         <div className="flex items-center justify-between">
-          <h2 className="font-bold text-[#2C1A0E]">
-            Tilgjengelige ting
-            {filteredItems.length > 0 && <span className="text-[#9C7B65] font-normal text-sm ml-1">({filteredItems.length})</span>}
+          <h2 className="font-bold" style={{ color: 'var(--terra-dark)' }}>
+            Delte gjenstander
+            {filteredItems.length > 0 && (
+              <span className="font-normal text-sm ml-1" style={{ color: 'var(--terra-mid)' }}>
+                ({filteredItems.length})
+              </span>
+            )}
           </h2>
           {accessLevel === 'stranger' && (
-            <span className="text-xs text-[#9C7B65]">Offentlige ting</span>
+            <span className="text-xs" style={{ color: 'var(--terra-mid)' }}>Offentlige gjenstander</span>
           )}
         </div>
 
@@ -283,8 +352,15 @@ export default function UserProfilePage() {
             <input
               value={itemSearch}
               onChange={e => setItemSearch(e.target.value)}
-              placeholder="Søk i tingene…"
-              className="w-full bg-white border border-[#E8DDD0] rounded-xl pl-10 pr-4 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
+              placeholder="Søk i gjenstander…"
+              className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none"
+              style={{
+                background: '#fff',
+                border: '1px solid #E8DDD0',
+                color: 'var(--terra-dark)',
+              }}
+              onFocus={e => e.currentTarget.style.borderColor = 'var(--terra)'}
+              onBlur={e => e.currentTarget.style.borderColor = '#E8DDD0'}
             />
           </div>
         )}
@@ -294,9 +370,11 @@ export default function UserProfilePage() {
           <div className="flex gap-2 overflow-x-auto pb-1">
             <button
               onClick={() => setItemCategory('')}
-              className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${
-                !itemCategory ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
-              }`}
+              className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0 transition-colors"
+              style={!itemCategory
+                ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
+                : { background: '#fff', color: '#6B4226', border: '1px solid #E8DDD0' }
+              }
             >
               Alle
             </button>
@@ -304,9 +382,11 @@ export default function UserProfilePage() {
               <button
                 key={cat.id}
                 onClick={() => setItemCategory(itemCategory === cat.id ? '' : cat.id)}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${
-                  itemCategory === cat.id ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
-                }`}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0 transition-colors"
+                style={itemCategory === cat.id
+                  ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
+                  : { background: '#fff', color: '#6B4226', border: '1px solid #E8DDD0' }
+                }
               >
                 {cat.emoji} {cat.label}
               </button>
@@ -315,25 +395,41 @@ export default function UserProfilePage() {
         )}
 
         {filteredItems.length === 0 ? (
-          <div className="bg-white rounded-2xl p-6 text-center text-[#9C7B65] text-sm">
+          <div className="rounded-2xl p-6 text-center text-sm" style={{ background: '#fff', color: 'var(--terra-mid)' }}>
             {items.length === 0
-              ? accessLevel === 'stranger' ? 'Ingen offentlige ting tilgjengelig' : 'Ingen ting tilgjengelig akkurat nå'
+              ? accessLevel === 'stranger'
+                ? 'Ingen offentlige gjenstander tilgjengelig'
+                : 'Ingen gjenstander tilgjengelig akkurat nå'
               : 'Ingen treff på søket'}
           </div>
         ) : (
           <div className="flex flex-col gap-2">
             {filteredItems.map(item => (
               <Link key={item.id} href={`/items/${item.id}`}>
-                <div className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
+                <div
+                  className="flex items-center gap-3 px-4 py-3 rounded-2xl shadow-sm transition-colors"
+                  style={{ background: '#fff' }}
+                >
                   {item.image_url
-                    ? <img src={item.image_url} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
-                    : <div className="w-12 h-12 rounded-xl bg-[#E8DDD0] flex items-center justify-center text-xl flex-shrink-0">{catEmoji(item.category)}</div>}
+                    ? <img src={item.image_url} className="rounded-xl object-cover flex-shrink-0" style={{ width: 48, height: 48 }} alt={item.name} />
+                    : (
+                      <div
+                        className="flex items-center justify-center text-xl flex-shrink-0 rounded-xl"
+                        style={{ width: 48, height: 48, background: '#E8DDD0' }}
+                      >
+                        {catEmoji(item.category)}
+                      </div>
+                    )}
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-[#2C1A0E] text-sm truncate">{item.name}</p>
-                    <p className="text-xs text-[#9C7B65] mt-0.5">{catEmoji(item.category)} {item.category}</p>
+                    <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
+                      {catEmoji(item.category)} {CATEGORIES.find(c => c.id === item.category)?.label || item.category}
+                    </p>
                   </div>
                   {item.price && (
-                    <span className="text-xs text-[#C4673A] font-medium flex-shrink-0">{item.price} kr/dag</span>
+                    <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--terra)' }}>
+                      {item.price} kr/dag
+                    </span>
                   )}
                 </div>
               </Link>
@@ -341,6 +437,41 @@ export default function UserProfilePage() {
           </div>
         )}
       </div>
+
+      {/* Venner-seksjon: tydelig "+" knapp, ingen inviter-banner over item-listen */}
+      {isFriend && (
+        <div className="px-4 pb-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold" style={{ color: 'var(--terra-dark)' }}>Venner</h2>
+            <Link
+              href="/friends"
+              className="text-sm font-medium"
+              style={{ color: 'var(--terra)' }}
+            >
+              Mine venner →
+            </Link>
+          </div>
+          {/* Placeholder: faktisk venneliste kan rendres her */}
+        </div>
+      )}
+
+      {/* Sekundær inviter-lenke — nederst, ikke dominant CTA */}
+      <div className="px-4 pb-8">
+        <Link
+          href="/invite"
+          className="flex items-center justify-center gap-1.5 text-sm w-full py-2.5 rounded-xl transition-colors"
+          style={{
+            color: 'var(--terra)',
+            border: '1px solid rgba(196,103,58,0.25)',
+            background: 'rgba(196,103,58,0.04)',
+          }}
+        >
+          <span>👥</span>
+          <span>Inviter venner til Village</span>
+        </Link>
+      </div>
+
+      <div className="nav-spacer" />
     </div>
   )
 }

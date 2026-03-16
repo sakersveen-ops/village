@@ -295,7 +295,8 @@ export default function CommunityPage() {
   return (
     <div className="max-w-lg mx-auto pb-24">
       {/* Header */}
-      <div className="bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-4">
+      <div className="glass" style={{ borderRadius: '0 0 20px 20px', position: 'sticky', top: 0, zIndex: 40, borderTop: 'none' }}>
+        <div className="px-4 pt-10 pb-4">
         <button onClick={() => router.back()} className="text-[#C4673A] text-sm mb-4 block">← Tilbake</button>
 
         {editing ? (
@@ -372,14 +373,15 @@ export default function CommunityPage() {
           </div>
         )}
 
-        <div className="flex gap-2 mt-4 overflow-x-auto">
+        <div className="flex gap-2 mt-4 overflow-x-auto pb-1">
           {(['feed', 'members', ...(isAdmin ? ['admin'] : [])] as string[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t as any)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors flex-shrink-0 ${
-                tab === t ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
+                tab === t ? 'border-transparent text-white' : 'text-[#6B4226] border-[#E8DDD0]'
               }`}
+              style={tab === t ? { background: 'var(--terra)' } : { background: 'rgba(255,248,243,0.6)', backdropFilter: 'blur(8px)' }}
             >
               {t === 'feed' ? 'Feed'
                 : t === 'members' ? `Medlemmer (${members.length})`
@@ -387,7 +389,8 @@ export default function CommunityPage() {
             </button>
           ))}
         </div>
-      </div>
+        </div>{/* close inner px-4 pt-10 div */}
+      </div>{/* close glass header */}
 
       <div className="px-4 pt-4">
 
@@ -416,29 +419,84 @@ export default function CommunityPage() {
               </div>
             )}
             {items.length === 0 ? (
-              <div className="text-center py-16 text-[#9C7B65]">
-                <div className="text-4xl mb-2">📭</div>
-                <p>Ingen ting lagt ut ennå</p>
+              <div className="rounded-3xl p-8 text-center" style={{
+                background: 'linear-gradient(135deg, rgba(255,240,230,0.7) 0%, rgba(250,247,242,0.7) 100%)',
+                border: '1px solid rgba(196,103,58,0.15)',
+              }}>
+                <div className="text-5xl mb-3">🌱</div>
+                <p className="font-semibold text-[#2C1A0E] mb-1" style={{ letterSpacing: '-0.01em' }}>Ingen ting delt ennå</p>
+                <p className="text-sm text-[#9C7B65] mb-5">
+                  Inviter naboer og venner — jo flere som er med, jo mer å låne!
+                </p>
+                <button
+                  onClick={async () => {
+                    const shareUrl = `${window.location.origin}/community/join/${community?.invite_code}`
+                    if (navigator.share) {
+                      try {
+                        await navigator.share({
+                          title: community?.name,
+                          text: `Bli med i kretsen «${community?.name}» på Village!`,
+                          url: shareUrl,
+                        })
+                      } catch { /* cancelled */ }
+                    } else {
+                      try {
+                        await navigator.clipboard.writeText(shareUrl)
+                        setCopySuccess(true)
+                        setTimeout(() => setCopySuccess(false), 2000)
+                      } catch { /* ignore */ }
+                    }
+                  }}
+                  className="w-full text-white rounded-xl py-3 font-medium"
+                  style={{ background: 'var(--terra)' }}
+                >
+                  {copySuccess ? '✓ Lenke kopiert!' : '👥 Inviter naboer'}
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {items.map(item => (
                   <Link key={item.id} href={`/items/${item.id}`}>
-                    <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+                    <div
+                      className="rounded-[20px] overflow-hidden group relative"
+                      style={{
+                        border: '1px solid rgba(196,103,58,0.15)',
+                        boxShadow: '0 2px 16px rgba(44,26,14,0.07)',
+                      }}
+                    >
+                      {/* Image area */}
                       {item.image_url ? (
-                        <img src={item.image_url} alt={item.name} className="w-full h-36 object-cover" />
+                        <div className="relative w-full h-36 overflow-hidden">
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          />
+                          {/* Subtle top-to-transparent gradient */}
+                          <div className="absolute inset-0" style={{
+                            background: 'linear-gradient(to bottom, transparent 50%, rgba(44,26,14,0.45) 100%)',
+                          }} />
+                        </div>
                       ) : (
-                        <div className="w-full h-36 bg-[#E8DDD0] flex items-center justify-center text-3xl">📦</div>
+                        <div className="w-full h-36 flex items-center justify-center text-4xl"
+                          style={{ background: 'linear-gradient(135deg, rgba(255,240,230,1) 0%, rgba(232,221,208,1) 100%)' }}>
+                          📦
+                        </div>
                       )}
-                      <div className="p-3">
-                        <p className="font-semibold text-[#2C1A0E] text-sm truncate">{item.name}</p>
+                      {/* Info area */}
+                      <div className="p-3 glass-card">
+                        <p className="font-display font-semibold text-[#2C1A0E] text-sm truncate" style={{ letterSpacing: '-0.01em' }}>
+                          {item.name}
+                        </p>
                         <div className="flex items-center gap-1.5 mt-1">
                           <div className="w-4 h-4 rounded-full bg-[#E8DDD0] flex items-center justify-center overflow-hidden flex-shrink-0">
                             {item.profiles?.avatar_url
                               ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
-                              : <span className="text-xs font-bold text-[#6B4226]" style={{ fontSize: '8px' }}>{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>}
+                              : <span className="text-[#6B4226] font-bold" style={{ fontSize: '8px' }}>{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>}
                           </div>
-                          <p className="text-xs text-[#4A7C59] truncate">{item.profiles?.name || item.profiles?.email?.split('@')[0]}</p>
+                          <p className="text-xs truncate" style={{ color: 'var(--terra-green)' }}>
+                            {item.profiles?.name || item.profiles?.email?.split('@')[0]}
+                          </p>
                         </div>
                       </div>
                     </div>

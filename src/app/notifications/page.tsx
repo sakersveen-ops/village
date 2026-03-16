@@ -6,10 +6,114 @@ import Link from 'next/link'
 
 const ACTION_TYPES = ['loan_request', 'friend_request', 'join_request', 'friend_accepted']
 
+// Contextual SVG icons per notification type
+const NotifIcon = ({ type }: { type: string }) => {
+  if (type === 'loan_request') {
+    // Book stack / lending
+    return (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="13" width="14" height="3" rx="1.5" fill="var(--terra)" opacity="0.25"/>
+        <rect x="4" y="9" width="12" height="3" rx="1.5" fill="var(--terra)" opacity="0.45"/>
+        <rect x="3" y="5" width="13" height="4" rx="1.5" fill="var(--terra)"/>
+        <path d="M18 5v10" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M20 15l-2 2.5L16 15" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    )
+  }
+  if (type === 'loan_accepted') {
+    // Checkmark circle
+    return (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="11" cy="11" r="9" fill="var(--terra-green)" opacity="0.15"/>
+        <circle cx="11" cy="11" r="9" stroke="var(--terra-green)" strokeWidth="1.5"/>
+        <path d="M7 11.5l2.5 2.5 5.5-5.5" stroke="var(--terra-green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    )
+  }
+  if (type === 'loan_declined') {
+    // X circle
+    return (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="11" cy="11" r="9" fill="var(--terra)" opacity="0.1"/>
+        <circle cx="11" cy="11" r="9" stroke="var(--terra)" strokeWidth="1.5"/>
+        <path d="M8 8l6 6M14 8l-6 6" stroke="var(--terra)" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+    )
+  }
+  if (type === 'friend_request') {
+    // Handshake / wave
+    return (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 14c0-2.5 1.5-4 3.5-4h1L11 8h2l2 2h1c2 0 3 1.5 3 3" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M7.5 10l-3 3.5c-.5.6-.3 1.5.5 1.8l6 2.5c.7.3 1.4 0 1.7-.7l2-4.6" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M14.5 12l2.5 3c.5.7 0 1.6-.8 1.6H14" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="9" cy="5.5" r="1.5" fill="var(--terra)" opacity="0.5"/>
+        <circle cx="13" cy="5.5" r="1.5" fill="var(--terra)" opacity="0.5"/>
+      </svg>
+    )
+  }
+  if (type === 'friend_accepted') {
+    // Two people / checkmark
+    return (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="8" cy="7" r="2.5" stroke="var(--terra-green)" strokeWidth="1.5"/>
+        <path d="M3 17c0-3 2-4.5 5-4.5s5 1.5 5 4.5" stroke="var(--terra-green)" strokeWidth="1.5" strokeLinecap="round"/>
+        <path d="M15 10l1.5 1.5 3-3" stroke="var(--terra-green)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    )
+  }
+  if (type === 'join_request') {
+    // House / community
+    return (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 10.5L11 4l8 6.5" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <rect x="7" y="12" width="8" height="7" rx="1" stroke="var(--terra)" strokeWidth="1.5"/>
+        <rect x="9.5" y="15" width="3" height="4" rx="0.5" fill="var(--terra)" opacity="0.35"/>
+        <path d="M14 7h2v3" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    )
+  }
+  if (type === 'join_accepted') {
+    return (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="11" cy="11" r="9" fill="var(--terra-green)" opacity="0.15"/>
+        <circle cx="11" cy="11" r="9" stroke="var(--terra-green)" strokeWidth="1.5"/>
+        <path d="M7 11.5l2.5 2.5 5.5-5.5" stroke="var(--terra-green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    )
+  }
+  if (type === 'change_proposal') {
+    // Swap arrows
+    return (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 8h14M14 5l4 3-4 3" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M18 14H4M8 11l-4 3 4 3" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    )
+  }
+  if (type === 'proposal_accepted') {
+    return (
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="11" cy="11" r="9" fill="var(--terra-green)" opacity="0.15"/>
+        <circle cx="11" cy="11" r="9" stroke="var(--terra-green)" strokeWidth="1.5"/>
+        <path d="M7 11.5l2.5 2.5 5.5-5.5" stroke="var(--terra-green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    )
+  }
+  // Generic bell fallback
+  return (
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M11 3a5 5 0 00-5 5v4l-1.5 2.5h13L16 12V8a5 5 0 00-5-5z" stroke="var(--terra)" strokeWidth="1.5" strokeLinejoin="round"/>
+      <path d="M9 17.5a2 2 0 004 0" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([])
   const [tab, setTab] = useState<'actions' | 'updates'>('actions')
   const [loading, setLoading] = useState(true)
+  const [markingAll, setMarkingAll] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -44,15 +148,20 @@ export default function NotificationsPage() {
     load()
   }, [])
 
-  const icon = (type: string) => {
-    if (type === 'loan_request') return '📬'
-    if (type === 'loan_accepted') return '✅'
-    if (type === 'loan_declined') return '❌'
-    if (type === 'friend_request') return '👋'
-    if (type === 'join_request') return '🏘️'
-    if (type === 'join_accepted') return '✅'
-    if (type === 'join_declined') return '❌'
-    return '🔔'
+  const handleMarkAllRead = async () => {
+    setMarkingAll(true)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', user.id)
+      .eq('read', false)
+
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+    setMarkingAll(false)
   }
 
   const formatDate = (d: string) =>
@@ -70,7 +179,6 @@ export default function NotificationsPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // Finn forespørselen
     const { data: req } = await supabase
       .from('friend_requests')
       .select('id, from_id')
@@ -119,117 +227,227 @@ export default function NotificationsPage() {
   const updates = notifications.filter(n => !ACTION_TYPES.includes(n.type))
   const unreadActions = actions.filter(n => !n.read).length
   const unreadUpdates = updates.filter(n => !n.read).length
+  const currentUnread = tab === 'actions' ? unreadActions : unreadUpdates
 
   const current = tab === 'actions' ? actions : updates
   const groups = groupByDate(current)
 
+  // Action-tab cards get the left-border treatment; updates do not
+  const isActionTab = tab === 'actions'
+
   const NotifCard = ({ n }: { n: any }) => {
     const handled = handledRequests.has(n.id)
+    const needsAction = isActionTab && !n.read
 
     if (n.type === 'friend_request') {
       return (
-        <div className={`bg-white rounded-2xl px-4 py-3 flex items-start gap-3 shadow-sm ${!n.read ? 'border-l-4 border-[#C4673A]' : ''}`}>
-          <span className="text-xl mt-0.5 flex-shrink-0">👋</span>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-[#2C1A0E] text-sm">{n.title}</p>
-            <p className="text-xs text-[#9C7B65] mt-0.5">{n.body}</p>
-            <p className="text-xs text-[#9C7B65] mt-1">{formatDate(n.created_at)}</p>
+        <div style={{
+          borderRadius: '16px',
+          overflow: 'hidden',
+          borderLeft: needsAction ? '3px solid var(--terra)' : undefined,
+        }}>
+        <div
+          className="glass"
+          style={{
+            borderRadius: needsAction ? '0 16px 16px 0' : '16px',
+            padding: '12px 14px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+          }}
+        >
+          <span style={{ flexShrink: 0, marginTop: 2 }}>
+            <NotifIcon type={n.type} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--terra-dark)', margin: 0 }}>{n.title}</p>
+            <p style={{ fontSize: 13, color: 'var(--terra-mid)', marginTop: 2 }}>{n.body}</p>
+            <p style={{ fontSize: 11, color: 'var(--terra-mid)', marginTop: 4 }}>{formatDate(n.created_at)}</p>
             {!handled ? (
-              <div className="flex gap-2 mt-2">
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                 <button
                   onClick={() => handleFriendRequest(n, true)}
-                  className="bg-[#4A7C59] text-white text-xs rounded-full px-3 py-1.5 font-medium"
+                  className="btn-sm btn-accept"
                 >
                   ✓ Godta
                 </button>
                 <button
                   onClick={() => handleFriendRequest(n, false)}
-                  className="border border-[#E8DDD0] text-[#9C7B65] text-xs rounded-full px-3 py-1.5"
+                  className="btn-sm btn-decline"
                 >
                   Avslå
                 </button>
               </div>
             ) : (
-              <p className="text-xs text-[#4A7C59] mt-2 font-medium">✓ Håndtert</p>
+              <p style={{ fontSize: 12, color: 'var(--terra-green)', marginTop: 8, fontWeight: 600 }}>✓ Håndtert</p>
             )}
           </div>
+          {!n.read && (
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--terra)', flexShrink: 0, marginTop: 6 }} />
+          )}
+        </div>
         </div>
       )
     }
 
-  return (
-    <Link href={n.type === 'join_request' && n.loans?.community_id ? `/community/${n.loans.community_id}` : n.loans?.item_id ? `/items/${n.loans.item_id}` : '#'}>
-      <div className={`bg-white rounded-2xl px-4 py-3 flex items-start gap-3 shadow-sm ${!n.read ? 'border-l-4 border-[#C4673A]' : ''}`}>
-        <span className="text-xl mt-0.5 flex-shrink-0">{icon(n.type)}</span>
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-[#2C1A0E] text-sm">{n.title}</p>
-          <p className="text-xs text-[#9C7B65] mt-0.5">{n.body}</p>
-          {n.loans?.items?.name && (
-            <p className="text-xs text-[#9C7B65] mt-0.5 italic">{n.loans.items.name}</p>
+    return (
+      <Link
+        href={
+          n.type === 'join_request' && n.loans?.community_id
+            ? `/community/${n.loans.community_id}`
+            : n.loans?.item_id
+            ? `/items/${n.loans.item_id}`
+            : '#'
+        }
+      >
+        <div style={{
+          borderRadius: '16px',
+          overflow: 'hidden',
+          borderLeft: needsAction ? '3px solid var(--terra)' : undefined,
+        }}>
+        <div
+          className="glass"
+          style={{
+            borderRadius: needsAction ? '0 16px 16px 0' : '16px',
+            padding: '12px 14px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+          }}
+        >
+          <span style={{ flexShrink: 0, marginTop: 2 }}>
+            <NotifIcon type={n.type} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--terra-dark)', margin: 0 }}>{n.title}</p>
+            <p style={{ fontSize: 13, color: 'var(--terra-mid)', marginTop: 2 }}>{n.body}</p>
+            {n.loans?.items?.name && (
+              <p style={{ fontSize: 12, color: 'var(--terra-mid)', marginTop: 2, fontStyle: 'italic' }}>
+                {n.loans.items.name}
+              </p>
+            )}
+            <p style={{ fontSize: 11, color: 'var(--terra-mid)', marginTop: 4 }}>{formatDate(n.created_at)}</p>
+          </div>
+          {!n.read && (
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--terra)', flexShrink: 0, marginTop: 6 }} />
           )}
-          <p className="text-xs text-[#9C7B65] mt-1">{formatDate(n.created_at)}</p>
         </div>
-        {!n.read && <div className="w-2 h-2 rounded-full bg-[#C4673A] flex-shrink-0 mt-1.5" />}
-      </div>
-    </Link>
-  )
-}
+        </div>
+      </Link>
+    )
+  }
 
   return (
-    <div className="max-w-lg mx-auto pb-24">
-      <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-4 z-10">
-        <h1 className="text-xl font-bold text-[#2C1A0E] mb-3">Varsler</h1>
-        <div className="flex gap-2">
+    <div className="max-w-lg mx-auto">
+      {/* Sticky header */}
+      <header
+        className="page-header glass"
+        style={{ borderRadius: '0 0 20px 20px', position: 'sticky', top: 0, zIndex: 40 }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h1 className="page-header-title font-display" style={{ margin: 0 }}>Varsler</h1>
+          {currentUnread > 0 && (
+            <button
+              onClick={handleMarkAllRead}
+              disabled={markingAll}
+              style={{
+                fontSize: 12,
+                color: 'var(--terra)',
+                fontWeight: 600,
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px 0',
+                opacity: markingAll ? 0.5 : 1,
+              }}
+            >
+              {markingAll ? 'Markerer…' : 'Merk alle som lest'}
+            </button>
+          )}
+        </div>
+
+        {/* Tab bar */}
+        <div style={{ display: 'flex', gap: 8 }}>
           <button
             onClick={() => setTab('actions')}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-              tab === 'actions' ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
-            }`}
+            className={`pill ${tab === 'actions' ? 'active' : ''}`}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
           >
             Handlinger
             {unreadActions > 0 && (
-              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${tab === 'actions' ? 'bg-white/20 text-white' : 'bg-[#FFF0E6] text-[#C4673A]'}`}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  borderRadius: 99,
+                  background: tab === 'actions' ? 'rgba(255,255,255,0.22)' : 'rgba(196,103,58,0.12)',
+                  color: tab === 'actions' ? 'white' : 'var(--terra)',
+                }}
+              >
                 {unreadActions}
               </span>
             )}
           </button>
           <button
             onClick={() => setTab('updates')}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-              tab === 'updates' ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
-            }`}
+            className={`pill ${tab === 'updates' ? 'active' : ''}`}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
           >
             Oppdateringer
             {unreadUpdates > 0 && (
-              <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${tab === 'updates' ? 'bg-white/20 text-white' : 'bg-[#FFF0E6] text-[#C4673A]'}`}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  borderRadius: 99,
+                  background: tab === 'updates' ? 'rgba(255,255,255,0.22)' : 'rgba(196,103,58,0.12)',
+                  color: tab === 'updates' ? 'white' : 'var(--terra)',
+                }}
+              >
                 {unreadUpdates}
               </span>
             )}
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="px-4 pt-4 flex flex-col gap-4">
+      {/* Content */}
+      <div style={{ padding: '16px 16px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-2xl h-16 animate-pulse" />
+            <div key={i} className="glass" style={{ borderRadius: 16, height: 72, opacity: 0.5 }} />
           ))
         ) : current.length === 0 ? (
-          <div className="text-center py-16 text-[#9C7B65]">
-            <div className="text-4xl mb-2">{tab === 'actions' ? '✅' : '🔔'}</div>
-            <p>{tab === 'actions' ? 'Ingen handlinger å gjøre' : 'Ingen oppdateringer'}</p>
+          <div style={{ textAlign: 'center', padding: '64px 0', color: 'var(--terra-mid)' }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>{tab === 'actions' ? '✅' : '🔔'}</div>
+            <p style={{ fontSize: 14 }}>{tab === 'actions' ? 'Ingen handlinger å gjøre' : 'Ingen oppdateringer'}</p>
           </div>
         ) : (
           Object.entries(groups).map(([label, items]) => (
             <div key={label}>
-              <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-2">{label}</p>
-              <div className="flex flex-col gap-2">
+              {/* Date group header — 11px uppercase */}
+              <p
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--terra-mid)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.07em',
+                  marginBottom: 8,
+                }}
+              >
+                {label}
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {items.map(n => <NotifCard key={n.id} n={n} />)}
               </div>
             </div>
           ))
         )}
       </div>
+      <div className="nav-spacer" />
     </div>
   )
 }

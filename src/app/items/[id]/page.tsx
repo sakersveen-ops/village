@@ -5,21 +5,38 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import ItemCalendar from '@/components/ItemCalendar'
 import LoanThread from '@/components/LoanThread'
+import { track, Events, startTimer } from '@/lib/track'
+
+const CATEGORY_GRADIENTS: Record<string, { gradient: string; label: string }> = {
+  'verktøy':     { gradient: 'linear-gradient(135deg, #4A7C59 0%, #2d5a3d 100%)', label: 'Verktøy' },
+  'bok':         { gradient: 'linear-gradient(135deg, #C4673A 0%, #8B3A1E 100%)', label: 'Bøker' },
+  'elektronikk': { gradient: 'linear-gradient(135deg, #2C1A0E 0%, #4a3020 100%)', label: 'Elektronikk' },
+  'sport':       { gradient: 'linear-gradient(135deg, #3a7fbf 0%, #1a4f7f 100%)', label: 'Sport' },
+  'barn':        { gradient: 'linear-gradient(135deg, #e07b4a 0%, #c4673a 100%)', label: 'Barn' },
+  'hage':        { gradient: 'linear-gradient(135deg, #5a9a6a 0%, #3a7a4a 100%)', label: 'Hage' },
+  'kjøkken':     { gradient: 'linear-gradient(135deg, #9C7B65 0%, #6B4226 100%)', label: 'Kjøkken' },
+  'klær':        { gradient: 'linear-gradient(135deg, #b86ea0 0%, #7a3a6a 100%)', label: 'Klær' },
+}
+
+const getCategoryGradient = (category?: string) => {
+  if (!category) return { gradient: 'linear-gradient(135deg, #C4673A 0%, #8B3A1E 100%)', label: 'Gjenstand' }
+  return CATEGORY_GRADIENTS[category.toLowerCase()] || { gradient: 'linear-gradient(135deg, #9C7B65 0%, #6B4226 100%)', label: category }
+}
 
 export default function ItemPage() {
-  const [item, setItem]               = useState<any>(null)
-  const [user, setUser]               = useState<any>(null)
-  const [loan, setLoan]               = useState<any>(null)
-  const [allLoans, setAllLoans]       = useState<any[]>([])
-  const [pendingLoans, setPendingLoans] = useState<any[]>([])
+  const [item, setItem]                     = useState<any>(null)
+  const [user, setUser]                     = useState<any>(null)
+  const [loan, setLoan]                     = useState<any>(null)
+  const [allLoans, setAllLoans]             = useState<any[]>([])
+  const [pendingLoans, setPendingLoans]     = useState<any[]>([])
   const [proposalLoanId, setProposalLoanId] = useState<string | null>(null)
-  const [blockedDates, setBlockedDates] = useState<string[]>([])
-  const [message, setMessage]         = useState('')
-  const [startDate, setStartDate]     = useState('')
-  const [dueDate, setDueDate]         = useState('')
-  const [sent, setSent]               = useState(false)
-  const [sentRange, setSentRange]     = useState<{ start: string; end: string } | null>(null)
-  const [loading, setLoading]         = useState(true)
+  const [blockedDates, setBlockedDates]     = useState<string[]>([])
+  const [message, setMessage]               = useState('')
+  const [startDate, setStartDate]           = useState('')
+  const [dueDate, setDueDate]               = useState('')
+  const [sent, setSent]                     = useState(false)
+  const [sentRange, setSentRange]           = useState<{ start: string; end: string } | null>(null)
+  const [loading, setLoading]               = useState(true)
   const router = useRouter()
   const { id } = useParams()
 
@@ -59,6 +76,8 @@ export default function ItemPage() {
         .from('item_blocked_dates').select('date').eq('item_id', id)
       setBlockedDates((blocked || []).map((b: any) => b.date))
 
+      if (item?.owner_id !== user.id) track(Events.CALENDAR_OPENED, { item_id: item?.id })
+
       setLoading(false)
     }
     load()
@@ -79,10 +98,25 @@ export default function ItemPage() {
     setStartDate(start)
     setDueDate(end)
     setMessage(`Hei! Kan jeg låne «${item?.name}» fra ${fd(start)} til ${fd(end)}? 😊`)
+    track(Events.DATE_RANGE_SELECTED, {
+      item_id: item?.id,
+      days: Math.ceil((new Date(end).getTime() - new Date(start).getTime()) / 86400000),
+    })
+  }
+
+  const handleStartDateChange = (val: string) => {
+    setStartDate(val)
+    if (val && dueDate) setMessage(`Hei! Kan jeg låne «${item?.name}» fra ${fd(val)} til ${fd(dueDate)}? 😊`)
+  }
+
+  const handleDueDateChange = (val: string) => {
+    setDueDate(val)
+    if (startDate && val) setMessage(`Hei! Kan jeg låne «${item?.name}» fra ${fd(startDate)} til ${fd(val)}? 😊`)
   }
 
   const sendRequest = async () => {
     if (!message.trim() || !startDate || !dueDate) return
+    const t = startTimer()
     const supabase = createClient()
     const { data: newLoan } = await supabase.from('loans').insert({
       item_id: id,
@@ -95,7 +129,6 @@ export default function ItemPage() {
       community_id: item.community_id || null,
     }).select().single()
 
-    // Seed initial request message into thread immediately
     if (newLoan?.id) {
       await supabase.from('loan_messages').insert({
         loan_id: newLoan.id,
@@ -116,6 +149,11 @@ export default function ItemPage() {
     setSentRange({ start: startDate, end: dueDate })
     setLoan(newLoan)
     setSent(true)
+    track(Events.LOAN_REQUEST_SENT, {
+      item_id: item.id,
+      duration_ms: t(),
+      days_requested: Math.ceil((new Date(dueDate).getTime() - new Date(startDate).getTime()) / 86400000),
+    })
   }
 
   const respondToLoan = async (loanId: string, accept: boolean) => {
@@ -129,7 +167,6 @@ export default function ItemPage() {
 
     const targetLoan = pendingLoans.find(l => l.id === loanId)
 
-    // System message into thread immediately
     await supabase.from('loan_messages').insert({
       loan_id: loanId,
       sender_id: user.id,
@@ -151,6 +188,10 @@ export default function ItemPage() {
     if (accept && targetLoan) {
       setAllLoans(prev => prev.map(l => l.id === loanId ? { ...l, status: 'active' } : l))
     }
+    track(accept ? Events.LOAN_ACCEPTED : Events.LOAN_DECLINED, {
+      loan_id: loanId,
+      item_id: item.id,
+    })
   }
 
   const markReturned = async (loanId: string) => {
@@ -169,102 +210,124 @@ export default function ItemPage() {
     return diff >= 0 && diff <= 3
   }
 
-  if (loading) return <div className="p-8 text-center text-[#9C7B65]">Laster…</div>
-  if (!item)   return <div className="p-8 text-center text-[#9C7B65]">Fant ikke gjenstanden</div>
+  if (loading) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
+  if (!item)   return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Fant ikke gjenstanden</div>
 
-  const ownerName  = item.profiles?.name || item.profiles?.email?.split('@')[0]
-  const isOwner    = user?.id === item.owner_id
-  const activeLoan = allLoans.find(l => l.status === 'active')
+  const ownerName   = item.profiles?.name || item.profiles?.email?.split('@')[0]
+  const isOwner     = user?.id === item.owner_id
+  const activeLoan  = allLoans.find(l => l.status === 'active')
+  const categoryGfx = getCategoryGradient(item.category)
 
   return (
     <div className="max-w-lg mx-auto pb-32">
 
-      {/* Hero */}
+      {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <div className="relative">
         <button onClick={() => router.back()}
-          className="absolute top-6 left-4 bg-white/80 rounded-full w-9 h-9 flex items-center justify-center text-[#2C1A0E] shadow-sm z-10">
+          className="btn-glass absolute top-6 left-4 z-10"
+          style={{ width: 36, height: 36, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           ←
         </button>
         {item.image_url ? (
-          <img src={item.image_url} alt={item.name} className="w-full h-64 object-cover" />
+          <div className="w-full overflow-hidden" style={{ height: 256 }}>
+            <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+          </div>
         ) : (
-          <div className="w-full h-64 bg-[#E8DDD0] flex items-center justify-center text-6xl">
-            {item.category === 'barn' ? '🧸' : item.category === 'kjole' ? '👗' : item.category === 'verktøy' ? '🔧' : item.category === 'bok' ? '📚' : '📦'}
+          <div className="w-full flex flex-col items-center justify-center gap-2"
+            style={{ height: 256, background: categoryGfx.gradient }}>
+            <span className="font-display text-white/90 font-semibold"
+              style={{ fontSize: 20, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              {categoryGfx.label}
+            </span>
+            <span className="text-white/60 text-sm">{item.name}</span>
           </div>
         )}
         {!item.available && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-            <span className="text-white font-bold text-lg tracking-wide">UTLÅNT</span>
+            <span className="text-white font-bold tracking-widest" style={{ fontSize: 18 }}>UTLÅNT</span>
           </div>
         )}
       </div>
 
       <div className="px-4 pt-5 flex flex-col gap-4">
 
-        {/* Title + price */}
+        {/* ── Title + price ─────────────────────────────────────────────── */}
         <div className="flex justify-between items-start">
-          <h1 className="text-2xl font-bold text-[#2C1A0E] flex-1">{item.name}</h1>
+          <h1 className="font-display flex-1"
+            style={{ fontSize: 26, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+            {item.name}
+          </h1>
           {item.price
-            ? <span className="bg-[#FFF0E6] text-[#C4673A] font-bold text-sm px-3 py-1 rounded-full ml-2">{item.price} kr/dag</span>
-            : <span className="bg-[#EEF4F0] text-[#4A7C59] font-bold text-sm px-3 py-1 rounded-full ml-2">Gratis</span>}
+            ? <span className="status-pill pending ml-2">{item.price} kr/dag</span>
+            : <span className="status-pill active ml-2">Gratis</span>}
         </div>
 
-        {/* Availability banner */}
+        {/* ── Availability banner ───────────────────────────────────────── */}
         {item.available ? (
-          <div className="bg-[#EEF4F0] rounded-2xl px-4 py-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#4A7C59] inline-block" />
-            <p className="text-[#4A7C59] font-medium text-sm">Tilgjengelig nå</p>
+          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
+            <span className="status-pill active">● Tilgjengelig nå</span>
           </div>
         ) : activeLoan ? (
-          <div className={`rounded-2xl px-4 py-3 ${isOverdue(activeLoan.due_date) ? 'bg-red-50' : isDueSoon(activeLoan.due_date) ? 'bg-[#FFF0E6]' : 'bg-[#FAF7F2]'}`}>
+          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
             <div className="flex items-center gap-3">
               <Link href={`/profile/${activeLoan.profiles?.id}`}>
-                <div className="w-9 h-9 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
+                <div className="rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm"
+                  style={{ width: 36, height: 36, background: 'rgba(196,103,58,0.15)', color: 'var(--terra)' }}>
                   {activeLoan.profiles?.avatar_url
                     ? <img src={activeLoan.profiles.avatar_url} className="w-full h-full object-cover" />
                     : (activeLoan.profiles?.name || activeLoan.profiles?.email)?.[0]?.toUpperCase()}
                 </div>
               </Link>
               <div className="flex-1">
-                <Link href={`/profile/${activeLoan.profiles?.id}`} className="text-sm font-medium text-[#2C1A0E] hover:underline">
+                <Link href={`/profile/${activeLoan.profiles?.id}`}
+                  className="text-sm font-medium hover:underline" style={{ color: 'var(--terra-dark)' }}>
                   Lånt av {activeLoan.profiles?.name || activeLoan.profiles?.email?.split('@')[0]}
                 </Link>
                 {activeLoan.due_date && (
-                  <p className={`text-xs mt-0.5 font-medium ${isOverdue(activeLoan.due_date) ? 'text-red-500' : isDueSoon(activeLoan.due_date) ? 'text-[#C4673A]' : 'text-[#9C7B65]'}`}>
-                    {isOverdue(activeLoan.due_date) ? `⚠️ Skulle vært returnert ${fd(activeLoan.due_date)}`
-                      : isDueSoon(activeLoan.due_date) ? `⏰ Returneres snart – ${fd(activeLoan.due_date)}`
-                      : `Returneres ${fd(activeLoan.due_date)}`}
+                  <p className="text-xs mt-0.5 font-medium"
+                    style={{ color: isOverdue(activeLoan.due_date) ? '#ef4444' : isDueSoon(activeLoan.due_date) ? 'var(--terra)' : 'var(--terra-mid)' }}>
+                    {isOverdue(activeLoan.due_date)
+                      ? `⚠️ Skulle vært returnert ${fd(activeLoan.due_date)}`
+                      : isDueSoon(activeLoan.due_date)
+                        ? `⏰ Returneres snart – ${fd(activeLoan.due_date)}`
+                        : `Returneres ${fd(activeLoan.due_date)}`}
                   </p>
                 )}
               </div>
             </div>
             {isOwner && (
               <button onClick={() => markReturned(activeLoan.id)}
-                className="mt-3 w-full bg-[#4A7C59] text-white rounded-xl py-2 text-sm font-medium">
+                className="btn-sm btn-accept mt-3 w-full">
                 ✓ Bekreft at {activeLoan.profiles?.name || activeLoan.profiles?.email?.split('@')[0]} har levert tilbake
               </button>
             )}
           </div>
         ) : null}
 
-        {item.description && <p className="text-[#6B4226]">{item.description}</p>}
+        {item.description && (
+          <p style={{ color: 'var(--terra-dark)', letterSpacing: '-0.01em' }}>{item.description}</p>
+        )}
 
-        {/* Owner card */}
+        {/* ── Owner card ────────────────────────────────────────────────── */}
         <Link href={`/profile/${item.profiles?.id}`}>
-          <div className="bg-white rounded-2xl p-4 flex items-center gap-3 shadow-sm">
-            <div className="w-10 h-10 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold overflow-hidden">
-              {item.profiles?.avatar_url
-                ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
-                : ownerName?.[0]?.toUpperCase()}
-            </div>
-            <div>
-              <p className="font-medium text-[#2C1A0E]">{ownerName}</p>
-              <p className="text-xs text-[#9C7B65]">Eier</p>
+          <div className="item-card" style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(196,103,58,0.18)' }}>
+            <div className="item-card-body glass-card"
+              style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div className="rounded-full overflow-hidden flex items-center justify-center font-bold text-white flex-shrink-0"
+                style={{ width: 40, height: 40, background: 'var(--terra)' }}>
+                {item.profiles?.avatar_url
+                  ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
+                  : ownerName?.[0]?.toUpperCase()}
+              </div>
+              <div>
+                <p className="font-medium" style={{ color: 'var(--terra-dark)' }}>{ownerName}</p>
+                <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>Eier</p>
+              </div>
             </div>
           </div>
         </Link>
 
-        {/* Calendar */}
+        {/* ── Calendar ──────────────────────────────────────────────────── */}
         <ItemCalendar
           loans={allLoans}
           blockedDates={blockedDates}
@@ -274,68 +337,73 @@ export default function ItemPage() {
           isOwner={isOwner}
         />
 
-        {/* ═══ OWNER VIEWS ══════════════════════════════════════════════════ */}
+        {/* ══ OWNER VIEWS ═════════════════════════════════════════════════ */}
 
         {isOwner && item.available && pendingLoans.length === 0 && !activeLoan && (
           <div className="flex gap-2">
-            <div className="flex-1 bg-[#FFF0E6] rounded-2xl p-4 text-center">
-              <p className="text-[#C4673A] text-sm font-medium">Dette er din gjenstand</p>
+            <div className="glass flex-1" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
+              <p className="text-sm font-medium" style={{ color: 'var(--terra)' }}>Dette er din gjenstand</p>
             </div>
             <Link href={`/items/access?item=${item.id}`}>
-              <div className="bg-white border border-[#E8DDD0] rounded-2xl p-4 text-center shadow-sm">
+              <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
                 <p className="text-sm">🔒</p>
-                <p className="text-xs text-[#9C7B65] mt-1">Tilgang</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--terra-mid)' }}>Tilgang</p>
               </div>
             </Link>
           </div>
         )}
 
-        {/* Owner: active loan thread */}
         {isOwner && activeLoan && (
           <div className="flex flex-col gap-2">
-            <h2 className="font-bold text-[#2C1A0E]">Meldingstråd</h2>
+            <h2 className="font-display font-bold"
+              style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>Meldingstråd</h2>
             <LoanThread loan={activeLoan} item={item} user={user} isOwner={true}
               onLoanUpdated={updated => setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))} />
           </div>
         )}
 
-        {/* Owner: pending requests */}
         {isOwner && pendingLoans.length > 0 && (
           <div className="flex flex-col gap-3">
-            <h2 className="font-bold text-[#2C1A0E]">
-              Innkommende forespørsler <span className="text-[#C4673A]">({pendingLoans.length})</span>
+            <h2 className="font-display font-bold"
+              style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+              Innkommende forespørsler{' '}
+              <span style={{ color: 'var(--terra)' }}>({pendingLoans.length})</span>
             </h2>
 
             {pendingLoans.map(l => (
               <div key={l.id} className="flex flex-col">
-                {/* Request card */}
-                <div className="bg-white rounded-t-2xl p-4 shadow-sm">
+                <div className="glass" style={{ borderRadius: '16px 16px 0 0', padding: 16 }}>
                   <div className="flex items-center gap-2 mb-3">
                     <Link href={`/profile/${l.profiles?.id}`}>
-                      <div className="w-9 h-9 rounded-full bg-[#E8DDD0] flex items-center justify-center text-sm font-bold text-[#6B4226] overflow-hidden flex-shrink-0">
+                      <div className="rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm"
+                        style={{ width: 36, height: 36, background: 'rgba(196,103,58,0.15)', color: 'var(--terra)' }}>
                         {l.profiles?.avatar_url
                           ? <img src={l.profiles.avatar_url} className="w-full h-full object-cover" />
                           : (l.profiles?.name || l.profiles?.email)?.[0]?.toUpperCase()}
                       </div>
                     </Link>
                     <div className="flex-1">
-                      <Link href={`/profile/${l.profiles?.id}`} className="font-medium text-[#2C1A0E] text-sm hover:underline">
+                      <Link href={`/profile/${l.profiles?.id}`}
+                        className="font-medium text-sm hover:underline" style={{ color: 'var(--terra-dark)' }}>
                         {l.profiles?.name || l.profiles?.email?.split('@')[0]}
                       </Link>
                     </div>
-                    <span className="text-xs text-[#9C7B65]">
+                    <span className="text-xs" style={{ color: 'var(--terra-mid)' }}>
                       {fd(l.start_date)}{l.due_date ? ` → ${fd(l.due_date)}` : ''}
                     </span>
                   </div>
 
                   {l.status === 'change_proposed' ? (
-                    <div className="bg-[#FFF0E6] rounded-xl px-3 py-2 text-xs text-[#C4673A] font-medium flex items-center gap-2">
-                      <span>📅</span> Endringsforslag sendt – venter på svar fra låntaker
+                    <div className="glass" style={{ borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: 12, border: '1px solid rgba(196,103,58,0.3)' }}>
+                      <span style={{ fontSize: 18, marginTop: 2 }}>📅</span>
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: 'var(--terra)' }}>Endringsforslag sendt</p>
+                        <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Venter på svar fra låntaker – se meldingstråden</p>
+                      </div>
                     </div>
                   ) : (
                     <div className="flex gap-2">
-                      <button onClick={() => respondToLoan(l.id, true)}
-                        className="flex-1 bg-[#4A7C59] text-white rounded-xl py-2 text-sm font-medium">
+                      <button onClick={() => respondToLoan(l.id, true)} className="btn-sm btn-accept flex-1">
                         ✓ Godta
                       </button>
                       <button
@@ -345,19 +413,17 @@ export default function ItemPage() {
                             document.getElementById(`proposal-${l.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                           }, 80)
                         }}
-                        className="flex-1 bg-[#FFF0E6] border border-[#F5D5C0] text-[#C4673A] rounded-xl py-2 text-sm font-medium">
+                        className="btn-glass btn-sm flex-1">
                         📅 Foreslå endring
                       </button>
-                      <button onClick={() => respondToLoan(l.id, false)}
-                        className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-2 text-sm font-medium">
+                      <button onClick={() => respondToLoan(l.id, false)} className="btn-sm btn-decline flex-1">
                         Avslå
                       </button>
                     </div>
                   )}
                 </div>
 
-                {/* Thread always visible below card */}
-                <div id={`proposal-${l.id}`} className="rounded-b-2xl overflow-hidden shadow-sm">
+                <div id={`proposal-${l.id}`} style={{ borderRadius: '0 0 16px 16px', overflow: 'hidden' }}>
                   <LoanThread
                     loan={l}
                     item={item}
@@ -366,7 +432,11 @@ export default function ItemPage() {
                     openProposal={proposalLoanId === l.id}
                     onProposalOpened={() => setProposalLoanId(null)}
                     onLoanUpdated={updated => {
-                      setPendingLoans(prev => prev.map(p => p.id === updated.id ? updated : p))
+                      if (updated.status === 'active') {
+                        setPendingLoans(prev => prev.filter(p => p.id !== updated.id))
+                      } else {
+                        setPendingLoans(prev => prev.map(p => p.id === updated.id ? updated : p))
+                      }
                       setAllLoans(prev => prev.map(a => a.id === updated.id ? updated : a))
                     }}
                   />
@@ -376,12 +446,12 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* ═══ BORROWER VIEWS ═══════════════════════════════════════════════ */}
+        {/* ══ BORROWER VIEWS ══════════════════════════════════════════════ */}
 
         {!isOwner && loan?.status === 'pending' && (
           <div className="flex flex-col gap-3">
-            <div className="bg-[#FFF0E6] rounded-2xl p-4 text-center">
-              <p className="text-[#C4673A] font-medium">⏳ Venter på svar fra {ownerName}</p>
+            <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
+              <span className="status-pill pending">⏳ Venter på svar fra {ownerName}</span>
             </div>
             <LoanThread loan={loan} item={item} user={user} isOwner={false}
               onLoanUpdated={updated => setLoan(updated)} />
@@ -390,27 +460,35 @@ export default function ItemPage() {
 
         {!isOwner && loan?.status === 'change_proposed' && (
           <div className="flex flex-col gap-3">
-            <div className="bg-[#FFF0E6] border border-[#F5D5C0] rounded-2xl p-4 flex items-center gap-3">
-              <span className="text-2xl">📅</span>
+            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(196,103,58,0.3)' }}>
+              <span style={{ fontSize: 24 }}>📅</span>
               <div>
-                <p className="text-[#C4673A] font-semibold text-sm">Utleier har foreslått endring</p>
-                <p className="text-xs text-[#9C7B65] mt-0.5">Se meldingstråden og svar på forslaget</p>
+                <p className="text-sm font-semibold" style={{ color: 'var(--terra)' }}>Utleier har foreslått endring</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Se meldingstråden og svar på forslaget</p>
               </div>
             </div>
             <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
+              onLoanUpdated={updated => {
+                setLoan(updated)
+                if (updated.status === 'active') {
+                  setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))
+                }
+              }} />
           </div>
         )}
 
         {!isOwner && loan?.status === 'active' && (
           <div className="flex flex-col gap-3">
-            <div className="bg-[#EEF4F0] rounded-2xl p-4">
-              <p className="text-[#4A7C59] font-medium mb-1">✓ Du låner denne nå!</p>
-              {loan.due_date && <p className="text-sm text-[#9C7B65]">Returner innen {fd(loan.due_date)}</p>}
+            <div className="glass" style={{ borderRadius: 16, padding: 16 }}>
+              <span className="status-pill active">✓ Du låner denne nå!</span>
+              {loan.due_date && (
+                <p className="text-sm mt-2" style={{ color: 'var(--terra-mid)' }}>Returner innen {fd(loan.due_date)}</p>
+              )}
               {item.price && item.vipps_number && (
                 <a href={`https://qr.vipps.no/28/2/01/031/${item.vipps_number}?amount=${item.price}&message=Leie+${encodeURIComponent(item.name)}`}
                   target="_blank"
-                  className="mt-3 flex items-center justify-center gap-2 bg-[#FF5B24] text-white rounded-xl py-2.5 text-sm font-medium w-full">
+                  className="btn-primary mt-3 flex items-center justify-center gap-2 w-full"
+                  style={{ background: '#FF5B24' }}>
                   Betal via Vipps 💸
                 </a>
               )}
@@ -422,11 +500,14 @@ export default function ItemPage() {
 
         {!isOwner && !loan && item.available && (
           <div className="flex flex-col gap-3">
-            <h2 className="font-bold text-[#2C1A0E]">Send låneforespørsel</h2>
+            <h2 className="font-display font-bold"
+              style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+              Send låneforespørsel
+            </h2>
             {sent ? (
               <div className="flex flex-col gap-3">
-                <div className="bg-[#EEF4F0] rounded-2xl p-4 text-center">
-                  <p className="text-[#4A7C59] font-medium">✓ Forespørsel sendt til {ownerName}!</p>
+                <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
+                  <span className="status-pill active">✓ Forespørsel sendt til {ownerName}!</span>
                 </div>
                 {loan && <LoanThread loan={loan} item={item} user={user} isOwner={false}
                   onLoanUpdated={updated => setLoan(updated)} />}
@@ -435,27 +516,30 @@ export default function ItemPage() {
               <>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Fra</label>
-                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                    <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Fra</label>
+                    <input type="date" value={startDate} onChange={e => handleStartDateChange(e.target.value)}
                       min={new Date().toISOString().split('T')[0]}
-                      className="bg-white border border-[#E8DDD0] rounded-xl px-3 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm" />
+                      className="glass text-sm outline-none"
+                      style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)' }} />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Til</label>
-                    <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                    <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Til</label>
+                    <input type="date" value={dueDate} onChange={e => handleDueDateChange(e.target.value)}
                       min={startDate || new Date().toISOString().split('T')[0]}
-                      className="bg-white border border-[#E8DDD0] rounded-xl px-3 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm" />
+                      className="glass text-sm outline-none"
+                      style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)' }} />
                   </div>
                 </div>
                 {startDate && dueDate && (
-                  <div className="bg-[#EEF4F0] rounded-xl px-3 py-2 text-xs text-[#4A7C59]">
-                    ✓ {fd(startDate)} → {fd(dueDate)}
+                  <div className="glass" style={{ borderRadius: 12, padding: '8px 12px' }}>
+                    <span className="status-pill active">✓ {fd(startDate)} → {fd(dueDate)}</span>
                   </div>
                 )}
                 <textarea value={message} onChange={e => setMessage(e.target.value)} rows={3}
-                  className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A] resize-none" />
+                  className="glass outline-none resize-none"
+                  style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)', fontSize: 15 }} />
                 <button onClick={sendRequest} disabled={!startDate || !dueDate}
-                  className="bg-[#C4673A] text-white rounded-xl py-3 font-medium disabled:opacity-40">
+                  className="btn-primary disabled:opacity-40">
                   Send forespørsel
                 </button>
               </>
@@ -464,8 +548,8 @@ export default function ItemPage() {
         )}
 
         {!isOwner && !loan && !item.available && (
-          <div className="bg-[#FAF7F2] rounded-2xl p-4 text-center">
-            <p className="text-[#9C7B65]">Denne er utlånt akkurat nå</p>
+          <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
+            <span className="status-pill declined">Utlånt akkurat nå</span>
           </div>
         )}
 

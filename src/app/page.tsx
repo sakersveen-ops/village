@@ -3,37 +3,22 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-
-type Item = {
-  id: string
-  name: string
-  image_url: string
-  category: string
-  subcategory?: string
-  available: boolean
-  owner_id: string
-  created_at: string
-  description?: string
-  price?: number
-  profiles: { name: string; email: string; avatar_url?: string }
-}
+import { track, Events } from '@/lib/track'
 
 const CATEGORIES = [
-  { id: 'barn', label: 'Barn', emoji: '🧸', subcategories: ['Spise', 'Leke', 'Tur', 'Stelle', 'Sove', 'Bade', 'Klær'] },
-  { id: 'kjole', label: 'Kjoler', emoji: '👗', subcategories: [] },
-  { id: 'verktøy', label: 'Verktøy', emoji: '🔧', subcategories: [] },
-  { id: 'bok', label: 'Bøker', emoji: '📚', subcategories: [] },
-  { id: 'annet', label: 'Annet', emoji: '📦', subcategories: [] },
+  { id: 'all',      label: 'Alle',     emoji: '✨' },
+  { id: 'barn',     label: 'Barn',     emoji: '🧸' },
+  { id: 'kjole',    label: 'Kjoler',   emoji: '👗' },
+  { id: 'verktøy',  label: 'Verktøy',  emoji: '🔧' },
+  { id: 'bok',      label: 'Bøker',    emoji: '📚' },
+  { id: 'annet',    label: 'Annet',    emoji: '📦' },
 ]
 
 export default function FeedPage() {
-  const [items, setItems] = useState<Item[]>([])
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [activeCategory, setActiveCategory] = useState<string | null>(null)
-  const [activeSubcategory, setActiveSubcategory] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchFocused, setSearchFocused] = useState(false)
+  const [user, setUser]           = useState<any>(null)
+  const [feedItems, setFeedItems] = useState<any[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [activeCategory, setActiveCategory] = useState('all')
   const router = useRouter()
 
   useEffect(() => {
@@ -43,343 +28,280 @@ export default function FeedPage() {
       if (!user) { router.push('/login'); return }
       setUser(user)
 
+      // Fetch friend IDs
       const { data: friendships } = await supabase
-        .from('friendships').select('user_b').eq('user_a', user.id)
+        .from('friendships')
+        .select('user_b')
+        .eq('user_a', user.id)
       const friendIds = (friendships || []).map((f: any) => f.user_b)
 
-      let friendsOfFriendIds: string[] = []
+      // Items from friends (the "krets"), newest first
+      // Falls back to all items if user has no friends yet (empty state handling)
+      let query = supabase
+        .from('items')
+        .select('*, profiles(id, name, avatar_url)')
+        .order('created_at', { ascending: false })
+        .limit(60)
+
       if (friendIds.length > 0) {
-        const { data: fof } = await supabase
-          .from('friendships').select('user_b').in('user_a', friendIds).neq('user_b', user.id)
-        friendsOfFriendIds = [...new Set((fof || []).map((f: any) => f.user_b))]
+        query = query.in('owner_id', friendIds)
       }
 
-      const { data: closeFriendRows } = await supabase
-        .from('close_friends').select('friend_id').eq('user_id', user.id)
-      const closeFriendIds = (closeFriendRows || []).map((f: any) => f.friend_id)
-
-      const { data: myMemberships } = await supabase
-        .from('community_members').select('community_id').eq('user_id', user.id).eq('status', 'active')
-      const myCommunityIds = (myMemberships || []).map((m: any) => m.community_id)
-
-      const { data: allItems } = await supabase
-        .from('items')
-        .select('*, profiles(name, email, avatar_url), item_access(*)')
-        .order('created_at', { ascending: false })
-
-      const visible = (allItems || []).filter((item: any) => {
-        if (item.owner_id === user.id) return true
-        const access: any[] = item.item_access || []
-        if (access.length === 0) return true
-        return access.some((rule: any) => {
-          if (rule.access_type === 'public') return true
-          if (rule.access_type === 'close_friends' && closeFriendIds.includes(item.owner_id)) return true
-          if (rule.access_type === 'friends' && friendIds.includes(item.owner_id)) return true
-          if (rule.access_type === 'friends_of_friends' &&
-            (friendIds.includes(item.owner_id) || friendsOfFriendIds.includes(item.owner_id))) return true
-          if (rule.access_type === 'community' && rule.community_id && myCommunityIds.includes(rule.community_id)) return true
-          return false
-        })
-      })
-
-      setItems(visible)
+      const { data: items } = await query
+      setFeedItems(items || [])
+      track(Events.FEED_VIEWED, { item_count: items?.length ?? 0 })
       setLoading(false)
     }
     load()
   }, [])
 
-  const isNew = (item: Item) => {
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-    return new Date(item.created_at) > sevenDaysAgo
+  // --- Derived values ---
+
+  // Count available items per category (excluding own)
+  const countByCategory = (catId: string) => {
+    const base = feedItems.filter(i => i.owner_id !== user?.id)
+    if (catId === 'all') return base.filter(i => i.available).length
+    return base.filter(i => i.category === catId && i.available).length
   }
 
-  const countFor = (categoryId: string) =>
-    items.filter(i => (i.category === categoryId || (categoryId === 'barn' && i.category === 'baby')) && i.available).length
+  const totalAvailable = feedItems.filter(i => i.owner_id !== user?.id && i.available).length
 
-  const searchResults = searchQuery.trim().length >= 2
-    ? items.filter(i => {
-        const q = searchQuery.toLowerCase()
-        return i.name?.toLowerCase().includes(q) || i.description?.toLowerCase().includes(q)
-      })
-    : []
+  // Sort categories: those with items first, dimmed ones last
+  const sortedCategories = [...CATEGORIES].sort((a, b) => {
+    if (a.id === 'all') return -1
+    if (b.id === 'all') return 1
+    const countA = countByCategory(a.id)
+    const countB = countByCategory(b.id)
+    if (countA === 0 && countB > 0) return 1
+    if (countB === 0 && countA > 0) return -1
+    return countB - countA
+  })
 
-  const isSearching = searchQuery.trim().length >= 2
+  // Filter feed list by active category, sorted newest first, capped at 12
+  const filteredItems = feedItems
+    .filter(i => activeCategory === 'all' || i.category === activeCategory)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 12)
 
-  const ItemCard = ({ item }: { item: Item }) => {
-    const cat = CATEGORIES.find(c => c.id === item.category || (c.id === 'barn' && item.category === 'baby'))
+  const catEmoji = (cat: string) => {
+    const found = CATEGORIES.find(c => c.id === cat)
+    return found?.emoji ?? '📦'
+  }
+
+  const relativeTime = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const minutes = Math.floor(diff / 60000)
+    if (minutes < 60) return `${minutes}m siden`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}t siden`
+    const days = Math.floor(hours / 24)
+    return `${days}d siden`
+  }
+
+  if (loading) {
     return (
-      <Link href={`/items/${item.id}`}>
-        <div className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
-          {item.image_url ? (
-            <img src={item.image_url} className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
-          ) : (
-            <div className="w-12 h-12 rounded-xl bg-[#E8DDD0] flex items-center justify-center text-xl flex-shrink-0">
-              {cat?.emoji || '📦'}
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-[#2C1A0E] text-sm truncate">{item.name}</p>
-            <div className="flex items-center gap-1.5 mt-1">
-              <div className="w-4 h-4 rounded-full bg-[#E8DDD0] flex items-center justify-center overflow-hidden flex-shrink-0">
-                {item.profiles?.avatar_url
-                  ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
-                  : <span className="font-bold text-[#6B4226]" style={{ fontSize: '8px' }}>{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>}
-              </div>
-              <p className="text-xs text-[#4A7C59] truncate">
-                {item.profiles?.name || item.profiles?.email?.split('@')[0]}
+      <div className="flex items-center justify-center h-screen">
+        <p className="text-[#9C7B65] text-sm">Laster feed…</p>
+      </div>
+    )
+  }
+
+  // --- Empty state: no items from network ---
+  const isEmpty = feedItems.length === 0
+
+  return (
+    <div className="max-w-lg mx-auto pb-28">
+
+      {/* ── Sticky header ── */}
+      <header className="page-header glass">
+        <h1 className="page-header-title font-display">Village</h1>
+        <div className="flex items-center gap-2">
+          <Link href="/notifications">
+            <button className="w-9 h-9 flex items-center justify-center rounded-full glass text-base">
+              🔔
+            </button>
+          </Link>
+          <Link href="/profile">
+            <button className="w-9 h-9 flex items-center justify-center rounded-full glass text-base">
+              👤
+            </button>
+          </Link>
+        </div>
+      </header>
+
+      <div className="px-4 pt-5 flex flex-col gap-6">
+
+        {/* ── Empty state ── */}
+        {isEmpty && (
+          <div className="glass rounded-[20px] p-8 text-center flex flex-col items-center gap-4">
+            <span className="text-4xl">🏘️</span>
+            <div>
+              <p className="font-display text-[#2C1A0E] text-lg font-semibold">Kretsen din er stille</p>
+              <p className="text-[#9C7B65] text-sm mt-1 leading-relaxed">
+                Ingen har lagt ut ting ennå. Inviter venner eller legg ut ditt første objekt!
               </p>
             </div>
-          </div>
-          <div className="flex flex-col items-end gap-1 flex-shrink-0">
-            <span className="text-sm">{cat?.emoji}</span>
-            {!item.available && (
-              <span className="text-xs text-[#C4673A] font-medium">Utlånt</span>
-            )}
-          </div>
-        </div>
-      </Link>
-    )
-  }
-
-  const cat = CATEGORIES.find(c => c.id === activeCategory)
-
-  const filteredItems = activeCategory
-    ? items.filter(i => {
-        const matchCat = i.category === activeCategory || (activeCategory === 'barn' && i.category === 'baby')
-        const matchSub = activeSubcategory ? i.subcategory === activeSubcategory : true
-        return matchCat && matchSub
-      })
-    : []
-
-  // ── SØKEVISNING ──
-  if (isSearching) {
-    return (
-      <div className="max-w-lg mx-auto pb-24">
-        <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-4 z-10">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm pointer-events-none">🔍</span>
-              <input
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                autoFocus
-                placeholder="Søk på navn eller beskrivelse…"
-                className="w-full bg-white border border-[#E8DDD0] rounded-xl pl-10 pr-4 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
-              />
-            </div>
-            <button
-              onClick={() => setSearchQuery('')}
-              className="text-sm text-[#9C7B65] px-2"
-            >
-              Avbryt
-            </button>
-          </div>
-        </div>
-
-        <div className="px-4 pt-4 flex flex-col gap-2">
-          {searchResults.length > 0 ? (
-            <>
-              <p className="text-xs text-[#9C7B65] mb-1">{searchResults.length} treff på "{searchQuery}"</p>
-              {searchResults.map(item => <ItemCard key={item.id} item={item} />)}
-              <Link href={`/watches?q=${encodeURIComponent(searchQuery)}`}>
-                <div className="mt-3 bg-white border border-dashed border-[#C4673A] rounded-2xl px-4 py-3 flex items-center gap-3">
-                  <span className="text-xl">🔔</span>
-                  <div>
-                    <p className="text-sm font-medium text-[#C4673A]">Få varsel om flere treff</p>
-                    <p className="text-xs text-[#9C7B65]">Opprett søkevarsel for "{searchQuery}"</p>
-                  </div>
-                </div>
+            <div className="flex gap-3 mt-1">
+              <Link href="/add">
+                <button className="btn-primary px-5 py-2.5 text-sm">+ Legg ut</button>
               </Link>
-            </>
-          ) : (
-            <div className="text-center py-12 flex flex-col items-center gap-3">
-              <div className="text-4xl">🔍</div>
-              <p className="font-medium text-[#2C1A0E]">Ingen treff på "{searchQuery}"</p>
-              <p className="text-sm text-[#9C7B65]">Vil du få varsel hvis noen legger det ut?</p>
-              <Link href={`/watches?q=${encodeURIComponent(searchQuery)}`}>
-                <button className="bg-[#C4673A] text-white rounded-xl px-6 py-2.5 text-sm font-medium mt-1">
-                  🔔 Opprett søkevarsel
-                </button>
+              <Link href="/invite">
+                <button className="btn-glass px-5 py-2.5 text-sm">Inviter venner</button>
               </Link>
             </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  // ── KATEGORI-FEED ──
-  if (activeCategory && cat) {
-    return (
-      <div className="max-w-lg mx-auto pb-24">
-        <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-3 z-10">
-          <button
-            onClick={() => { setActiveCategory(null); setActiveSubcategory(null) }}
-            className="text-[#C4673A] text-sm mb-2 block"
-          >
-            ← Tilbake
-          </button>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xl">{cat.emoji}</span>
-            <h1 className="text-xl font-bold text-[#2C1A0E]">{cat.label}</h1>
-            <span className="text-sm text-[#9C7B65] ml-1">
-              {filteredItems.filter(i => i.available).length} tilgjengelig
-            </span>
           </div>
-          {cat.subcategories.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              <button
-                onClick={() => setActiveSubcategory(null)}
-                className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${!activeSubcategory ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'}`}
-              >
-                Alle
-              </button>
-              {cat.subcategories.map(sub => (
-                <button
-                  key={sub}
-                  onClick={() => setActiveSubcategory(activeSubcategory === sub ? null : sub)}
-                  className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition-colors flex-shrink-0 ${activeSubcategory === sub ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'}`}
-                >
-                  {sub}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
 
-        <div className="grid grid-cols-2 gap-3 p-4">
-          {filteredItems.length === 0 ? (
-            <div className="col-span-2 text-center py-16 text-[#9C7B65]">
-              <div className="text-4xl mb-2">{cat.emoji}</div>
-              <p>Ingen {cat.label.toLowerCase()} tilgjengelig for deg</p>
-            </div>
-          ) : (
-            filteredItems.map(item => (
-              <Link key={item.id} href={`/items/${item.id}`}>
-                <div className="bg-white rounded-2xl overflow-hidden shadow-sm relative">
-                  {isNew(item) && (
-                    <div className="absolute top-2 left-2 z-10 bg-[#C4673A] text-white text-xs font-bold px-2 py-0.5 rounded-full">Ny</div>
-                  )}
-                  {item.image_url ? (
-                    <img src={item.image_url} alt={item.name} className="w-full h-36 object-cover" />
-                  ) : (
-                    <div className="w-full h-36 bg-[#E8DDD0] flex items-center justify-center text-3xl">{cat.emoji}</div>
-                  )}
-                  {!item.available && (
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                      <span className="text-white text-xs font-bold tracking-wide">UTLÅNT</span>
-                    </div>
-                  )}
-                  <div className="p-3">
-                    <p className="font-semibold text-[#2C1A0E] text-sm leading-tight truncate">{item.name}</p>
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                      <div className="w-5 h-5 rounded-full bg-[#E8DDD0] flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {item.profiles?.avatar_url
-                          ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
-                          : <span className="text-xs font-bold text-[#6B4226]">{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>}
-                      </div>
-                      <p className="text-xs text-[#4A7C59] font-medium truncate">
-                        {item.profiles?.name || item.profiles?.email?.split('@')[0]}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  // ── KATEGORI-GRID ──
-  return (
-    <div className="max-w-lg mx-auto pb-24">
-      <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-4 z-10">
-        <div className="flex justify-between items-center mb-3">
-          <div>
-            <h1 className="text-2xl font-bold text-[#2C1A0E]">VILLAGE</h1>
-            <p className="text-xs text-[#9C7B65]">Lån og lån bort i kretsen din</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link href="/invite">
-              <button className="text-sm text-[#C4673A] font-medium border border-[#C4673A] rounded-full px-3 py-1">
-                + Inviter
-              </button>
-            </Link>
-            <Link href="/profile">
-              <div className="w-9 h-9 rounded-full bg-[#C4673A] flex items-center justify-center text-white font-bold text-sm cursor-pointer overflow-hidden">
-                {user?.user_metadata?.avatar_url
-                  ? <img src={user.user_metadata.avatar_url} className="w-full h-full object-cover" />
-                  : user?.email?.[0]?.toUpperCase()}
-              </div>
-            </Link>
-          </div>
-        </div>
-
-        {/* Søkefelt */}
-        <div className="relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm pointer-events-none">🔍</span>
-          <input
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Søk etter gjenstander…"
-            className="w-full bg-white border border-[#E8DDD0] rounded-xl pl-10 pr-4 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
-          />
-        </div>
-      </div>
-
-      <div className="p-4">
-        {loading ? (
-          <div className="grid grid-cols-2 gap-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl h-28 animate-pulse" />
-            ))}
-          </div>
-        ) : (
+        {!isEmpty && (
           <>
-            <div className="grid grid-cols-2 gap-3">
-              {CATEGORIES.map(cat => {
-                const count = countFor(cat.id)
-                const newCount = items.filter(i =>
-                  (i.category === cat.id || (cat.id === 'barn' && i.category === 'baby')) && isNew(i)
-                ).length
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setActiveCategory(cat.id)}
-                    className="bg-white rounded-2xl p-4 shadow-sm text-left flex flex-col gap-2 active:scale-95 transition-transform"
-                  >
-                    <span className="text-2xl">{cat.emoji}</span>
-                    <div>
-                      <p className="font-bold text-[#2C1A0E] text-sm">{cat.label}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <p className="text-xs text-[#9C7B65]">{count} tilgjengelig</p>
-                        {newCount > 0 && (
-                          <span className="bg-[#FFF0E6] text-[#C4673A] text-xs font-bold px-1.5 py-0.5 rounded-full">
-                            {newCount} ny
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
+            {/* ── Section header: "I kretsen din" ── */}
+            <div>
+              <h2 className="font-display text-[#2C1A0E] text-xl font-semibold leading-tight">
+                I kretsen din
+              </h2>
+              <p className="text-[#9C7B65] text-sm mt-0.5">
+                {totalAvailable > 0
+                  ? `${totalAvailable} ting å låne`
+                  : 'Ingen ledige ting akkurat nå'}
+              </p>
             </div>
 
-            {items.filter(isNew).length > 0 && (
-              <div className="mt-4">
-                <p className="text-sm font-bold text-[#2C1A0E] mb-3">🆕 Nylig lagt ut</p>
+            {/* ── Category grid ── */}
+            <div>
+              <div className="grid grid-cols-3 gap-2.5">
+                {sortedCategories.map(cat => {
+                  const count = countByCategory(cat.id)
+                  const isEmpty = cat.id !== 'all' && count === 0
+                  const isActive = activeCategory === cat.id
+
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => {
+                        setActiveCategory(cat.id)
+                        track(Events.CATEGORY_FILTERED, { category: cat.id })
+                      }}
+                      style={{ opacity: isEmpty ? 0.45 : 1 }}
+                      className={`
+                        relative rounded-[16px] p-3 flex flex-col items-center gap-1.5
+                        border transition-all duration-200
+                        ${isActive
+                          ? 'bg-[var(--terra)] border-[var(--terra)] shadow-sm'
+                          : 'glass border-[rgba(196,103,58,0.18)]'}
+                        ${isEmpty ? 'cursor-default pointer-events-none' : 'active:scale-95'}
+                      `}
+                    >
+                      <span className="text-2xl">{cat.emoji}</span>
+                      <span className={`text-xs font-medium leading-tight ${isActive ? 'text-white' : 'text-[#2C1A0E]'}`}>
+                        {cat.label}
+                      </span>
+                      {cat.id !== 'all' && (
+                        <span className={`text-[10px] font-semibold tabular-nums ${
+                          isActive ? 'text-white/80' : 'text-[#9C7B65]'
+                        }`}>
+                          {count === 0 ? '—' : `${count} ledig${count !== 1 ? 'e' : ''}`}
+                        </span>
+                      )}
+                      {cat.id === 'all' && (
+                        <span className={`text-[10px] font-semibold tabular-nums ${
+                          isActive ? 'text-white/80' : 'text-[#9C7B65]'
+                        }`}>
+                          {totalAvailable} tilgjengelig
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* ── Nylig lagt ut ── */}
+            <div>
+              <div className="flex justify-between items-baseline mb-3">
+                <h2 className="font-display text-[#2C1A0E] text-base font-semibold">
+                  Nylig lagt ut
+                </h2>
+                {filteredItems.length > 0 && (
+                  <span className="text-[#9C7B65] text-xs">
+                    {filteredItems.length} gjenstander
+                  </span>
+                )}
+              </div>
+
+              {filteredItems.length === 0 ? (
+                <div className="glass rounded-[16px] p-6 text-center">
+                  <p className="text-[#9C7B65] text-sm">
+                    Ingen ting i denne kategorien ennå
+                  </p>
+                </div>
+              ) : (
                 <div className="flex flex-col gap-2">
-                  {items.filter(isNew).slice(0, 3).map(item => (
-                    <ItemCard key={item.id} item={item} />
+                  {filteredItems.map(item => (
+                    <Link key={item.id} href={`/items/${item.id}`}>
+                      <div className="item-card glass-hover flex items-center gap-3 px-3 py-3"
+                        style={{ borderRadius: '16px', border: '1px solid rgba(196,103,58,0.18)' }}>
+
+                        {/* Thumbnail with availability dot */}
+                        <div className="relative flex-shrink-0">
+                          {item.image_url ? (
+                            <img
+                              src={item.image_url}
+                              className="w-14 h-14 rounded-[12px] object-cover"
+                              alt={item.name}
+                            />
+                          ) : (
+                            <div className="w-14 h-14 rounded-[12px] bg-[#E8DDD0] flex items-center justify-center text-2xl">
+                              {catEmoji(item.category)}
+                            </div>
+                          )}
+                          {/* Availability dot — overlaid on thumbnail, bottom-right corner */}
+                          <span
+                            className="absolute bottom-0.5 right-0.5 w-3 h-3 rounded-full border-2 border-white shadow-sm flex-shrink-0"
+                            style={{
+                              backgroundColor: item.available ? '#4A7C59' : '#C4673A',
+                            }}
+                            title={item.available ? 'Ledig' : 'Utlånt'}
+                          />
+                        </div>
+
+                        {/* Text content */}
+                        <div className="item-card-body flex-1 min-w-0" style={{ background: 'transparent' }}>
+                          <p className="item-name font-display text-[#2C1A0E] text-sm font-semibold truncate">
+                            {item.name}
+                          </p>
+                          <p className="text-[10px] text-[#9C7B65] mt-0.5 truncate">
+                            {item.profiles?.name ?? 'Ukjent'} · {relativeTime(item.created_at)}
+                          </p>
+                        </div>
+
+                        {/* Chevron */}
+                        <span className="text-[#9C7B65] text-sm flex-shrink-0">›</span>
+                      </div>
+                    </Link>
                   ))}
                 </div>
+              )}
+            </div>
+
+            {/* ── Invite CTA ── */}
+            <Link href="/invite">
+              <div
+                className="flex items-center justify-between p-4 mb-2"
+                style={{
+                  background: 'var(--terra)',
+                  borderRadius: '20px',
+                }}
+              >
+                <div>
+                  <p className="text-white font-semibold text-sm">Utvid kretsen din</p>
+                  <p className="text-white/70 text-xs mt-0.5">Inviter venner og få flere ting å låne</p>
+                </div>
+                <span className="text-white text-lg">→</span>
               </div>
-            )}
+            </Link>
           </>
         )}
+
       </div>
     </div>
   )

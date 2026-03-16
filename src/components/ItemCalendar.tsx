@@ -12,21 +12,18 @@ type Props = {
 
 export default function ItemCalendar({ loans, blockedDates, requestedRange, onToggleBlock, onSelectRange, isOwner }: Props) {
   const [currentMonth, setCurrentMonth] = useState(new Date())
-  const [selectStart, setSelectStart] = useState<string | null>(null)
-  const [hover, setHover] = useState<string | null>(null)
+  const [selectStart, setSelectStart]   = useState<string | null>(null)
+  const [hover, setHover]               = useState<string | null>(null)
 
-  const year = currentMonth.getFullYear()
-  const month = currentMonth.getMonth()
-  const firstDay = new Date(year, month, 1).getDay()
+  const year        = currentMonth.getFullYear()
+  const month       = currentMonth.getMonth()
+  const firstDay    = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const startOffset = firstDay === 0 ? 6 : firstDay - 1
 
   const toDateStr = (d: Date) => d.toISOString().split('T')[0]
-  const today = toDateStr(new Date())
+  const today     = toDateStr(new Date())
 
-  const isBlocked = (dateStr: string) => blockedDates.includes(dateStr)
-
-  // Separate active vs pending loans for different colours
   const isActiveLoan = (dateStr: string) =>
     loans.some(loan => {
       if (!loan.start_date || loan.status !== 'active') return false
@@ -76,102 +73,99 @@ export default function ItemCalendar({ loans, blockedDates, requestedRange, onTo
   for (let i = 0; i < startOffset; i++) days.push(null)
   for (let i = 1; i <= daysInMonth; i++) days.push(toDateStr(new Date(year, month, i)))
 
+  const selectionHint = !isOwner && onSelectRange
+    ? (selectStart ? 'Klikk på sluttdato' : 'Klikk på startdato')
+    : null
+
+  // Day class logic per design system §5
+  const getDayClass = (dateStr: string): string => {
+    const base = 'cal-day'
+    if (isPast(dateStr))                             return `${base} past`
+    if (isActiveLoan(dateStr))                       return `${base} active-loan`
+    if (isPendingLoan(dateStr))                      return `${base} pending-loan`
+    if (isRequested(dateStr))                        return `${base} requested`
+    if (blockedDates.includes(dateStr))              return `${base} blocked`
+    if (dateStr === selectStart)                     return `${base} selected`
+    if (isInSelectRange(dateStr))                    return `${base} in-range`
+    return base
+  }
+
   return (
-    <div className="bg-white rounded-2xl p-4 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <button onClick={() => setCurrentMonth(new Date(year, month - 1))}
-          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#FAF7F2] text-[#6B4226]">←</button>
-        <p className="font-semibold text-[#2C1A0E] capitalize">{monthName}</p>
-        <button onClick={() => setCurrentMonth(new Date(year, month + 1))}
-          className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#FAF7F2] text-[#6B4226]">→</button>
+    <div className="calendar-wrapper glass">
+
+      {/* Header with hint for borrowers */}
+      <div className="mb-2">
+        <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Tilgjengelighet</p>
+        {selectionHint && (
+          <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>{selectionHint}</p>
+        )}
       </div>
 
+      {/* Month navigation */}
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={() => setCurrentMonth(new Date(year, month - 1))}
+          className="btn-glass" style={{ width: 32, height: 32, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          ←
+        </button>
+        <h2 className="cal-month-title font-display capitalize">{monthName}</h2>
+        <button onClick={() => setCurrentMonth(new Date(year, month + 1))}
+          className="btn-glass" style={{ width: 32, height: 32, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          →
+        </button>
+      </div>
+
+      {/* Weekday headers */}
       <div className="grid grid-cols-7 mb-1">
         {['Ma', 'Ti', 'On', 'To', 'Fr', 'Lø', 'Sø'].map(d => (
-          <div key={d} className="text-center text-xs text-[#9C7B65] font-medium py-1">{d}</div>
+          <div key={d} className="text-center text-xs font-medium py-1" style={{ color: 'var(--terra-mid)' }}>{d}</div>
         ))}
       </div>
 
+      {/* Day grid */}
       <div className="grid grid-cols-7 gap-y-1">
         {days.map((dateStr, i) => {
           if (!dateStr) return <div key={`empty-${i}`} />
-          const past = isPast(dateStr)
-          const active = isActiveLoan(dateStr)
-          const pending = isPendingLoan(dateStr)
-          const blocked = isBlocked(dateStr)
-          const requested = isRequested(dateStr)
-          const inRange = isInSelectRange(dateStr)
-          const isStart = dateStr === selectStart
           const isToday = dateStr === today
-
-          let bg = ''
-          let text = 'text-[#2C1A0E]'
-          let cursor = 'cursor-pointer'
-
-          if (past) {
-            text = 'text-[#D0C4B8]'; cursor = 'cursor-default'
-          } else if (active) {
-            // Confirmed loan – red
-            bg = 'bg-red-100'; text = 'text-red-400'; cursor = 'cursor-default'
-          } else if (pending) {
-            // Pending/awaiting confirmation – amber
-            bg = 'bg-amber-100'; text = 'text-amber-600'; cursor = 'cursor-default'
-          } else if (requested) {
-            // Borrower's own pending request – yellow
-            bg = 'bg-[#FDE68A]'; text = 'text-[#92400E]'; cursor = 'cursor-default'
-          } else if (blocked) {
-            bg = 'bg-[#E8DDD0]'; text = 'text-[#9C7B65]'
-          } else if (isStart) {
-            bg = 'bg-[#C4673A]'; text = 'text-white'
-          } else if (inRange) {
-            bg = 'bg-[#FFF0E6]'; text = 'text-[#C4673A]'
-          }
+          const past    = isPast(dateStr)
 
           return (
             <div
               key={dateStr}
               onClick={() => handleDayClick(dateStr)}
               onMouseEnter={() => !isOwner && selectStart && setHover(dateStr)}
-              className={`relative flex items-center justify-center h-8 rounded-lg text-xs font-medium ${bg} ${text} ${cursor} transition-colors`}
+              className={`${getDayClass(dateStr)} ${isToday && !past ? 'ring-2 ring-offset-1' : ''}`}
+              style={isToday && !past ? { '--tw-ring-color': 'var(--terra)' } as React.CSSProperties : {}}
             >
               {dateStr.split('-')[2].replace(/^0/, '')}
-              {isToday && !past && (
-                <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#C4673A]" />
-              )}
             </div>
           )
         })}
       </div>
 
-      {/* Legend */}
-      <div className="flex gap-3 mt-3 flex-wrap">
+      {/* Legend — 12px filled circles, 12px text, jevnt spacing */}
+      <div className="flex gap-4 mt-4 flex-wrap">
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm bg-red-100" />
-          <span className="text-xs text-[#9C7B65]">Utlånt</span>
+          <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: 'rgba(239,68,68,0.25)' }} />
+          <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>Utlånt</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm bg-amber-100" />
-          <span className="text-xs text-[#9C7B65]">Venter bekreftelse</span>
+          <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: 'rgba(245,158,11,0.3)' }} />
+          <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>Venter bekreftelse</span>
         </div>
         {requestedRange && (
           <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm bg-[#FDE68A]" />
-            <span className="text-xs text-[#9C7B65]">Forespurt</span>
+            <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: '#FDE68A' }} />
+            <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>Forespurt</span>
           </div>
         )}
         <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm bg-[#E8DDD0]" />
-          <span className="text-xs text-[#9C7B65]">Blokkert</span>
+          <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: 'rgba(196,103,58,0.2)' }} />
+          <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>Blokkert</span>
         </div>
-        {!isOwner && !requestedRange && (
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm bg-[#FFF0E6]" />
-            <span className="text-xs text-[#9C7B65]">
-              {selectStart ? 'Trykk på sluttdato' : 'Trykk på startdato'}
-            </span>
-          </div>
+        {/* "Trykk for å blokkere/åpne" kun for eier */}
+        {isOwner && (
+          <p className="ml-auto" style={{ fontSize: 12, color: 'var(--terra-mid)' }}>Trykk for å blokkere/åpne</p>
         )}
-        {isOwner && <p className="text-xs text-[#9C7B65] ml-auto">Trykk for å blokkere/åpne</p>}
       </div>
     </div>
   )

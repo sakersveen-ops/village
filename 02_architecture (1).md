@@ -205,6 +205,33 @@ borrower + no loan + unavailable             → "Utlånt akkurat nå"
 
 ### `src/app/notifications/page.tsx` — `NotificationsPage`
 
+### `src/app/search/page.tsx` — `SearchPage`
+
+**State**
+```ts
+tab: 'gjenstander' | 'kretser' | 'personer'
+query: string
+items: any[]        // items + profiles(id,name,avatar_url)
+communities: any[]  // communities rows
+people: any[]       // profiles rows
+loading: boolean
+```
+
+**Search logic**
+```ts
+// Debounced 280ms on query + tab change
+// gjenstander: SELECT items + profiles WHERE available=true, ilike name if query>=2, limit 40
+// kretser:     SELECT communities WHERE is_public=true, ilike name if query>=2, limit 40
+// personer:    SELECT profiles WHERE name/username ilike query (only if query>=2), neq self, limit 30
+```
+
+**Behaviour**
+- Gjenstander pre-loads on mount (empty query = show all available)
+- Kretser pre-loads on mount
+- Personer requires ≥2 chars before querying
+- Back button uses router.back()
+- Search input autofocuses on mount
+
 **State**
 ```ts
 notifications: any[]

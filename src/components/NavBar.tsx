@@ -8,7 +8,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/': 'Village',
   '/community/search': 'Kretser',
   '/add': 'Legg ut',
-  '/schedule': 'Schedule',
+  '/schedule': 'Avtaler',
   '/profile': 'Min profil',
 }
 

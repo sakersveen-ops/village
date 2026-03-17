@@ -352,6 +352,7 @@ The `--slider-val` CSS variable drives the gradient fill on the track. Without t
 | `font-display` (Tailwind class) | `tailwind.config.ts` plugin | Titles, item names, month label |
 | `initSlider`, `updateSlider` | `src/lib/sliderFill.ts` | Any `input[type="range"]` |
 | `--terra`, `--terra-dark` etc. | `globals.css :root` | Anywhere you need a colour inline |
+| Search input in header | Inline style i `search/page.tsx` | `search/page.tsx` |
 
 ---
 

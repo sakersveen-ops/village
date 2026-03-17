@@ -4,6 +4,28 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+function IconBtn({
+  onClick, href, label, children,
+}: {
+  onClick?: () => void
+  href?: string
+  label: string
+  children: React.ReactNode
+}) {
+  const cls = "w-9 h-9 flex items-center justify-center rounded-full shadow-sm flex-shrink-0"
+  const style = { background: '#fff', border: '1px solid #E8DDD0', color: '#6B4226' }
+  if (href) return (
+    <Link href={href} aria-label={label}>
+      <span className={cls} style={style}>{children}</span>
+    </Link>
+  )
+  return (
+    <button onClick={onClick} aria-label={label} className={cls} style={style}>
+      {children}
+    </button>
+  )
+}
+
 const CATEGORIES = [
   { id: 'all', label: 'Alle', emoji: '✨' },
   { id: 'barn', label: 'Barn', emoji: '🧸' },

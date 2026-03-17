@@ -408,9 +408,13 @@ Returner KUN JSON, ingen annen tekst.` }
   return (
     <div className="max-w-lg mx-auto pb-24">
 
-      {/* ── Header: kun modusvelger, ingen tilbake/tittel ─────────────────── */}
+      {/* ── Header: modusvelger med tittel ───────────────────────────────── */}
       <div className="page-header glass sticky top-0 z-10 px-4 pb-3"
         style={{ borderRadius: '0 0 20px 20px', paddingTop: 12 }}>
+        <h1 className="font-display font-bold mb-3"
+          style={{ fontSize: 22, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+          Legg ut noe
+        </h1>
         <div className="flex gap-2 overflow-x-auto hide-scrollbar">
           {MODES.map(m => (
             <button

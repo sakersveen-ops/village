@@ -13,29 +13,6 @@ const CATEGORIES = [
   { id: 'annet', label: 'Annet', emoji: '📦' },
 ]
 
-// Ikonknapp — brukes på tvers av navbar og seksjonsheadere
-function IconBtn({
-  onClick, href, label, children,
-}: {
-  onClick?: () => void
-  href?: string
-  label: string
-  children: React.ReactNode
-}) {
-  const cls = "w-9 h-9 flex items-center justify-center rounded-full shadow-sm flex-shrink-0"
-  const style = { background: '#fff', border: '1px solid #E8DDD0', color: '#6B4226' }
-  if (href) return (
-    <Link href={href} aria-label={label}>
-      <span className={cls} style={style}>{children}</span>
-    </Link>
-  )
-  return (
-    <button onClick={onClick} aria-label={label} className={cls} style={style}>
-      {children}
-    </button>
-  )
-}
-
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
@@ -55,7 +32,6 @@ export default function ProfilePage() {
   const [itemSearch, setItemSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   // UI
-  const [showMenu, setShowMenu] = useState(false)
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const router = useRouter()
@@ -191,11 +167,6 @@ export default function ProfilePage() {
     if (newReq) setSentRequests(prev => [...prev, newReq])
   }
 
-  const signOut = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
 
   const displayName = profile?.name || user?.email?.split('@')[0]
   const lentOut = myItems.filter(i => !i.available).length
@@ -216,46 +187,6 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-lg mx-auto pb-24">
-
-      {/* ── Toppmenybar ── */}
-      {/* Erstatter den gamle ← Feed / ··· raden.
-          Venstre: ← tilbake til feed (samme stil som søkeknappen i navbar)
-          Høyre: ··· ligger rett til høyre for meldinger-knappen i den globale navbaren.
-          Her håndterer vi kun ← og ··· siden dette er profilsiden som ikke har en global header. */}
-      <header className="page-header glass" style={{ borderRadius: '0 0 20px 20px' }}>
-        {/* Venstre: tilbake til feed */}
-        <IconBtn href="/" label="Tilbake til feed">
-          ←
-        </IconBtn>
-
-        <h1 className="page-header-title font-display" style={{ flex: 1, textAlign: 'center' }}>
-          Profil
-        </h1>
-
-        {/* Høyre: ··· meny — plassert som nabo til meldinger-knapp i navbar */}
-        <div className="relative">
-          <IconBtn onClick={() => setShowMenu(m => !m)} label="Meny">
-            ···
-          </IconBtn>
-          {showMenu && (
-            <>
-              <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-              <div className="absolute right-0 top-11 z-50 rounded-2xl shadow-lg overflow-hidden w-44"
-                style={{ background: '#fff', border: '1px solid #E8DDD0' }}>
-                <Link href="/settings" onClick={() => setShowMenu(false)}>
-                  <div className="px-4 py-3 flex items-center gap-2 text-sm" style={{ color: 'var(--terra-dark)' }}>
-                    ⚙️ Innstillinger
-                  </div>
-                </Link>
-                <button onClick={signOut} className="w-full px-4 py-3 flex items-center gap-2 text-sm"
-                  style={{ color: 'var(--terra)', borderTop: '1px solid #E8DDD0' }}>
-                  🚪 Logg ut
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      </header>
 
       {/* ── Profilhode: avatar + navn ── */}
       <div style={{ background: '#FAF7F2', borderBottom: '1px solid #E8DDD0' }} className="px-4 pt-6 pb-6">

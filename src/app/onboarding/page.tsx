@@ -493,6 +493,23 @@ function OnboardingContent() {
   const [ownedItems, setOwnedItems] = useState<Set<string>>(new Set())
   const [wantedItems, setWantedItems] = useState<Set<string>>(new Set())
 
+  // Guard: redirect already-onboarded users away
+  useEffect(() => {
+    ;(async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.push('/login'); return }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', user.id)
+        .single()
+      if (profile?.name) {
+        router.push('/')
+      }
+    })()
+  }, [router])
+
   useEffect(() => {
     if (!inviteCode) return
     ;(async () => {
@@ -526,7 +543,12 @@ function OnboardingContent() {
       const { data } = supabase.storage.from('item-images').getPublicUrl(path)
       avatar_url = data.publicUrl
     }
-    await supabase.from('profiles').upsert({ id: user.id, email: user.email, name, username: username || null, phone, address, avatar_url: avatar_url || null })
+    const updates: Record<string, unknown> = { id: user.id, email: user.email, name }
+    if (username) updates.username = username
+    if (phone) updates.phone = phone
+    if (address) updates.address = address
+    if (avatar_url) updates.avatar_url = avatar_url
+    await supabase.from('profiles').upsert(updates)
     track('onboarding_profile_saved')
     setSaving(false)
     goNext()

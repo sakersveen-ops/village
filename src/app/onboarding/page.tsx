@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { track } from '@/lib/track'
@@ -467,7 +467,7 @@ function CommunitiesStep({ communitySuggestions, sentJoinRequests, onJoin, onCre
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function OnboardingPage() {
+function OnboardingContent() {
   const [step, setStep] = useState(1)
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -741,5 +741,13 @@ export default function OnboardingPage() {
       </div>
       {steps[step]}
     </div>
+  )
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={<div className="max-w-lg mx-auto px-4 pt-10 pb-24 min-h-screen flex flex-col" />}>
+      <OnboardingContent />
+    </Suspense>
   )
 }

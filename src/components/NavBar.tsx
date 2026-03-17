@@ -7,8 +7,8 @@ import { usePathname } from 'next/navigation'
 const PAGE_TITLES: Record<string, string> = {
   '/': 'Village',
   '/community/search': 'Kretser',
-  '/add': 'Legg ut',
-  '/schedule': 'Avtaler',
+  '/add': 'Del gjenstand',
+  '/schedule': 'Mine avtaler',
   '/profile': 'Min profil',
 }
 
@@ -75,8 +75,8 @@ export default function NavBar() {
   const navItems = [
     { href: '/',                 icon: 'home',     label: 'Feed' },
     { href: '/community/search', icon: 'community', label: 'Kretser' },
-    { href: '/add',              icon: null,        label: 'Legg ut' },
-    { href: '/schedule',         icon: 'schedule',  label: 'Schedule' },
+    { href: '/add',              icon: null,        label: 'Del gjenstand' },
+    { href: '/schedule',         icon: 'schedule',  label: 'Avtaler' },
     { href: '/profile',          icon: 'profile',   label: 'Profil' },
   ]
 

@@ -52,15 +52,24 @@ export default function NavBar() {
     const load = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setHasUser(false); return }
-      setHasUser(true)
+            if (!user) { setHasUser(false); return }
+            setHasUser(true)
 
-      const [{ count: notifCount }, { count: loanCount }] = await Promise.all([
+            const [
+        { count: notifCount },
+        { data: pendingLoans },
+        { data: loanRequestNotifs },
+        ] = await Promise.all([
         supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('read', false),
-        supabase.from('loans').select('*', { count: 'exact', head: true }).eq('owner_id', user.id).eq('status', 'pending'),
-      ])
+        supabase.from('loans').select('id').eq('owner_id', user.id).eq('status', 'pending'),
+        supabase.from('notifications').select('loan_id').eq('user_id', user.id).eq('type', 'loan_request').eq('read', false),
+        ])
 
-      setUnread((notifCount || 0) + (loanCount || 0))
+        // Pending loans som IKKE allerede har et ulest loan_request-varsel
+        const coveredLoanIds = new Set((loanRequestNotifs || []).map((n: any) => n.loan_id))
+        const uncoveredLoans = (pendingLoans || []).filter((l: any) => !coveredLoanIds.has(l.id)).length
+
+        setUnread((notifCount || 0) + uncoveredLoans)
     }
     load()
     const interval = setInterval(load, 30000)

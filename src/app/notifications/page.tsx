@@ -419,10 +419,27 @@ export default function NotificationsPage() {
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="glass" style={{ borderRadius: 16, height: 72, opacity: 0.5 }} />
           ))
+        ) : notifications.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '72px 24px 0', color: 'var(--terra-mid)' }}>
+            <div style={{ fontSize: 44, marginBottom: 12 }}>🏘️</div>
+            <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--terra-dark)', marginBottom: 6 }}>Ingen varsler ennå</p>
+            <p style={{ fontSize: 13, lineHeight: 1.5 }}>Her dukker det opp varsler knyttet til dine låneavtaler, meldingsutvekslinger og venneforespørsler.</p>
+          </div>
         ) : current.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '64px 0', color: 'var(--terra-mid)' }}>
-            <div style={{ fontSize: 40, marginBottom: 8 }}>{tab === 'actions' ? '✅' : '🔔'}</div>
-            <p style={{ fontSize: 14 }}>{tab === 'actions' ? 'Ingen handlinger å gjøre' : 'Ingen oppdateringer'}</p>
+          <div style={{ textAlign: 'center', padding: '72px 24px 0', color: 'var(--terra-mid)' }}>
+            {tab === 'actions' ? (
+              <>
+                <div style={{ fontSize: 44, marginBottom: 12 }}>🎉</div>
+                <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--terra-dark)', marginBottom: 6 }}>Alt er i orden!</p>
+                <p style={{ fontSize: 13, lineHeight: 1.5 }}>Du har ingen utestående handlinger. Nye låneforespørsler og venneforespørsler dukker opp her.</p>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 44, marginBottom: 12 }}>🔔</div>
+                <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--terra-dark)', marginBottom: 6 }}>Ingen oppdateringer</p>
+                <p style={{ fontSize: 13, lineHeight: 1.5 }}>Statusendringer på dine lån og andre oppdateringer vises her.</p>
+              </>
+            )}
           </div>
         ) : (
           Object.entries(groups).map(([label, items]) => (

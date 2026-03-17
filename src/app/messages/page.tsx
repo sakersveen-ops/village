@@ -237,6 +237,14 @@ export default function MessagesPage() {
   const doneThreads = filtered.filter(t => t.loan_status === 'returned')
 
   const totalUnread = threads.filter(t => t.unread).length
+  const [showFilters, setShowFilters] = useState(false)
+
+  const activeFilterCount = (
+    (filters.loanstatus !== 'aktive' ? 1 : 0) +
+    (filters.eier !== 'alle' ? 1 : 0) +
+    (filters.motpart !== 'alle' ? 1 : 0) +
+    (filters.type !== 'alle' ? 1 : 0)
+  )
 
   // -------------------------------------------------------------------------
   // Filter helper
@@ -373,26 +381,50 @@ export default function MessagesPage() {
 
   return (
     <div className="min-h-screen" style={{ background: '#FDF5F0' }}>
-      {/* Header */}
+
+      {/* Sticky header — søk + filterknapp */}
       <header className="page-header glass" style={{ borderRadius: '0 0 20px 20px' }}>
         <h1 className="page-header-title font-display">Meldinger</h1>
-        {totalUnread > 0 && (
-          <span
-            className="text-white text-xs font-bold rounded-full flex items-center justify-center"
-            style={{ background: '#C4673A', width: 20, height: 20, fontSize: 11 }}
+        <div className="flex items-center gap-2">
+          {totalUnread > 0 && (
+            <span
+              className="text-white font-bold rounded-full flex items-center justify-center"
+              style={{ background: '#C4673A', width: 20, height: 20, fontSize: 11 }}
+            >
+              {totalUnread}
+            </span>
+          )}
+          {/* Filterknapp */}
+          <button
+            onClick={() => setShowFilters(v => !v)}
+            className="btn-glass flex items-center gap-1.5"
+            style={{ fontSize: 12, padding: '5px 10px', borderRadius: 10, position: 'relative' }}
           >
-            {totalUnread}
-          </span>
-        )}
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+              <line x1="2" y1="4" x2="14" y2="4"/><line x1="4" y1="8" x2="12" y2="8"/><line x1="6" y1="12" x2="10" y2="12"/>
+            </svg>
+            Filtrer
+            {activeFilterCount > 0 && (
+              <span
+                className="text-white font-bold rounded-full flex items-center justify-center"
+                style={{ background: '#C4673A', width: 16, height: 16, fontSize: 9, position: 'absolute', top: -5, right: -5 }}
+              >
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+        </div>
       </header>
 
-      <div className="px-4 pt-3 pb-2 flex flex-col gap-2">
-        {/* Search */}
+      {/* Søkefelt — scrolles med siden */}
+      <div className="px-4 pt-3 pb-2">
         <div
           className="flex items-center gap-2 rounded-xl px-3 py-2"
           style={{ background: 'rgba(255,248,243,0.8)', border: '1px solid rgba(196,103,58,0.18)', fontSize: 12, color: '#9C7B65' }}
         >
-          <span>🔍</span>
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9C7B65" strokeWidth="2" strokeLinecap="round">
+            <circle cx="7" cy="7" r="5"/><line x1="11" y1="11" x2="14" y2="14"/>
+          </svg>
           <input
             type="text"
             placeholder="Søk i meldinger..."
@@ -402,12 +434,14 @@ export default function MessagesPage() {
             style={{ color: '#2C1A0E', fontSize: 12 }}
           />
           {search && (
-            <button onClick={() => setSearch('')} style={{ color: '#9C7B65', fontSize: 14 }}>✕</button>
+            <button onClick={() => setSearch('')} style={{ color: '#9C7B65', fontSize: 13, lineHeight: 1 }}>✕</button>
           )}
         </div>
+      </div>
 
-        {/* Filters */}
-        <div className="flex flex-col gap-1.5">
+      {/* Filter-drawer — vises/skjules */}
+      {showFilters && (
+        <div className="mx-4 mb-2 rounded-2xl glass-heavy px-4 py-3 flex flex-col gap-2">
           <FilterPills
             label="Lånstatus"
             filterKey="loanstatus"
@@ -444,16 +478,28 @@ export default function MessagesPage() {
             ]}
           />
         </div>
-      </div>
+      )}
 
-      {/* Thread list */}
+      {/* Trådliste */}
       <div className="px-3 pb-4 flex flex-col gap-1">
         {loading ? (
           <p style={{ color: '#9C7B65', fontSize: 13, textAlign: 'center', marginTop: 40 }}>Laster meldinger…</p>
+        ) : threads.length === 0 ? (
+          /* Helt tomt — ingen lån i det hele tatt */
+          <div style={{ textAlign: 'center', marginTop: 64, padding: '0 24px' }}>
+            <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.35 }}>💬</div>
+            <p style={{ color: '#2C1A0E', fontSize: 14, fontWeight: 500, marginBottom: 6 }}>
+              Ingen meldinger ennå
+            </p>
+            <p style={{ color: '#9C7B65', fontSize: 12, lineHeight: 1.6 }}>
+              Her samles alle meldingstråder fra låneavtalene dine — både når du låner ut og når du låner av andre.
+            </p>
+          </div>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', marginTop: 48, color: '#9C7B65', fontSize: 13 }}>
-            <div style={{ fontSize: 32, marginBottom: 8, opacity: 0.4 }}>💬</div>
-            Ingen meldinger matcher filteret
+          /* Har lån, men filteret gir null treff */
+          <div style={{ textAlign: 'center', marginTop: 48, padding: '0 24px' }}>
+            <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.35 }}>🔍</div>
+            <p style={{ color: '#9C7B65', fontSize: 13 }}>Ingen meldinger matcher filteret</p>
           </div>
         ) : (
           <>
@@ -463,14 +509,12 @@ export default function MessagesPage() {
                 {actionThreads.map(t => <ThreadCard key={t.loan_id} thread={t} />)}
               </>
             )}
-
             {activeThreads.length > 0 && (
               <>
                 <SectionLabel label="Aktive lån" />
                 {activeThreads.map(t => <ThreadCard key={t.loan_id} thread={t} />)}
               </>
             )}
-
             {doneThreads.length > 0 && (
               <>
                 <SectionLabel label="Fullførte" />

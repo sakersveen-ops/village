@@ -4,30 +4,8 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-function IconBtn({
-  onClick, href, label, children,
-}: {
-  onClick?: () => void
-  href?: string
-  label: string
-  children: React.ReactNode
-}) {
-  const cls = "w-9 h-9 flex items-center justify-center rounded-full shadow-sm flex-shrink-0"
-  const style = { background: '#fff', border: '1px solid #E8DDD0', color: '#6B4226' }
-  if (href) return (
-    <Link href={href} aria-label={label}>
-      <span className={cls} style={style}>{children}</span>
-    </Link>
-  )
-  return (
-    <button onClick={onClick} aria-label={label} className={cls} style={style}>
-      {children}
-    </button>
-  )
-}
-
 const CATEGORIES = [
-  { id: 'all', label: 'Alle', emoji: '✨' },
+  { id: 'all', label: 'Alle', emoji: '' },
   { id: 'barn', label: 'Barn', emoji: '🧸' },
   { id: 'kjole', label: 'Kjoler', emoji: '👗' },
   { id: 'verktøy', label: 'Verktøy', emoji: '🔧' },
@@ -247,9 +225,8 @@ export default function ProfilePage() {
           <Link href="/items/manage" className="flex-1">
             <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16, cursor: 'pointer' }}>
               <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{myItems.length}</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>gjenstander</p>
-              <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra)' }}>
-                {lentOut > 0 ? `${lentOut} utlånt` : 'se liste'}
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
+                {lentOut > 0 ? `${lentOut} utlånt` : 'gjenstander'}
               </p>
             </div>
           </Link>
@@ -258,7 +235,6 @@ export default function ProfilePage() {
             <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16, cursor: 'pointer' }}>
               <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{activeLoansCount}</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>avtaler</p>
-              <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra)' }}>se oversikt</p>
             </div>
           </Link>
           {/* Venner → /friends */}
@@ -266,7 +242,6 @@ export default function ProfilePage() {
             <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16, cursor: 'pointer' }}>
               <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{friends.length}</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>venner</p>
-              <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra)' }}>se alle</p>
             </div>
           </Link>
         </div>
@@ -308,15 +283,12 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* ── Sendte venneforespørsler ── */}
+        {/* ── Sendte venneforespørsler — ingen egen tittel, slås visuelt inn i forespørsler-blokken ── */}
         {sentRequests.length > 0 && (
           <div>
-            <h2 className="text-base font-bold mb-3" style={{ color: 'var(--terra-dark)' }}>
-              Venter på svar <span className="font-normal text-sm" style={{ color: 'var(--terra-mid)' }}>({sentRequests.length})</span>
-            </h2>
             <div className="flex flex-col gap-2">
               {sentRequests.map(req => (
-                <div key={req.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
+                <div key={req.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#FAF7F2', border: '1px solid #E8DDD0' }}>
                   <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
                     style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
                     {req.profiles?.avatar_url
@@ -353,7 +325,7 @@ export default function ProfilePage() {
             </h2>
             {/* Søkeikon — samme runde knapp-stil som ← tilbake */}
             <IconBtn onClick={() => { setFriendSearchOpen(o => !o); setFriendSearch(''); setSearchResults([]) }} label="Søk etter folk">
-              🔍
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </IconBtn>
             {/* Inviter-pill */}
             <Link href="/invite"
@@ -367,7 +339,9 @@ export default function ProfilePage() {
           {friendSearchOpen && (
             <div className="mb-3">
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm pointer-events-none">🔍</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--terra-mid)' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </span>
                 <input
                   autoFocus
                   value={friendSearch}
@@ -481,7 +455,7 @@ export default function ProfilePage() {
             </h2>
             {/* Søkeikon — samme runde knapp-stil */}
             <IconBtn onClick={() => { setItemSearchOpen(o => !o); setItemSearch('') }} label="Søk i gjenstander">
-              🔍
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </IconBtn>
             {/* Legg ut-pill — samme stil som Inviter */}
             <Link href="/add"
@@ -494,7 +468,9 @@ export default function ProfilePage() {
           {/* Søkefelt — vises kun når åpent */}
           {itemSearchOpen && (
             <div className="relative mb-3">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm pointer-events-none">🔍</span>
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--terra-mid)' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              </span>
               <input
                 autoFocus
                 value={itemSearch}
@@ -512,13 +488,13 @@ export default function ProfilePage() {
           {myItems.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
               {CATEGORIES.filter(c => c.id === 'all' || myItems.some(i => i.category === c.id)).map(cat => (
-                <button key={cat.id} onClick={() => setActiveCategory(cat.id)}
+                <button key={cat.id} onClick={() => { setActiveCategory(cat.id); setItemSearch('') }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0 transition-colors"
                   style={activeCategory === cat.id
                     ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
                     : { background: '#fff', color: '#6B4226', border: '1px solid #E8DDD0' }
                   }>
-                  <span>{cat.emoji}</span>
+                  {cat.emoji && <span>{cat.emoji}</span>}
                   <span>{cat.label}</span>
                 </button>
               ))}
@@ -548,11 +524,11 @@ export default function ProfilePage() {
                       <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
                       <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--terra-mid)' }}>{item.category}</p>
                     </div>
-                    <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
-                      style={item.available
+                    <span className="px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
+                      style={{ fontSize: 10, ...(item.available
                         ? { background: '#EEF4F0', color: 'var(--terra-green)' }
-                        : { background: '#FFF0E6', color: 'var(--terra)' }
-                      }>
+                        : { background: '#FFF0E6', color: 'var(--terra)' })
+                      }}>
                       {item.available ? 'Ledig' : 'Utlånt'}
                     </span>
                   </div>

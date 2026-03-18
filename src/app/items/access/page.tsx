@@ -6,11 +6,11 @@ import { Suspense } from 'react'
 import { track } from '@/lib/track'
 
 const ACCESS_LEVELS = [
-  { id: 'close_friends',    label: 'Nære venner',     emoji: '❤️',  description: 'Kun de du har merket som nære venner' },
-  { id: 'friends',          label: 'Venner',           emoji: '👥',  description: 'Alle du er venner med' },
-  { id: 'friends_of_friends', label: 'Venners venner', emoji: '🌐', description: 'Venner og deres venner' },
-  { id: 'community',        label: 'Spesifikke kretser', emoji: '🏘️', description: 'Velg hvilke kretser som kan låne' },
-  { id: 'public',           label: 'Alle',             emoji: '🌍',  description: 'Synlig for alle på Village' },
+  { id: 'close_friends',      label: 'Nære venner',     emoji: '❤️',  description: 'Kun de du har merket som nære venner' },
+  { id: 'friends',            label: 'Venner',           emoji: '👥',  description: 'Alle du er venner med' },
+  { id: 'friends_of_friends', label: 'Venners venner',   emoji: '🌐',  description: 'Venner og deres venner' },
+  { id: 'community',          label: 'Spesifikke kretser', emoji: '🏘️', description: 'Velg hvilke kretser som kan låne' },
+  { id: 'public',             label: 'Alle',             emoji: '🌍',  description: 'Synlig for alle på Village' },
 ]
 
 const PRICE_TYPES = [
@@ -19,8 +19,15 @@ const PRICE_TYPES = [
   { id: 'fixed',    label: 'engangsbeløp' },
 ]
 
-// Hierarchy: selecting a level auto-selects all levels above it
+// Hierarchy: selecting a level auto-selects all levels above it (closer circles)
 const LEVEL_ORDER = ['close_friends', 'friends', 'friends_of_friends', 'community', 'public']
+
+// FIX 3: Map each level to which higher level implicitly includes it
+const INCLUDED_BY: Record<string, string> = {
+  close_friends: 'Venner',
+  friends: 'Venners venner',
+  friends_of_friends: 'Alle',
+}
 
 type AccessEntry = {
   access_type: string
@@ -37,48 +44,52 @@ function PriceRow({ price, priceType, onPriceChange, onTypeChange, placeholder }
   placeholder?: string
 }) {
   return (
-    <div className="flex items-center gap-2 pt-3 mt-3"
-      style={{ borderTop: '1px solid rgba(196,103,58,0.12)' }}>
-      <input
-        type="number"
-        placeholder={placeholder || 'Gratis'}
-        value={price || ''}
-        onChange={e => onPriceChange(e.target.value)}
-        className="glass flex-1 outline-none text-sm"
-        style={{ borderRadius: 10, padding: '8px 12px', color: 'var(--terra-dark)' }}
-      />
-      <span className="text-xs flex-shrink-0" style={{ color: 'var(--terra-mid)' }}>kr</span>
-      <select
-        value={priceType}
-        onChange={e => onTypeChange(e.target.value)}
-        className="glass outline-none text-xs flex-shrink-0"
-        style={{ borderRadius: 10, padding: '8px 10px', color: 'var(--terra-dark)' }}
-      >
-        {PRICE_TYPES.map(pt => (
-          <option key={pt.id} value={pt.id}>{pt.label}</option>
-        ))}
-      </select>
+    <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(196,103,58,0.12)' }}>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          placeholder={placeholder || '0'}
+          value={price || ''}
+          onChange={e => onPriceChange(e.target.value)}
+          className="glass flex-1 outline-none text-sm"
+          style={{ borderRadius: 10, padding: '8px 12px', color: 'var(--terra-dark)' }}
+        />
+        <span className="text-xs flex-shrink-0" style={{ color: 'var(--terra-mid)' }}>kr</span>
+        <select
+          value={priceType}
+          onChange={e => onTypeChange(e.target.value)}
+          className="glass outline-none text-xs flex-shrink-0"
+          style={{ borderRadius: 10, padding: '8px 10px', color: 'var(--terra-dark)' }}
+        >
+          {PRICE_TYPES.map(pt => (
+            <option key={pt.id} value={pt.id}>{pt.label}</option>
+          ))}
+        </select>
+      </div>
+      {/* FIX 4: Helper text */}
+      <p className="text-xs mt-1.5" style={{ color: 'var(--terra-mid)', opacity: 0.7 }}>
+        La stå tom for gratis
+      </p>
     </div>
   )
 }
 
 function AccessPageInner() {
-  const [communities, setCommunities]     = useState<any[]>([])
+  const [communities, setCommunities]       = useState<any[]>([])
   const [selectedLevels, setSelectedLevels] = useState<AccessEntry[]>([
     { access_type: 'close_friends', price_type: 'per_day' },
     { access_type: 'friends',       price_type: 'per_day' },
   ])
   const [allCommunities, setAllCommunities] = useState(false)
-  const [saving, setSaving]               = useState(false)
-  const [saveError, setSaveError]         = useState<string | null>(null)
-  const [loading, setLoading]             = useState(true)
-  const router  = useRouter()
+  const [saving, setSaving]                 = useState(false)
+  const [saveError, setSaveError]           = useState<string | null>(null)
+  const [loading, setLoading]               = useState(true)
+  const router      = useRouter()
   const searchParams = useSearchParams()
-  const itemId  = searchParams.get('item')
-  const itemName = searchParams.get('name') ? decodeURIComponent(searchParams.get('name')!) : null
+  const itemId      = searchParams.get('item')
+  const itemName    = searchParams.get('name') ? decodeURIComponent(searchParams.get('name')!) : null
 
   useEffect(() => {
-    // Wait until searchParams has resolved and itemId is a real UUID
     if (!itemId || itemId === 'undefined' || itemId === 'null') return
 
     const load = async () => {
@@ -86,7 +97,6 @@ function AccessPageInner() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      // Verify item exists
       const { data: itemCheck, error: itemError } = await supabase
         .from('items').select('id').eq('id', itemId).single()
       if (itemError || !itemCheck) { router.push('/'); return }
@@ -117,7 +127,6 @@ function AccessPageInner() {
     load()
   }, [itemId])
 
-  // ── Derived: first price set on any named level (close_friends/friends/fof) ──
   const suggestedPrice = (() => {
     for (const id of ['close_friends', 'friends', 'friends_of_friends']) {
       const e = selectedLevels.find(l => l.access_type === id && !l.community_id)
@@ -126,7 +135,6 @@ function AccessPageInner() {
     return null
   })()
 
-  // ── Toggle a named level (with auto-hierarchy) ────────────────────────────
   const toggleNamedLevel = (levelId: string) => {
     const idx = LEVEL_ORDER.indexOf(levelId)
     if (idx === -1) return
@@ -134,18 +142,16 @@ function AccessPageInner() {
     const isSelected = selectedLevels.some(l => l.access_type === levelId && !l.community_id)
 
     if (isSelected) {
-      // Deselect this level and all levels above it in hierarchy
       const toRemove = LEVEL_ORDER.slice(0, idx + 1)
       setSelectedLevels(prev => prev.filter(l =>
         l.community_id || !toRemove.includes(l.access_type)
       ))
     } else {
-      // Select this level AND all levels below it in hierarchy (close_friends, friends, ...)
       const toAdd = LEVEL_ORDER.slice(0, idx + 1)
       setSelectedLevels(prev => {
-        const existing = prev.filter(l => l.community_id) // keep community entries
+        const existing     = prev.filter(l => l.community_id)
         const namedExisting = prev.filter(l => !l.community_id)
-        const newEntries = toAdd
+        const newEntries   = toAdd
           .filter(id => !namedExisting.some(l => l.access_type === id))
           .map(id => ({
             access_type: id,
@@ -212,13 +218,9 @@ function AccessPageInner() {
         .from('item_access').delete().eq('item_id', itemId)
       if (deleteError) throw deleteError
 
-      // Build rows: for "all communities" toggle, insert one row per community
       const rows: any[] = []
       for (const l of selectedLevels) {
-        if (l.access_type === 'community' && !l.community_id && allCommunities) {
-          // skip — we'll add per-community rows below
-          continue
-        }
+        if (l.access_type === 'community' && !l.community_id && allCommunities) continue
         rows.push({
           item_id: itemId,
           access_type: l.access_type,
@@ -257,14 +259,22 @@ function AccessPageInner() {
     <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
   )
 
-  const communitySelected = selectedLevels.some(l => l.access_type === 'community' && !l.community_id)
-  // All-communities price: use first community entry's price as representative
-  const allCommunitiesEntry = { price_type: 'per_day', price: suggestedPrice?.price, ...selectedLevels.find(l => l.community_id) }
+  const communitySelected    = selectedLevels.some(l => l.access_type === 'community' && !l.community_id)
+  const allCommunitiesEntry  = { price_type: 'per_day', price: suggestedPrice?.price, ...selectedLevels.find(l => l.community_id) }
+
+  // FIX 3: Determine which level is the "highest" selected, so we can show implicit hints
+  const highestSelectedIdx = LEVEL_ORDER.reduce((max, id, i) => {
+    if (selectedLevels.some(l => l.access_type === id && !l.community_id)) return i
+    return max
+  }, -1)
+
+  // FIX 2: Ordered list — community and public rendered separately below, so filter them out here
+  const namedLevels = ACCESS_LEVELS.filter(l => l.id !== 'community' && l.id !== 'public')
 
   return (
     <div className="max-w-lg mx-auto pb-48">
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* ── FIX 5: Vertical stacked header ─────────────────────────────────── */}
       <div className="page-header glass sticky top-0 z-40 px-4 pb-4"
         style={{ borderRadius: '0 0 20px 20px', paddingTop: 0 }}>
         <button onClick={() => router.back()}
@@ -277,23 +287,31 @@ function AccessPageInner() {
         </button>
         <h1 className="font-display font-bold"
           style={{ fontSize: 22, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-          {itemName || 'Hvem kan låne dette?'}
+          {itemName ? `Hvem kan låne ${itemName}?` : 'Hvem kan låne dette?'}
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
-          Velg en eller flere grupper og sett pris per gruppe
+          Velg én eller flere grupper og sett pris per gruppe
         </p>
       </div>
 
       <div className="px-4 pt-5 flex flex-col gap-3">
 
-        {/* ── Named access levels ─────────────────────────────────────────── */}
-        {ACCESS_LEVELS.filter(l => l.id !== 'community').map(level => {
-          const entry   = selectedLevels.find(l => l.access_type === level.id && !l.community_id)
+        {/* ── FIX 1 & 2: Named levels in correct order, no duplicate public ── */}
+        {namedLevels.map((level, levelIdx) => {
+          const entry    = selectedLevels.find(l => l.access_type === level.id && !l.community_id)
           const selected = !!entry
+          const levelOrderIdx = LEVEL_ORDER.indexOf(level.id)
+
+          // FIX 3: Is this level implicitly selected because a higher level is selected?
+          const implicitlySelected = !selected && highestSelectedIdx > levelOrderIdx
 
           return (
             <div key={level.id} className="glass"
-              style={{ borderRadius: 16, padding: 16 }}>
+              style={{
+                borderRadius: 16,
+                padding: 16,
+                opacity: implicitlySelected ? 0.6 : 1,
+              }}>
               <button
                 onClick={() => toggleNamedLevel(level.id)}
                 className="w-full flex items-center gap-3 text-left"
@@ -301,14 +319,22 @@ function AccessPageInner() {
                 <span style={{ fontSize: 22 }}>{level.emoji}</span>
                 <div className="flex-1">
                   <p className="font-semibold text-sm" style={{ color: 'var(--terra-dark)' }}>{level.label}</p>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>{level.description}</p>
+                  {/* FIX 3: Implicit inclusion hint */}
+                  {implicitlySelected && INCLUDED_BY[level.id] ? (
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
+                      Inkludert fordi du valgte {INCLUDED_BY[level.id]}
+                    </p>
+                  ) : (
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>{level.description}</p>
+                  )}
                 </div>
                 <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
                   style={{
-                    background: selected ? 'var(--terra)' : 'transparent',
-                    border: selected ? 'none' : '2px solid rgba(196,103,58,0.25)',
+                    background: selected || implicitlySelected ? 'var(--terra)' : 'transparent',
+                    border: selected || implicitlySelected ? 'none' : '2px solid rgba(196,103,58,0.25)',
+                    opacity: implicitlySelected ? 0.5 : 1,
                   }}>
-                  {selected && <span className="text-white text-xs">✓</span>}
+                  {(selected || implicitlySelected) && <span className="text-white text-xs">✓</span>}
                 </div>
               </button>
 
@@ -318,16 +344,15 @@ function AccessPageInner() {
                   priceType={entry?.price_type || 'per_day'}
                   onPriceChange={val => updatePrice(level.id, undefined, val)}
                   onTypeChange={val => updatePriceType(level.id, undefined, val)}
-                  placeholder={suggestedPrice && !entry?.price ? `${suggestedPrice.price} kr foreslått` : 'Gratis'}
+                  placeholder={suggestedPrice && !entry?.price ? `${suggestedPrice.price}` : undefined}
                 />
               )}
             </div>
           )
         })}
 
-        {/* ── Spesifikke kretser ──────────────────────────────────────────── */}
+        {/* ── FIX 2: Spesifikke kretser (4th) ────────────────────────────── */}
         <div className="glass" style={{ borderRadius: 16, padding: 16 }}>
-          {/* Community level toggle */}
           <button
             onClick={() => toggleNamedLevel('community')}
             className="w-full flex items-center gap-3 text-left"
@@ -348,8 +373,6 @@ function AccessPageInner() {
 
           {communitySelected && communities.length > 0 && (
             <div className="mt-4 flex flex-col gap-3">
-
-              {/* Alle kretser toggle */}
               <button
                 onClick={() => setAllCommunities(prev => !prev)}
                 className="flex items-center gap-3 w-full"
@@ -372,18 +395,16 @@ function AccessPageInner() {
                 <span className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Alle kretser</span>
               </button>
 
-              {/* All-communities price — only shown when toggle is on */}
               {allCommunities && (
                 <PriceRow
                   price={allCommunitiesEntry?.price}
                   priceType={allCommunitiesEntry?.price_type || 'per_day'}
                   onPriceChange={val => updateAllCommunitiesPrice(val)}
                   onTypeChange={val => updateAllCommunitiesPriceType(val)}
-                  placeholder={suggestedPrice ? `${suggestedPrice.price} kr foreslått` : 'Gratis'}
+                  placeholder={suggestedPrice ? `${suggestedPrice.price}` : undefined}
                 />
               )}
 
-              {/* Individual communities — only when "alle kretser" is OFF */}
               {!allCommunities && (
                 <div className="flex flex-col gap-2">
                   {communities.length === 0 ? (
@@ -414,7 +435,7 @@ function AccessPageInner() {
                             priceType={cEntry?.price_type || 'per_day'}
                             onPriceChange={val => updatePrice('community', c.id, val)}
                             onTypeChange={val => updatePriceType('community', c.id, val)}
-                            placeholder={suggestedPrice ? `${suggestedPrice.price} kr foreslått` : 'Gratis'}
+                            placeholder={suggestedPrice ? `${suggestedPrice.price}` : undefined}
                           />
                         )}
                       </div>
@@ -432,7 +453,7 @@ function AccessPageInner() {
           )}
         </div>
 
-        {/* ── Alle (public) ───────────────────────────────────────────────── */}
+        {/* ── FIX 1 & 2: Public — sist, én gang ──────────────────────────── */}
         {(() => {
           const level  = ACCESS_LEVELS.find(l => l.id === 'public')!
           const entry  = selectedLevels.find(l => l.access_type === 'public' && !l.community_id)
@@ -462,7 +483,7 @@ function AccessPageInner() {
                   priceType={entry?.price_type || 'per_day'}
                   onPriceChange={val => updatePrice('public', undefined, val)}
                   onTypeChange={val => updatePriceType('public', undefined, val)}
-                  placeholder={suggestedPrice ? `${suggestedPrice.price} kr foreslått` : 'Gratis'}
+                  placeholder={suggestedPrice ? `${suggestedPrice.price}` : undefined}
                 />
               )}
             </div>

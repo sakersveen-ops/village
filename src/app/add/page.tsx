@@ -333,7 +333,6 @@ Returner KUN JSON, ingen annen tekst.` }
       name,
       description,
       category,
-      subcategory: subcategory || null,
       image_url: image_url || null,
       available: true,
     }).select().single()

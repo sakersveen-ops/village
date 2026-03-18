@@ -418,7 +418,7 @@ Returner KUN JSON, ingen annen tekst.` }
         style={{ borderRadius: '0 0 20px 20px', paddingTop: 12, display: 'flex', flexDirection: 'column' }}>
         <h1 className="font-display font-bold mb-3"
           style={{ fontSize: 22, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-          Legg ut noe
+          Hvordan vil du legge ut gjenstanden?
         </h1>
         <div className="flex gap-2 overflow-x-auto hide-scrollbar">
           {MODES.map(m => (
@@ -592,26 +592,6 @@ Returner KUN JSON, ingen annen tekst.` }
               </div>
             )}
 
-            {imageAnalyzed && (
-              <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
-                <span className="status-pill active">✓ Gjenkjent – sjekk og juster under</span>
-              </div>
-            )}
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Navn *</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Hva vil du låne ut?"
-                className="glass outline-none"
-                style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)' }} />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Beskrivelse</label>
-              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
-                placeholder="Størrelse, tilstand, merke…"
-                className="glass outline-none resize-none"
-                style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)' }} />
-            </div>
 
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Kategori *</label>
@@ -624,6 +604,31 @@ Returner KUN JSON, ingen annen tekst.` }
                 ))}
               </div>
             </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Tittel *</label>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Hva vil du låne ut?"
+                className="glass outline-none"
+                style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)' }} />
+            </div>
+
+            {imageAnalyzed && (
+              <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
+                <span className="status-pill active">✓ Gjenkjent – sjekk og juster under</span>
+              </div>
+            )}
+
+            
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Beskrivelse</label>
+              <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3}
+                placeholder="Størrelse, tilstand, merke…"
+                className="glass outline-none resize-none"
+                style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)' }} />
+            </div>
+
+            
 
             {selectedCat && selectedCat.subcategories.length > 0 && (
               <div className="flex flex-col gap-1">

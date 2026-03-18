@@ -78,17 +78,18 @@ function AccessPageInner() {
   const itemName = searchParams.get('name') ? decodeURIComponent(searchParams.get('name')!) : null
 
   useEffect(() => {
+    // Wait until searchParams has resolved and itemId is a real UUID
+    if (!itemId || itemId === 'undefined' || itemId === 'null') return
+
     const load = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
       // Verify item exists
-      if (itemId) {
-        const { data: itemCheck, error: itemError } = await supabase
-          .from('items').select('id').eq('id', itemId).single()
-        if (itemError || !itemCheck) { router.push('/'); return }
-      }
+      const { data: itemCheck, error: itemError } = await supabase
+        .from('items').select('id').eq('id', itemId).single()
+      if (itemError || !itemCheck) { router.push('/'); return }
 
       const { data: memberships } = await supabase
         .from('community_members')
@@ -97,21 +98,20 @@ function AccessPageInner() {
         .eq('status', 'active')
       setCommunities((memberships || []).map((m: any) => m.communities))
 
-      if (itemId) {
-        const { data: existing } = await supabase
-          .from('item_access').select('*').eq('item_id', itemId)
-        if (existing && existing.length > 0) {
-          setSelectedLevels(existing.map((e: any) => ({
-            access_type: e.access_type,
-            community_id: e.community_id,
-            price: e.price,
-            price_type: e.price_type || 'per_day',
-          })))
-          track('access_page_viewed', { item_id: itemId, mode: 'edit' })
-        } else {
-          track('access_page_viewed', { item_id: itemId, mode: 'new' })
-        }
+      const { data: existing } = await supabase
+        .from('item_access').select('*').eq('item_id', itemId)
+      if (existing && existing.length > 0) {
+        setSelectedLevels(existing.map((e: any) => ({
+          access_type: e.access_type,
+          community_id: e.community_id,
+          price: e.price,
+          price_type: e.price_type || 'per_day',
+        })))
+        track('access_page_viewed', { item_id: itemId, mode: 'edit' })
+      } else {
+        track('access_page_viewed', { item_id: itemId, mode: 'new' })
       }
+
       setLoading(false)
     }
     load()

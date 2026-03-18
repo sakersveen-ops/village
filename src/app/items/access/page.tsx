@@ -75,6 +75,7 @@ function AccessPageInner() {
   const router  = useRouter()
   const searchParams = useSearchParams()
   const itemId  = searchParams.get('item')
+  const itemName = searchParams.get('name') ? decodeURIComponent(searchParams.get('name')!) : null
 
   useEffect(() => {
     const load = async () => {
@@ -276,7 +277,7 @@ function AccessPageInner() {
         </button>
         <h1 className="font-display font-bold"
           style={{ fontSize: 22, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-          Hvem kan låne dette?
+          {itemName || 'Hvem kan låne dette?'}
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
           Velg en eller flere grupper og sett pris per gruppe

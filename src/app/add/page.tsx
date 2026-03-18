@@ -265,7 +265,7 @@ Returner KUN JSON, ingen annen tekst.` }
     setShelfStep('saving')
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { setSaving(false); return }
     const selected = books.filter(b => b.selected)
     let done = 0
     for (const book of selected) {
@@ -314,7 +314,7 @@ Returner KUN JSON, ingen annen tekst.` }
     setSaving(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { setSaving(false); return }
 
     let image_url = ''
 
@@ -328,7 +328,7 @@ Returner KUN JSON, ingen annen tekst.` }
       image_url = data.publicUrl
     }
 
-    const { data: item } = await supabase.from('items').insert({
+    const { data: item, error: insertError } = await supabase.from('items').insert({
       owner_id: user.id,
       name,
       description,
@@ -338,8 +338,14 @@ Returner KUN JSON, ingen annen tekst.` }
       available: true,
     }).select().single()
 
+    if (insertError || !item?.id) {
+      console.error('Insert failed:', insertError)
+      setSaving(false)
+      return
+    }
+
     await matchWatches(item, user.id)
-    router.push(`/items/access?item=${item?.id}`)
+    router.push(`/items/access?item=${item.id}&name=${encodeURIComponent(name)}`)
   }
 
   const selectedCat = CATEGORIES.find(c => c.id === category)
@@ -636,7 +642,7 @@ Returner KUN JSON, ingen annen tekst.` }
 
             <button onClick={saveItem} disabled={saving || !canSubmit}
               className="btn-primary w-full mt-2 disabled:opacity-50">
-              {saving ? 'Lagrer…' : canSubmit ? 'Legg ut ting →' : 'Neste →'}
+              {saving ? 'Lagrer…' : 'Neste →'}
             </button>
           </>
         )}

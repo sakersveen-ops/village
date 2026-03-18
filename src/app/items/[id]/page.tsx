@@ -19,7 +19,7 @@ const CATEGORY_GRADIENTS: Record<string, { gradient: string; label: string }> = 
 }
 
 const getCategoryGradient = (category?: string) => {
-  if (!category) return { gradient: 'linear-gradient(135deg, #C4673A 0%, #8B3A1E 100%)', label: 'Gjenstand' }
+  if (!category) return { gradient: 'linear-gradient(135deg, #C4673A 0%, #8B3A1E 100%)', label: 'VILLAGE' }
   return CATEGORY_GRADIENTS[category.toLowerCase()] || { gradient: 'linear-gradient(135deg, #9C7B65 0%, #6B4226 100%)', label: category }
 }
 

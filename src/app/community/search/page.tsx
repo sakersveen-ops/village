@@ -52,7 +52,12 @@ export default function CommunitiesPage() {
       const friendIds = (friendships || []).map((f: any) => f.user_b)
       setHasFriends(friendIds.length > 0)
 
-      const myIds = new Set((mine || []).map((m: any) => m.communities?.id))
+      // Build set of community IDs the user is already a member of — used to exclude from friend/popular lists
+      const myIds = new Set(
+        (mine || [])
+          .map((m: any) => m.communities?.id)
+          .filter(Boolean)
+      )
 
       if (friendIds.length > 0) {
         const { data: friendMembers } = await supabase
@@ -149,21 +154,30 @@ export default function CommunitiesPage() {
           style={{ border: '1px solid rgba(196,103,58,0.15)', boxShadow: '0 2px 20px rgba(44,26,14,0.08)' }}
         >
           {community.cover_image_url ? (
-            <img src={community.cover_image_url} alt={community.name}
-              className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+            <>
+              <img src={community.cover_image_url} alt={community.name}
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              {/* Dark gradient only when there's a photo */}
+              <div className="absolute inset-0"
+                style={{ background: 'linear-gradient(to top, rgba(44,26,14,0.82) 0%, rgba(44,26,14,0.2) 55%, transparent 100%)' }} />
+            </>
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, rgba(255,240,230,1) 0%, rgba(232,221,208,1) 60%, rgba(196,103,58,0.15) 100%)' }}>
-              <span style={{ fontSize: '52px', opacity: 0.35 }}>{community.avatar_emoji}</span>
-            </div>
+            <>
+              {/* Warm terracotta gradient — no heavy dark overlay */}
+              <div className="absolute inset-0 flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, rgba(255,240,230,1) 0%, rgba(232,221,208,1) 60%, rgba(196,103,58,0.15) 100%)' }}>
+                <span style={{ fontSize: '48px', opacity: 0.25 }}>{community.avatar_emoji}</span>
+              </div>
+              {/* Lighter bottom gradient so white text is still readable */}
+              <div className="absolute inset-0"
+                style={{ background: 'linear-gradient(to top, rgba(44,26,14,0.55) 0%, rgba(44,26,14,0.0) 50%, transparent 100%)' }} />
+            </>
           )}
-          <div className="absolute inset-0"
-            style={{ background: 'linear-gradient(to top, rgba(44,26,14,0.82) 0%, rgba(44,26,14,0.2) 55%, transparent 100%)' }} />
 
           <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
             {!community.cover_image_url
               ? <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl"
-                  style={{ background: 'rgba(255,248,243,0.65)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.5)' }}>
+                  style={{ background: 'rgba(255,248,243,0.65)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.5)' }}>
                   {community.avatar_emoji}
                 </div>
               : <div />}
@@ -297,7 +311,7 @@ export default function CommunitiesPage() {
 
         {query.length >= 2 && (
           <div>
-            <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">Søkeresultater</p>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--terra-mid)' }}>Søkeresultater</p>
             {searchResults.length === 0 ? (
               <div className="glass rounded-2xl p-5 text-center text-sm text-[#9C7B65]">Ingen treff for «{query}»</div>
             ) : (
@@ -325,7 +339,7 @@ export default function CommunitiesPage() {
           <>
             {displayedCommunities.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--terra-mid)' }}>
                   {filterAdminOnly
                     ? `Kretser jeg administrerer (${displayedCommunities.length})`
                     : `Dine kretser (${displayedCommunities.length})`}
@@ -351,7 +365,7 @@ export default function CommunitiesPage() {
 
             {friendCommunities.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--terra-mid)' }}>
                   Utforsk — venners kretser
                 </p>
                 <div className="flex flex-col gap-2">
@@ -364,10 +378,10 @@ export default function CommunitiesPage() {
 
             {!hasFriends && popularCommunities.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-1">
+                <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--terra-mid)' }}>
                   Populære kretser nær deg
                 </p>
-                <p className="text-xs text-[#9C7B65] mb-3">Legg til venner for å se kretser de er med i</p>
+                <p className="text-xs mb-3" style={{ color: 'var(--terra-mid)' }}>Legg til venner for å se kretser de er med i</p>
                 <div className="flex flex-col gap-2">
                   {popularCommunities.map((c: any) => (
                     <CommunityRow key={c.id} community={c} />

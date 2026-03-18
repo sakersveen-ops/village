@@ -138,8 +138,14 @@ export default function ProfilePage() {
 
   const cancelFriendRequest = async (requestId: string) => {
     const supabase = createClient()
-    await supabase.from('friend_requests').delete().eq('id', requestId)
-    setSentRequests(prev => prev.filter(r => r.id !== requestId))
+    const { error } = await supabase
+      .from('friend_requests')
+      .delete()
+      .eq('id', requestId)
+      .eq('from_id', user.id)
+    if (!error) {
+      setSentRequests(prev => prev.filter(r => r.id !== requestId))
+    }
   }
 
   const searchUsers = async (q: string) => {

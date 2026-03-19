@@ -338,18 +338,27 @@ export default function ItemPage() {
         />
 
         {/* ══ OWNER VIEWS ═════════════════════════════════════════════════ */}
-
+        
         {isOwner && item.available && pendingLoans.length === 0 && !activeLoan && (
           <div className="flex gap-2">
-            <div className="glass flex-1" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-              <p className="text-sm font-medium" style={{ color: 'var(--terra)' }}>Dette er din gjenstand</p>
-            </div>
-            <Link href={`/items/access?item=${item.id}`}>
+            <Link href={`/items/access?item=${item.id}`} className="flex-1">
               <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
                 <p className="text-sm">🔒</p>
-                <p className="text-xs mt-1" style={{ color: 'var(--terra-mid)' }}>Tilgang</p>
+                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Endre tilgang</p>
               </div>
             </Link>
+            <button
+              onClick={async () => {
+                if (!confirm('Er du sikker på at du vil slette denne gjenstanden?')) return
+                const supabase = createClient()
+                await supabase.from('items').delete().eq('id', id)
+                router.back()
+              }}
+              className="flex-1 glass"
+              style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center', border: '1px solid rgba(239,68,68,0.25)' }}>
+              <p className="text-sm">🗑️</p>
+              <p className="text-xs mt-1 font-medium" style={{ color: '#ef4444' }}>Slett gjenstand</p>
+            </button>
           </div>
         )}
 

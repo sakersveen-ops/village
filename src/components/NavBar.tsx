@@ -14,11 +14,21 @@ const PAGE_TITLES: Record<string, string> = {
 
 function getTitle(pathname: string): string {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname]
+  if (pathname.startsWith('/items/manage')) return 'Mine gjenstander'
   if (pathname.startsWith('/items/')) return 'Gjenstand'
   if (pathname.startsWith('/profile/')) return 'Profil'
   if (pathname.startsWith('/community/')) return 'Krets'
   if (pathname.startsWith('/loans/')) return 'Lån'
+  if (pathname.startsWith('/friends')) return 'Venner'
+  if (pathname.startsWith('/invite')) return 'Inviter'
+  if (pathname.startsWith('/settings')) return 'Innstillinger'
   return 'Village'
+}
+
+// Toppnivå-sider: ingen tilbake-pil
+const ROOT_PATHS = ['/', '/community/search', '/add', '/schedule', '/profile']
+function isRootPath(pathname: string) {
+  return ROOT_PATHS.includes(pathname)
 }
 
 function BellIcon({ size = 18 }: { size?: number }) {
@@ -30,7 +40,6 @@ function BellIcon({ size = 18 }: { size?: number }) {
   )
 }
 
-// Delt knappstil for alle ikonknapper i topbaren
 const iconBtnStyle = (active = false): React.CSSProperties => ({
   width: 36, height: 36, borderRadius: 12,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -46,30 +55,34 @@ export default function NavBar() {
   const [showMenu, setShowMenu] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
-  const isProfile = pathname === '/profile'
+
+  const showBack = !isRootPath(pathname)
+
+  useEffect(() => {
+    // Lukk meny ved navigasjon
+    setShowMenu(false)
+  }, [pathname])
 
   useEffect(() => {
     const load = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-            if (!user) { setHasUser(false); return }
-            setHasUser(true)
+      if (!user) { setHasUser(false); return }
+      setHasUser(true)
 
-            const [
+      const [
         { count: notifCount },
         { data: pendingLoans },
         { data: loanRequestNotifs },
-        ] = await Promise.all([
+      ] = await Promise.all([
         supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('read', false),
         supabase.from('loans').select('id').eq('owner_id', user.id).eq('status', 'pending'),
         supabase.from('notifications').select('loan_id').eq('user_id', user.id).eq('type', 'loan_request').eq('read', false),
-        ])
+      ])
 
-        // Pending loans som IKKE allerede har et ulest loan_request-varsel
-        const coveredLoanIds = new Set((loanRequestNotifs || []).map((n: any) => n.loan_id))
-        const uncoveredLoans = (pendingLoans || []).filter((l: any) => !coveredLoanIds.has(l.id)).length
-
-        setUnread((notifCount || 0) + uncoveredLoans)
+      const coveredLoanIds = new Set((loanRequestNotifs || []).map((n: any) => n.loan_id))
+      const uncoveredLoans = (pendingLoans || []).filter((l: any) => !coveredLoanIds.has(l.id)).length
+      setUnread((notifCount || 0) + uncoveredLoans)
     }
     load()
     const interval = setInterval(load, 30000)
@@ -88,9 +101,9 @@ export default function NavBar() {
   const title = getTitle(pathname)
 
   const navItems = [
-    { href: '/',                 icon: 'home',     label: 'Feed' },
+    { href: '/',                 icon: 'home',      label: 'Feed' },
     { href: '/community/search', icon: 'community', label: 'Kretser' },
-    { href: '/add',              icon: null,        label: 'Del gjenstand' },
+    { href: '/add',              icon: null,         label: 'Del gjenstand' },
     { href: '/schedule',         icon: 'schedule',  label: 'Avtaler' },
     { href: '/profile',          icon: 'profile',   label: 'Profil' },
   ]
@@ -102,13 +115,13 @@ export default function NavBar() {
         className="page-header glass"
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}
       >
-        {/* Venstre: søk normalt, ← på /profile */}
-        {isProfile ? (
-          <Link href="/" aria-label="Tilbake til feed" style={iconBtnStyle()}>
+        {/* Venstre: ← på undersider, søk på rotsider */}
+        {showBack ? (
+          <button onClick={() => router.back()} aria-label="Tilbake" style={iconBtnStyle()}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,#2C1A0E)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
-          </Link>
+          </button>
         ) : (
           <Link href="/search" aria-label="Søk" style={iconBtnStyle()}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,#2C1A0E)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -120,7 +133,7 @@ export default function NavBar() {
         {/* Tittel */}
         <h1 className="page-header-title font-display">{title}</h1>
 
-        {/* Høyre: varsler + meldinger + ··· (kun på /profile) */}
+        {/* Høyre: varsler + meldinger + ··· (alltid) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
 
           {/* Varsler */}
@@ -149,35 +162,38 @@ export default function NavBar() {
             </svg>
           </Link>
 
-          {/* ··· meny — kun på /profile */}
-          {isProfile && (
-            <div style={{ position: 'relative' }}>
-              <button onClick={() => setShowMenu(m => !m)} aria-label="Meny" style={iconBtnStyle()}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="5" cy="12" r="1.5" />
-                  <circle cx="12" cy="12" r="1.5" />
-                  <circle cx="19" cy="12" r="1.5" />
-                </svg>
-              </button>
-              {showMenu && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
-                  <div className="absolute right-0 top-11 z-50 rounded-2xl shadow-lg overflow-hidden w-44"
-                    style={{ background: '#fff', border: '1px solid #E8DDD0' }}>
-                    <Link href="/settings" onClick={() => setShowMenu(false)}>
-                      <div className="px-4 py-3 flex items-center gap-2 text-sm" style={{ color: 'var(--terra-dark)' }}>
-                        ⚙️ Innstillinger
-                      </div>
-                    </Link>
-                    <button onClick={signOut} className="w-full px-4 py-3 flex items-center gap-2 text-sm"
-                      style={{ color: 'var(--terra)', borderTop: '1px solid #E8DDD0' }}>
-                      🚪 Logg ut
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+          {/* ··· meny — alltid */}
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setShowMenu(m => !m)} aria-label="Meny" style={iconBtnStyle(showMenu)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="5" cy="12" r="1.5" />
+                <circle cx="12" cy="12" r="1.5" />
+                <circle cx="19" cy="12" r="1.5" />
+              </svg>
+            </button>
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                <div className="absolute right-0 top-11 z-50 rounded-2xl shadow-lg overflow-hidden w-44"
+                  style={{ background: '#fff', border: '1px solid #E8DDD0' }}>
+                  <Link href="/profile" onClick={() => setShowMenu(false)}>
+                    <div className="px-4 py-3 flex items-center gap-2 text-sm" style={{ color: 'var(--terra-dark)' }}>
+                      👤 Min profil
+                    </div>
+                  </Link>
+                  <Link href="/settings" onClick={() => setShowMenu(false)}>
+                    <div className="px-4 py-3 flex items-center gap-2 text-sm" style={{ color: 'var(--terra-dark)', borderTop: '1px solid #E8DDD0' }}>
+                      ⚙️ Innstillinger
+                    </div>
+                  </Link>
+                  <button onClick={signOut} className="w-full px-4 py-3 flex items-center gap-2 text-sm"
+                    style={{ color: 'var(--terra)', borderTop: '1px solid #E8DDD0' }}>
+                    🚪 Logg ut
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </header>
 

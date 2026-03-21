@@ -1,30 +1,8 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
-import StoryViewer from './StoryViewer'
+import StoryViewer, { type Story } from './StoryViewer'
 import StoryCreator, { type ExistingStory } from './StoryCreator'
-
-interface Story {
-  id: string
-  title: string
-  type: 'category' | 'custom'
-  category: string | null
-  cover_url: string | null
-  cover_text: string | null
-  slides: {
-    item_id: string
-    sort_order: number
-    caption: string | null
-    items: {
-      id: string
-      name: string
-      image_url: string | null
-      category: string
-      available: boolean
-      price: number | null
-    }
-  }[]
-}
 
 interface StoryRingProps {
   ownerId: string

@@ -20,10 +20,11 @@ interface Slide {
   items: SlideItem
 }
 
-interface Story {
+export interface Story {
   id: string
   title: string
   type: 'category' | 'custom'
+  category: string | null
   cover_url: string | null
   cover_text: string | null
   slides: Slide[]

@@ -26,6 +26,7 @@ const getCategoryGradient = (category?: string) => {
 export default function ItemPage() {
   const [item, setItem]                     = useState<any>(null)
   const [user, setUser]                     = useState<any>(null)
+  const [userProfile, setUserProfile]       = useState<any>(null)
   const [loan, setLoan]                     = useState<any>(null)
   const [allLoans, setAllLoans]             = useState<any[]>([])
   const [pendingLoans, setPendingLoans]     = useState<any[]>([])
@@ -47,6 +48,9 @@ export default function ItemPage() {
       if (!user) { router.push('/login'); return }
       setUser(user)
 
+      const { data: prof } = await supabase.from('profiles').select('id, name').eq('id', user.id).single()
+      setUserProfile(prof)
+
       const { data: item } = await supabase
         .from('items')
         .select('*, profiles!items_owner_id_fkey(id, name, email, avatar_url)')
@@ -66,7 +70,8 @@ export default function ItemPage() {
       const myLoan = (loans || []).find((l: any) => l.borrower_id === user.id)
       setLoan(myLoan || null)
 
-      if (item?.owner_id === user.id) {
+      const hasAccess = item?.owner_id === user.id || item?.connected_profile_id === user.id
+      if (hasAccess) {
         setPendingLoans((loans || []).filter((l: any) =>
           l.status === 'pending' || l.status === 'change_proposed'
         ))
@@ -76,7 +81,7 @@ export default function ItemPage() {
         .from('item_blocked_dates').select('date').eq('item_id', id)
       setBlockedDates((blocked || []).map((b: any) => b.date))
 
-      if (item?.owner_id !== user.id) track(Events.CALENDAR_OPENED, { item_id: item?.id })
+      if (!hasAccess) track(Events.CALENDAR_OPENED, { item_id: item?.id })
 
       setLoading(false)
     }
@@ -119,39 +124,54 @@ export default function ItemPage() {
     const t = startTimer()
     const supabase = createClient()
 
-      const { data: newLoan, error: loanError } = await supabase
-        .from('loans')
-        .insert({
-          item_id: id,
-          borrower_id: user.id,
-          owner_id: item.owner_id,
-          message,
-          start_date: startDate,
-          due_date: dueDate,
-          status: 'pending',
-          community_id: item.community_id || null,
-        })
-        .select()
-        .single()
-
-      if (loanError || !newLoan?.id) {
-        console.error('Loan insert failed:', loanError)
-        alert('Kunne ikke sende forespørsel. Sjekk at du er logget inn og prøv igjen.')
-        return
+    // Resolve who to notify: the owner the borrower is friends with
+    // Prefer owner_id; fall back to connected_profile_id; fall back to owner_id
+    let notifyUserId = item.owner_id
+    if (item.connected_profile_id) {
+      const { data: friendWithOwner } = await supabase
+        .from('friendships').select('user_b')
+        .eq('user_a', user.id).eq('user_b', item.owner_id).maybeSingle()
+      if (!friendWithOwner) {
+        const { data: friendWithCoOwner } = await supabase
+          .from('friendships').select('user_b')
+          .eq('user_a', user.id).eq('user_b', item.connected_profile_id).maybeSingle()
+        if (friendWithCoOwner) notifyUserId = item.connected_profile_id
       }
+    }
 
-      await supabase.from('loan_messages').insert({
-        loan_id: newLoan.id,
-        sender_id: user.id,
-        type: 'chat',
-        body: message,
+    const { data: newLoan, error: loanError } = await supabase
+      .from('loans')
+      .insert({
+        item_id: id,
+        borrower_id: user.id,
+        owner_id: item.owner_id,
+        message,
+        start_date: startDate,
+        due_date: dueDate,
+        status: 'pending',
+        community_id: item.community_id || null,
       })
+      .select()
+      .single()
+
+    if (loanError || !newLoan?.id) {
+      console.error('Loan insert failed:', loanError)
+      alert('Kunne ikke sende forespørsel. Sjekk at du er logget inn og prøv igjen.')
+      return
+    }
+
+    await supabase.from('loan_messages').insert({
+      loan_id: newLoan.id,
+      sender_id: user.id,
+      type: 'chat',
+      body: message,
+    })
 
     await supabase.from('notifications').insert({
-      user_id: item.owner_id,
+      user_id: notifyUserId,
       type: 'loan_request',
       title: 'Ny låneforespørsel',
-      body: `${user.user_metadata?.name || user.email?.split('@')[0]} vil låne «${item.name}»`,
+      body: `${userProfile?.name || user.email?.split('@')[0]} vil låne «${item.name}»`,
       loan_id: newLoan.id,
     })
 
@@ -161,15 +181,31 @@ export default function ItemPage() {
     track(Events.LOAN_REQUEST_SENT, {
       item_id: item.id,
       duration_ms: t(),
-      days_requested: Math.ceil(
-        (new Date(dueDate).getTime() - new Date(startDate).getTime()) / 86400000
-      ),
+      days_requested: Math.ceil((new Date(dueDate).getTime() - new Date(startDate).getTime()) / 86400000),
     })
   }
 
   const respondToLoan = async (loanId: string, accept: boolean) => {
     const supabase = createClient()
-    await supabase.from('loans').update({ status: accept ? 'active' : 'declined' }).eq('id', loanId)
+
+    // Concurrency lock: only succeeds if still pending
+    const { data: updated } = await supabase
+      .from('loans')
+      .update({ status: accept ? 'active' : 'declined' })
+      .eq('id', loanId)
+      .eq('status', 'pending')
+      .select()
+      .single()
+
+    if (!updated) {
+      alert('Denne forespørselen er allerede behandlet.')
+      // Refresh pending loans to reflect reality
+      const { data: fresh } = await supabase
+        .from('loans').select('*, profiles!loans_borrower_id_fkey(id, name, email, avatar_url)')
+        .eq('item_id', id).in('status', ['pending', 'change_proposed'])
+      setPendingLoans(fresh || [])
+      return
+    }
 
     if (accept) {
       await supabase.from('items').update({ available: false }).eq('id', id)
@@ -177,6 +213,8 @@ export default function ItemPage() {
     }
 
     const targetLoan = pendingLoans.find(l => l.id === loanId)
+    const isCoOwner = user?.id === item.connected_profile_id
+    const actorName = userProfile?.name || user.email?.split('@')[0]
 
     await supabase.from('loan_messages').insert({
       loan_id: loanId,
@@ -187,6 +225,7 @@ export default function ItemPage() {
         : `❌ Forespørsel avslått`,
     })
 
+    // Notify borrower
     await supabase.from('notifications').insert({
       user_id: targetLoan?.borrower_id,
       type: accept ? 'loan_accepted' : 'loan_declined',
@@ -195,6 +234,18 @@ export default function ItemPage() {
       loan_id: loanId,
     })
 
+    // Notify the other co-owner if connection exists
+    const nonActorId = isCoOwner ? item.owner_id : item.connected_profile_id
+    if (nonActorId) {
+      await supabase.from('notifications').insert({
+        user_id: nonActorId,
+        type: accept ? 'loan_accepted_coowner' : 'loan_declined_coowner',
+        title: accept ? `🔗 Forespørsel godtatt av ${actorName}` : `🔗 Forespørsel avslått av ${actorName}`,
+        body: `«${item.name}» – ${targetLoan?.profiles?.name || 'låntaker'}`,
+        loan_id: loanId,
+      })
+    }
+
     setPendingLoans(prev => prev.filter(l => l.id !== loanId))
     if (accept && targetLoan) {
       setAllLoans(prev => prev.map(l => l.id === loanId ? { ...l, status: 'active' } : l))
@@ -202,6 +253,7 @@ export default function ItemPage() {
     track(accept ? Events.LOAN_ACCEPTED : Events.LOAN_DECLINED, {
       loan_id: loanId,
       item_id: item.id,
+      handled_by: isCoOwner ? 'co_owner' : 'owner',
     })
   }
 
@@ -224,15 +276,17 @@ export default function ItemPage() {
   if (loading) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
   if (!item)   return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Fant ikke gjenstanden</div>
 
-  const ownerName   = item.profiles?.name || item.profiles?.email?.split('@')[0]
-  const isOwner     = user?.id === item.owner_id
-  const activeLoan  = allLoans.find(l => l.status === 'active')
-  const categoryGfx = getCategoryGradient(item.category)
+  const ownerName      = item.profiles?.name || item.profiles?.email?.split('@')[0]
+  const isOwner        = user?.id === item.owner_id
+  const isCoOwner      = user?.id === item.connected_profile_id
+  const hasOwnerAccess = isOwner || isCoOwner
+  const activeLoan     = allLoans.find(l => l.status === 'active')
+  const categoryGfx    = getCategoryGradient(item.category)
 
   return (
     <div className="max-w-lg mx-auto pb-32">
 
-      {/* ── Hero ─────────────────────────────────────────────────────────── */}
+      {/* ── Hero ── */}
       <div className="relative">
         <button onClick={() => router.back()}
           className="btn-glass absolute top-6 left-4 z-10"
@@ -262,7 +316,7 @@ export default function ItemPage() {
 
       <div className="px-4 pt-5 flex flex-col gap-4">
 
-        {/* ── Title + price ─────────────────────────────────────────────── */}
+        {/* ── Title + price ── */}
         <div className="flex justify-between items-start">
           <h1 className="font-display flex-1"
             style={{ fontSize: 26, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
@@ -273,7 +327,17 @@ export default function ItemPage() {
             : <span className="status-pill active ml-2">Gratis</span>}
         </div>
 
-        {/* ── Availability banner ───────────────────────────────────────── */}
+        {/* Co-owner banner */}
+        {isCoOwner && (
+          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, border: '1px solid rgba(196,103,58,0.25)' }}>
+            <span style={{ fontSize: 18 }}>🔗</span>
+            <p className="text-sm" style={{ color: 'var(--terra-dark)' }}>
+              Denne gjenstanden tilhører <strong>{ownerName}</strong> – du administrerer den sammen
+            </p>
+          </div>
+        )}
+
+        {/* ── Availability banner ── */}
         {item.available ? (
           <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
             <span className="status-pill active">● Tilgjengelig nå</span>
@@ -306,7 +370,7 @@ export default function ItemPage() {
                 )}
               </div>
             </div>
-            {isOwner && (
+            {hasOwnerAccess && (
               <button onClick={() => markReturned(activeLoan.id)}
                 className="btn-sm btn-accept mt-3 w-full">
                 ✓ Bekreft at {activeLoan.profiles?.name || activeLoan.profiles?.email?.split('@')[0]} har levert tilbake
@@ -319,7 +383,7 @@ export default function ItemPage() {
           <p style={{ color: 'var(--terra-dark)', letterSpacing: '-0.01em' }}>{item.description}</p>
         )}
 
-        {/* ── Owner card ────────────────────────────────────────────────── */}
+        {/* ── Owner card ── */}
         <Link href={`/profile/${item.profiles?.id}`}>
           <div className="item-card" style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(196,103,58,0.18)' }}>
             <div className="item-card-body glass-card"
@@ -331,61 +395,72 @@ export default function ItemPage() {
                   : ownerName?.[0]?.toUpperCase()}
               </div>
               <div>
-                <p className="font-medium" style={{ color: 'var(--terra-dark)' }}>{ownerName}</p>
+                <p className="font-medium" style={{ color: 'var(--terra-dark)' }}>
+                  {ownerName}
+                  {isCoOwner && <span className="ml-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>🔗 Tilkoblet</span>}
+                </p>
                 <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>Eier</p>
               </div>
             </div>
           </div>
         </Link>
 
-        {/* ── Calendar ──────────────────────────────────────────────────── */}
+        {/* ── Calendar ── */}
         <ItemCalendar
           loans={allLoans}
           blockedDates={blockedDates}
           requestedRange={sentRange}
-          onToggleBlock={isOwner ? toggleBlock : undefined}
-          onSelectRange={!isOwner && !loan && item.available ? handleSelectRange : undefined}
-          isOwner={isOwner}
+          onToggleBlock={hasOwnerAccess ? toggleBlock : undefined}
+          onSelectRange={!hasOwnerAccess && !loan && item.available ? handleSelectRange : undefined}
+          isOwner={hasOwnerAccess}
         />
 
-        {/* ══ OWNER VIEWS ═════════════════════════════════════════════════ */}
-        
-        {isOwner && item.available && pendingLoans.length === 0 && !activeLoan && (
+        {/* ══ OWNER / CO-OWNER VIEWS ══ */}
+
+        {hasOwnerAccess && item.available && pendingLoans.length === 0 && !activeLoan && (
           <div className="flex gap-2">
-            <Link href={`/items/access?item=${item.id}`} className="flex-1">
-              <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-                <p className="text-sm">🔒</p>
-                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Endre tilgang</p>
+            {isOwner && (
+              <Link href={`/items/access?item=${item.id}`} className="flex-1">
+                <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
+                  <p className="text-sm">🔒</p>
+                  <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Endre tilgang</p>
+                </div>
+              </Link>
+            )}
+            {isOwner && (
+              <button
+                onClick={async () => {
+                  if (!confirm('Er du sikker på at du vil slette denne gjenstanden?')) return
+                  const supabase = createClient()
+                  await supabase.from('items').delete().eq('id', id)
+                  router.back()
+                }}
+                className="flex-1 glass"
+                style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center', border: '1px solid rgba(239,68,68,0.25)' }}>
+                <p className="text-sm">🗑️</p>
+                <p className="text-xs mt-1 font-medium" style={{ color: '#ef4444' }}>Slett gjenstand</p>
+              </button>
+            )}
+            {isCoOwner && (
+              <div className="flex-1 glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
+                <p className="text-sm">🔗</p>
+                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Delt gjenstand</p>
               </div>
-            </Link>
-            <button
-              onClick={async () => {
-                if (!confirm('Er du sikker på at du vil slette denne gjenstanden?')) return
-                const supabase = createClient()
-                await supabase.from('items').delete().eq('id', id)
-                router.back()
-              }}
-              className="flex-1 glass"
-              style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center', border: '1px solid rgba(239,68,68,0.25)' }}>
-              <p className="text-sm">🗑️</p>
-              <p className="text-xs mt-1 font-medium" style={{ color: '#ef4444' }}>Slett gjenstand</p>
-            </button>
+            )}
           </div>
         )}
 
-        {isOwner && activeLoan && (
+        {hasOwnerAccess && activeLoan && (
           <div className="flex flex-col gap-2">
-            <h2 className="font-display font-bold"
-              style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>Meldingstråd</h2>
+            <h2 className="font-display font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>Meldingstråd</h2>
             <LoanThread loan={activeLoan} item={item} user={user} isOwner={true}
               onLoanUpdated={updated => setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))} />
           </div>
         )}
 
-        {isOwner && pendingLoans.length > 0 && (
+        {hasOwnerAccess && pendingLoans.length > 0 && (
           <div className="flex flex-col gap-3">
-            <h2 className="font-display font-bold"
-              style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+            <h2 className="font-display font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
               Innkommende forespørsler{' '}
               <span style={{ color: 'var(--terra)' }}>({pendingLoans.length})</span>
             </h2>
@@ -445,10 +520,7 @@ export default function ItemPage() {
 
                 <div id={`proposal-${l.id}`} style={{ borderRadius: '0 0 16px 16px', overflow: 'hidden' }}>
                   <LoanThread
-                    loan={l}
-                    item={item}
-                    user={user}
-                    isOwner={true}
+                    loan={l} item={item} user={user} isOwner={true}
                     openProposal={proposalLoanId === l.id}
                     onProposalOpened={() => setProposalLoanId(null)}
                     onLoanUpdated={updated => {
@@ -466,9 +538,9 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* ══ BORROWER VIEWS ══════════════════════════════════════════════ */}
+        {/* ══ BORROWER VIEWS ══ */}
 
-        {!isOwner && loan?.status === 'pending' && (
+        {!hasOwnerAccess && loan?.status === 'pending' && (
           <div className="flex flex-col gap-3">
             <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
               <span className="status-pill pending">⏳ Venter på svar fra {ownerName}</span>
@@ -478,7 +550,7 @@ export default function ItemPage() {
           </div>
         )}
 
-        {!isOwner && loan?.status === 'change_proposed' && (
+        {!hasOwnerAccess && loan?.status === 'change_proposed' && (
           <div className="flex flex-col gap-3">
             <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(196,103,58,0.3)' }}>
               <span style={{ fontSize: 24 }}>📅</span>
@@ -497,7 +569,7 @@ export default function ItemPage() {
           </div>
         )}
 
-        {!isOwner && loan?.status === 'active' && (
+        {!hasOwnerAccess && loan?.status === 'active' && (
           <div className="flex flex-col gap-3">
             <div className="glass" style={{ borderRadius: 16, padding: 16 }}>
               <span className="status-pill active">✓ Du låner denne nå!</span>
@@ -518,10 +590,9 @@ export default function ItemPage() {
           </div>
         )}
 
-        {!isOwner && !loan && item.available && (
+        {!hasOwnerAccess && !loan && item.available && (
           <div className="flex flex-col gap-3">
-            <h2 className="font-display font-bold"
-              style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+            <h2 className="font-display font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
               Send låneforespørsel
             </h2>
             {sent ? (
@@ -567,7 +638,7 @@ export default function ItemPage() {
           </div>
         )}
 
-        {!isOwner && !loan && !item.available && (
+        {!hasOwnerAccess && !loan && !item.available && (
           <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
             <span className="status-pill declined">Utlånt akkurat nå</span>
           </div>

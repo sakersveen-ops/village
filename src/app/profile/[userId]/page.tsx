@@ -437,7 +437,7 @@ export default function UserProfilePage() {
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {filteredItems.map(item => (
+              {filteredItems.slice(0, 5).map(item => (
                 <Link key={item.id} href={`/items/${item.id}`}>
                   <div className="flex items-center gap-3 px-4 py-3 rounded-2xl shadow-sm" style={{ background: '#fff' }}>
                     {item.image_url
@@ -462,6 +462,13 @@ export default function UserProfilePage() {
                   </div>
                 </Link>
               ))}
+              {filteredItems.length > 5 && (
+                <Link href={`/profile/${userId}/items`}
+                  className="flex items-center justify-center text-sm w-full py-2.5 rounded-xl"
+                  style={{ color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.2)', background: 'rgba(196,103,58,0.04)' }}>
+                  Vis alle {filteredItems.length} gjenstander →
+                </Link>
+              )}
             </div>
           )}
         </div>

@@ -125,26 +125,16 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
   }, [openProposal])
 
   const loadMessages = async () => {
-    setLoading(true)
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('loan_messages')
-      .select('*, profiles(id, name, email, avatar_url)')
-      .eq('loan_id', loan.id)
-      .order('created_at', { ascending: true })
-
-    if ((!data || data.length === 0) && loan.message && loan.borrower_id) {
-      const { data: seeded } = await supabase
-        .from('loan_messages')
-        .insert({ loan_id: loan.id, sender_id: loan.borrower_id, type: 'chat', body: loan.message, created_at: loan.created_at })
-        .select('*, profiles(id, name, email, avatar_url)')
-        .single()
-      setMessages(seeded ? [seeded] : [])
-    } else {
-      setMessages(data || [])
-    }
-    setLoading(false)
-  }
+  setLoading(true)
+  const supabase = createClient()
+  const { data } = await supabase
+    .from('loan_messages')
+    .select('*, profiles(id, name, email, avatar_url)')
+    .eq('loan_id', loan.id)
+    .order('created_at', { ascending: true })
+  setMessages(data || [])
+  setLoading(false)
+}
 
   const loadBorrowerContext = async () => {
     if (!loan.borrower_id || !user?.id) return

@@ -16,19 +16,19 @@ const ACTION_TYPES = new Set([
 type FilterCategory = 'all' | 'mine_items' | 'their_items' | 'friends' | 'communities'
 
 const CATEGORY_TYPES: Record<FilterCategory, string[]> = {
-  all:          [],
-  mine_items:   ['loan_request', 'loan_change_proposal'],
-  their_items:  ['loan_accepted', 'loan_declined', 'proposal_accepted', 'proposal_declined', 'loan_message'],
-  friends:      ['friend_request', 'friend_accepted', 'connection_request', 'connection_accepted', 'connection_disconnected'],
-  communities:  ['join_request', 'join_accepted', 'join_declined'],
+  all:         [],
+  mine_items:  ['loan_request', 'loan_change_proposal'],
+  their_items: ['loan_accepted', 'loan_declined', 'proposal_accepted', 'proposal_declined', 'loan_message'],
+  friends:     ['friend_request', 'friend_accepted', 'connection_request', 'connection_accepted', 'connection_disconnected'],
+  communities: ['join_request', 'join_accepted', 'join_declined'],
 }
 
 const CATEGORY_LABELS: Record<FilterCategory, string> = {
-  all:          'Alle',
-  mine_items:   'Mine gjenstander',
-  their_items:  'Andres gjenstander',
-  friends:      'Venner',
-  communities:  'Kretser',
+  all:         'Alle',
+  mine_items:  'Mine gjenstander',
+  their_items: 'Andres gjenstander',
+  friends:     'Venner',
+  communities: 'Kretser',
 }
 
 const NotifIcon = ({ type }: { type: string }) => {
@@ -98,6 +98,10 @@ const NotifIcon = ({ type }: { type: string }) => {
   )
 }
 
+function formatDate(d: string) {
+  return new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
 function groupByDate(list: any[]) {
   const today = new Date().toDateString()
   const yesterday = new Date(Date.now() - 86400000).toDateString()
@@ -113,21 +117,28 @@ function groupByDate(list: any[]) {
   return groups
 }
 
-function formatDate(d: string) {
-  return new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-}
-
 function deduplicateActions(list: any[]): any[] {
-  const seen = new Set<string>()
+  const seenLoanIds = new Set<string>()
   const result: any[] = []
   for (const n of list) {
-    if (n.loan_id && ACTION_TYPES.has(n.type)) {
-      if (!seen.has(n.loan_id)) { seen.add(n.loan_id); result.push(n) }
-    } else {
-      result.push(n)
+    if (n.loan_id) {
+      if (seenLoanIds.has(n.loan_id)) continue
+      seenLoanIds.add(n.loan_id)
     }
+    result.push(n)
   }
   return result
+}
+
+// Inline button styles — safe fallback independent of globals.css cascade
+const btnAccept: React.CSSProperties = {
+  fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 99,
+  background: 'var(--terra-green)', color: 'white', border: 'none', cursor: 'pointer',
+}
+const btnDecline: React.CSSProperties = {
+  fontSize: 12, fontWeight: 500, padding: '6px 14px', borderRadius: 99,
+  background: 'transparent', color: 'var(--terra-mid)',
+  border: '1px solid rgba(156,123,101,0.35)', cursor: 'pointer',
 }
 
 export default function NotificationsPage() {
@@ -147,24 +158,36 @@ export default function NotificationsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setCurrentUser(user)
+
       const { data: prof } = await supabase.from('profiles').select('id, name').eq('id', user.id).single()
       setCurrentProfile(prof)
+
       const { data } = await supabase
         .from('notifications')
-        .select('*, loans(item_id, items(name), community_id, communities(name, avatar_emoji))')
+        .select(`*, loans(item_id, items(name), community_id, communities(name, avatar_emoji))`)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
       setNotifications(data || [])
+
+      // Only auto-mark non-action types as read on page visit
+      const actionList = Array.from(ACTION_TYPES).map(t => `"${t}"`).join(',')
       await supabase
         .from('notifications')
         .update({ read: true })
         .eq('user_id', user.id)
         .eq('read', false)
-        .not('type', 'in', '("loan_request","loan_change_proposal","friend_request","connection_request","join_request")')
+        .not('type', 'in', `(${actionList})`)
+
       setLoading(false)
     }
     load()
   }, [])
+
+  const markNotifRead = async (id: string) => {
+    const supabase = createClient()
+    await supabase.from('notifications').update({ read: true }).eq('id', id)
+    setNotifications(prev => prev.map(x => x.id === id ? { ...x, read: true } : x))
+  }
 
   const handleMarkAllRead = async () => {
     setMarkingAll(true)
@@ -176,32 +199,49 @@ export default function NotificationsPage() {
     setMarkingAll(false)
   }
 
-  const markNotifRead = async (id: string) => {
-    const supabase = createClient()
-    await supabase.from('notifications').update({ read: true }).eq('id', id)
-    setNotifications(prev => prev.map(x => x.id === id ? { ...x, read: true } : x))
-  }
-
   const handleFriendRequest = async (n: any, accept: boolean) => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    const { data: req } = await supabase
-      .from('friend_requests').select('id, from_id')
-      .eq('to_id', user.id).eq('status', 'pending')
-      .order('created_at', { ascending: false }).limit(1).single()
-    if (!req) return
-    await supabase.from('friend_requests').update({ status: accept ? 'accepted' : 'declined' }).eq('id', req.id)
-    if (accept) {
-      await supabase.from('friendships').insert([
+
+    // Try to find the specific request using from_id in notification metadata
+    const fromId = n.metadata?.from_id
+    let req: any = null
+
+    if (fromId) {
+      const { data } = await supabase
+        .from('friend_requests').select('id, from_id, status')
+        .eq('to_id', user.id).eq('from_id', fromId)
+        .order('created_at', { ascending: false }).limit(1).single()
+      req = data
+    }
+
+    // Fallback: latest pending request
+    if (!req) {
+      const { data } = await supabase
+        .from('friend_requests').select('id, from_id, status')
+        .eq('to_id', user.id).eq('status', 'pending')
+        .order('created_at', { ascending: false }).limit(1).single()
+      req = data
+    }
+
+    if (req && req.status === 'pending') {
+      await supabase.from('friend_requests')
+        .update({ status: accept ? 'accepted' : 'declined' }).eq('id', req.id)
+    }
+
+    if (accept && req) {
+      // upsert both directions — safe if friendship already exists
+      await supabase.from('friendships').upsert([
         { user_a: user.id, user_b: req.from_id },
         { user_a: req.from_id, user_b: user.id },
-      ])
+      ], { onConflict: 'user_a,user_b', ignoreDuplicates: true })
       await supabase.from('notifications').insert({
         user_id: req.from_id, type: 'friend_accepted',
         title: 'Venneforespørsel godtatt!', body: 'Dere er nå venner',
       })
     }
+
     track(Events.FRIEND_REQUEST_HANDLED, { accepted: accept })
     await markNotifRead(n.id)
     setHandled(prev => new Map(prev).set(n.id, accept ? 'accepted' : 'declined'))
@@ -211,12 +251,14 @@ export default function NotificationsPage() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+
     const { data: conn } = await supabase
       .from('profile_connections').select('*')
       .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
       .eq('status', 'pending').neq('initiated_by', user.id)
       .limit(1).single()
     if (!conn) return
+
     if (accept) {
       await supabase.from('profile_connections')
         .update({ status: 'active', accepted_at: new Date().toISOString() }).eq('id', conn.id)
@@ -235,10 +277,12 @@ export default function NotificationsPage() {
       await supabase.from('profile_connections').update({ status: 'disconnected' }).eq('id', conn.id)
       track(Events.CONNECTION_DECLINED, { connection_id: conn.id })
     }
+
     await markNotifRead(n.id)
     setHandled(prev => new Map(prev).set(n.id, accept ? 'accepted' : 'declined'))
   }
 
+  // --- Derived lists ---
   const rawActions = useMemo(
     () => deduplicateActions(notifications.filter(n => ACTION_TYPES.has(n.type) && !handled.has(n.id))),
     [notifications, handled]
@@ -254,10 +298,8 @@ export default function NotificationsPage() {
     ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }, [notifications, handled])
 
-  const applyFilter = (list: any[]) => {
-    if (filter === 'all') return list
-    return list.filter(n => CATEGORY_TYPES[filter].includes(n.type))
-  }
+  const applyFilter = (list: any[]) =>
+    filter === 'all' ? list : list.filter(n => CATEGORY_TYPES[filter].includes(n.type))
 
   const actions = applyFilter(rawActions)
   const updates = applyFilter(rawUpdates)
@@ -273,13 +315,15 @@ export default function NotificationsPage() {
       .filter(cat => cat === 'all' || base.some(n => CATEGORY_TYPES[cat].includes(n.type)))
   }, [tab, rawActions, rawUpdates])
 
-  useEffect(() => {
-    if (!availableFilters.includes(filter)) setFilter('all')
-  }, [availableFilters, filter])
+  const handleTabSwitch = (t: 'actions' | 'updates') => {
+    setTab(t)
+    setFilter('all')
+  }
 
+  // --- Card ---
   const NotifCard = ({ n }: { n: any }) => {
     const needsBorder = tab === 'actions' && !n.read
-    const cardStyle: React.CSSProperties = {
+    const outerStyle: React.CSSProperties = {
       borderRadius: '16px', overflow: 'hidden',
       borderLeft: needsBorder ? '3px solid var(--terra)' : undefined,
     }
@@ -287,12 +331,12 @@ export default function NotificationsPage() {
       borderRadius: needsBorder ? '0 16px 16px 0' : '16px',
       padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: '12px',
     }
-    const dot = !n.read && (
-      <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--terra)', flexShrink: 0, marginTop: 6 }} />
-    )
+    const dot = !n.read
+      ? <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--terra)', flexShrink: 0, marginTop: 6 }} />
+      : null
 
     if (n._receipt) return (
-      <div style={cardStyle}>
+      <div style={outerStyle}>
         <div className="glass" style={innerStyle}>
           <span style={{ flexShrink: 0, marginTop: 2 }}><NotifIcon type={n.type} /></span>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -308,7 +352,7 @@ export default function NotificationsPage() {
     )
 
     if (n.type === 'friend_request') return (
-      <div style={cardStyle}>
+      <div style={outerStyle}>
         <div className="glass" style={innerStyle}>
           <span style={{ flexShrink: 0, marginTop: 2 }}><NotifIcon type={n.type} /></span>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -316,8 +360,8 @@ export default function NotificationsPage() {
             <p style={{ fontSize: 13, color: 'var(--terra-mid)', marginTop: 2 }}>{n.body}</p>
             <p style={{ fontSize: 11, color: 'var(--terra-mid)', marginTop: 4 }}>{formatDate(n.created_at)}</p>
             <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <button onClick={() => handleFriendRequest(n, true)} className="btn-sm btn-accept">✓ Godta</button>
-              <button onClick={() => handleFriendRequest(n, false)} className="btn-sm btn-decline">Avslå</button>
+              <button onClick={() => handleFriendRequest(n, true)} style={btnAccept}>✓ Godta</button>
+              <button onClick={() => handleFriendRequest(n, false)} style={btnDecline}>Avslå</button>
             </div>
           </div>
           {dot}
@@ -326,7 +370,7 @@ export default function NotificationsPage() {
     )
 
     if (n.type === 'connection_request') return (
-      <div style={cardStyle}>
+      <div style={outerStyle}>
         <div className="glass" style={innerStyle}>
           <span style={{ flexShrink: 0, marginTop: 2 }}><NotifIcon type={n.type} /></span>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -334,8 +378,8 @@ export default function NotificationsPage() {
             <p style={{ fontSize: 13, color: 'var(--terra-mid)', marginTop: 2 }}>{n.body}</p>
             <p style={{ fontSize: 11, color: 'var(--terra-mid)', marginTop: 4 }}>{formatDate(n.created_at)}</p>
             <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <button onClick={() => handleConnectionRequest(n, true)} className="btn-sm btn-accept">🔗 Godta</button>
-              <button onClick={() => handleConnectionRequest(n, false)} className="btn-sm btn-decline">Avslå</button>
+              <button onClick={() => handleConnectionRequest(n, true)} style={btnAccept}>🔗 Godta</button>
+              <button onClick={() => handleConnectionRequest(n, false)} style={btnDecline}>Avslå</button>
             </div>
           </div>
           {dot}
@@ -350,7 +394,7 @@ export default function NotificationsPage() {
 
     return (
       <Link href={href}>
-        <div style={cardStyle}>
+        <div style={outerStyle}>
           <div className="glass" style={innerStyle}>
             <span style={{ flexShrink: 0, marginTop: 2 }}><NotifIcon type={n.type} /></span>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -370,6 +414,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="max-w-lg mx-auto">
+      {/* Header: title + tabs only */}
       <header className="page-header glass" style={{ borderRadius: '0 0 20px 20px', position: 'sticky', top: 0, zIndex: 40 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <h1 className="page-header-title font-display" style={{ margin: 0 }}>Varsler</h1>
@@ -380,12 +425,11 @@ export default function NotificationsPage() {
             </button>
           )}
         </div>
-
-        <div style={{ display: 'flex', gap: 8, marginBottom: availableFilters.length > 1 ? 10 : 0 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
           {(['actions', 'updates'] as const).map(t => {
             const count = t === 'actions' ? unreadActions : unreadUpdates
             return (
-              <button key={t} onClick={() => setTab(t)} className={`pill ${tab === t ? 'active' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button key={t} onClick={() => handleTabSwitch(t)} className={`pill ${tab === t ? 'active' : ''}`} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 {t === 'actions' ? 'Handlinger' : 'Oppdateringer'}
                 {count > 0 && (
                   <span style={{ fontSize: 11, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: tab === t ? 'rgba(255,255,255,0.22)' : 'rgba(196,103,58,0.12)', color: tab === t ? 'white' : 'var(--terra)' }}>
@@ -396,19 +440,25 @@ export default function NotificationsPage() {
             )
           })}
         </div>
-
-        {availableFilters.length > 1 && (
-          <div className="pill-row">
-            {availableFilters.map(cat => (
-              <button key={cat} onClick={() => setFilter(cat)} className={`pill ${filter === cat ? 'active' : ''}`} style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                {CATEGORY_LABELS[cat]}
-              </button>
-            ))}
-          </div>
-        )}
       </header>
 
-      <div style={{ padding: '16px 16px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Filter row — outside header, scrolls with content */}
+      {availableFilters.length > 1 && (
+        <div style={{ padding: '12px 16px 0', display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' }}>
+          {availableFilters.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setFilter(cat)}
+              className={`pill ${filter === cat ? 'active' : ''}`}
+              style={{ fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 }}
+            >
+              {CATEGORY_LABELS[cat]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ padding: '12px 16px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="glass" style={{ borderRadius: 16, height: 72, opacity: 0.5 }} />
@@ -426,6 +476,11 @@ export default function NotificationsPage() {
                 <div style={{ fontSize: 44, marginBottom: 12 }}>🎉</div>
                 <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--terra-dark)', marginBottom: 6 }}>Alt er i orden!</p>
                 <p style={{ fontSize: 13, lineHeight: 1.5 }}>Du har ingen utestående handlinger.</p>
+              </>
+            ) : filter !== 'all' ? (
+              <>
+                <div style={{ fontSize: 44, marginBottom: 12 }}>🔍</div>
+                <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--terra-dark)', marginBottom: 6 }}>Ingen varsler i denne kategorien</p>
               </>
             ) : (
               <>

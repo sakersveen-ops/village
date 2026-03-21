@@ -229,8 +229,8 @@ function AskPageInnerComponent() {
   )
 }
 
-const AddPageInner = dynamic(() => Promise.resolve(AddPageInnerComponent), { ssr: false })
+const AskPageInner = dynamic(() => Promise.resolve(AskPageInnerComponent), { ssr: false })
 
-export default function AddPage() {
-  return <AddPageInner />
+export default function AskPage() {
+  return <AskPageInner />
 }

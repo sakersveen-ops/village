@@ -16,6 +16,7 @@ Village is a Norwegian peer-to-peer sharing and lending app. Users can list item
 - **Communities** — shared groups visible as pill links on profile pages.
 - **Notifications** — friend requests, loan status changes, friend_accepted events.
 - **Profile pages** — shows user's items, mutual friends, shared communities, search + category filter.
+- **Tilkoblede profiler** — two accounts (e.g. spouses) can connect so their items appear on each other's profile with a 🔗 tag. Shared loan calendar, co-owner loan management, max one connection per account.
 
 ## Design language
 - Warm brown/terracotta palette: `#C4673A` (primary), `#2C1A0E` (dark), `#9C7B65` (mid), `#4A7C59` (green accent).
@@ -23,4 +24,4 @@ Village is a Norwegian peer-to-peer sharing and lending app. Users can list item
 - Airbnb-style UX patterns where applicable (date pickers, item cards).
 
 ## Current development focus
-Core borrowing/lending flow is the priority: loan thread reliability, calendar UX, and notification correctness.
+Connected Profiles (Tilkoblede profiler): schema, invite flow, co-owner loan management, item deduplication in feeds, 🔗 badge on item cards.

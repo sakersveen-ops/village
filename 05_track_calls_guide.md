@@ -23,10 +23,11 @@ track(Events.LOAN_REQUEST_SENT, {
 
 ### respondToLoan(loanId, accept)
 ```ts
-// Etter vellykket UPDATE:
+// Etter vellykket UPDATE (data ikke null):
 track(accept ? Events.LOAN_ACCEPTED : Events.LOAN_DECLINED, {
   loan_id: loanId,
   item_id: item.id,
+  handled_by: isCoOwner ? 'co_owner' : 'owner',
 })
 ```
 
@@ -44,7 +45,7 @@ track(Events.DATE_RANGE_SELECTED, {
 ### Når ItemCalendar vises for borrower — i JSX (eller i load()):
 ```ts
 // I useEffect/load når item er lastet og bruker ikke er eier:
-if (!isOwner) track(Events.CALENDAR_OPENED, { item_id: item.id })
+if (!hasOwnerAccess) track(Events.CALENDAR_OPENED, { item_id: item.id })
 ```
 
 ---
@@ -76,6 +77,14 @@ track(accept ? Events.PROPOSAL_ACCEPTED : Events.PROPOSAL_DECLINED, {
 track(Events.FRIEND_REQUEST_HANDLED, { accepted: accept })
 ```
 
+### handleConnectionRequest(n, accept)
+```ts
+// Etter vellykket UPDATE:
+track(accept ? Events.CONNECTION_ACCEPTED : Events.CONNECTION_DECLINED, {
+  connection_id: n.connection_id,
+})
+```
+
 ---
 
 ## src/app/profile/[userId]/page.tsx
@@ -90,6 +99,33 @@ track(Events.FRIEND_REQUEST_SENT)
 ```ts
 // Øverst i load() etter profil er hentet, men kun hvis ikke self:
 if (userId !== viewer?.id) track(Events.PROFILE_VIEWED, { profile_id: userId })
+```
+
+---
+
+## src/app/connections/page.tsx — ConnectionsPage (ny)
+
+### sendInvite(targetId)
+```ts
+track(Events.CONNECTION_INVITE_SENT, { target_id: targetId })
+```
+
+### disconnect()
+```ts
+track(Events.CONNECTION_DISCONNECTED)
+```
+
+---
+
+## Events-konstanter som må legges til i src/lib/track.ts
+
+```ts
+// Tilkoblede profiler
+CONNECTION_INVITE_SENT:    'connection_invite_sent',
+CONNECTION_ACCEPTED:       'connection_accepted',
+CONNECTION_DECLINED:       'connection_declined',
+CONNECTION_DISCONNECTED:   'connection_disconnected',
+MIRROR_ITEM_VIEWED:        'mirror_item_viewed',   // når bruker ser et item med 🔗-badge
 ```
 
 ---

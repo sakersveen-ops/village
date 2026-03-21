@@ -17,9 +17,9 @@ Per-loan messaging thread with proposals and quick suggestions.
 **Props**
 ```ts
 loan: any            // loan record (id, status, start_date, due_date, borrower_id, message, created_at)
-item: any            // item record (id, name, owner_id)
+item: any            // item record (id, name, owner_id, connected_profile_id)
 user: any            // Supabase auth user (id, email, user_metadata.name, user_metadata.avatar_url)
-isOwner: boolean
+isOwner: boolean     // true if user.id === item.owner_id || item.connected_profile_id
 onLoanUpdated: (loan: any) => void
 openProposal?: boolean       // triggers proposal form to open externally
 onProposalOpened?: () => void
@@ -131,11 +131,11 @@ hover: string | null         // drives in-range highlight
 
 **State**
 ```ts
-item: any                                           // items + profiles(id,name,email,avatar_url)
+item: any                                           // items + profiles(id,name,email,avatar_url) + connected_profile_id
 user: any                                           // auth user
 loan: any | null                                    // current user's loan on this item
 allLoans: any[]                                     // all non-terminal loans (for calendar)
-pendingLoans: any[]                                 // owner only: status pending|change_proposed
+pendingLoans: any[]                                 // owner/co-owner only: status pending|change_proposed
 proposalLoanId: string | null                       // which loan has external proposal form triggered
 blockedDates: string[]
 message: string                                     // pre-filled request message
@@ -145,13 +145,22 @@ sentRange: { start: string; end: string } | null    // passed to ItemCalendar as
 loading: boolean
 ```
 
+**Owner access**
+```ts
+const isOwner   = item.owner_id === user.id
+const isCoOwner = item.connected_profile_id === user.id
+const hasOwnerAccess = isOwner || isCoOwner
+// hasOwnerAccess gates: viewing pending loans, accepting/declining, marking returned, toggling blocked dates
+// isOwner only gates: editing item metadata (name, description, image, price)
+```
+
 **Key functions**
 ```ts
 load()
   // SELECT items + profiles WHERE id=$id
   // SELECT loans + profiles!loans_borrower_id_fkey WHERE item_id=$id AND status IN(pending,active,change_proposed) ORDER BY start_date
   // SELECT item_blocked_dates WHERE item_id=$id
-  // Sets: item, allLoans, loan (myLoan), pendingLoans (owner only)
+  // Sets: item, allLoans, loan (myLoan), pendingLoans (hasOwnerAccess)
 
 toggleBlock(dateStr)
   // DELETE or INSERT item_blocked_dates; updates blockedDates state
@@ -162,14 +171,17 @@ handleSelectRange(start, end)
 sendRequest()
   // INSERT loans (status:'pending', community_id: item.community_id)
   // INSERT loan_messages (type:'chat', body: message) — seeds thread
-  // INSERT notifications (type:'loan_request') to owner
+  // Routing: notify the owner the borrower is friends with (owner_id preferred if friends with both)
+  //   → INSERT notifications (type:'loan_request') to resolved recipient
   // Sets sentRange, loan, sent=true
 
 respondToLoan(loanId, accept)
-  // UPDATE loans SET status='active'|'declined'
+  // UPDATE loans SET status='active'|'declined' WHERE id=$loanId AND status='pending'
+  //   → if data is null: loan already handled → show toast "Denne forespørselen er allerede behandlet"
   // If accept: UPDATE items SET available=false
   // INSERT loan_messages (type:'system') with outcome text
   // INSERT notifications (type:'loan_accepted'|'loan_declined') to borrower
+  // If connected_profile_id exists: INSERT notifications (type:'loan_accepted_coowner'|'loan_declined_coowner') to the non-acting co-owner
 
 markReturned(loanId)
   // UPDATE loans SET status='returned'
@@ -178,9 +190,9 @@ markReturned(loanId)
 
 **Render decision tree**
 ```
-isOwner + available + no pending + no active → "Dette er din gjenstand" + access link
-isOwner + activeLoan                         → LoanThread (isOwner=true)
-isOwner + pendingLoans                       → per-loan: request card + Godta/Foreslå endring/Avslå + LoanThread
+hasOwnerAccess + available + no pending + no active → "Dette er din gjenstand" + access link
+hasOwnerAccess + activeLoan                         → LoanThread (isOwner=true)
+hasOwnerAccess + pendingLoans                       → per-loan: request card + Godta/Foreslå endring/Avslå + LoanThread
 
 borrower + loan.status==='pending'           → waiting banner + LoanThread
 borrower + loan.status==='change_proposed'   → proposal banner + LoanThread
@@ -195,42 +207,15 @@ borrower + no loan + unavailable             → "Utlånt akkurat nå"
   loans={allLoans}
   blockedDates={blockedDates}
   requestedRange={sentRange}
-  onToggleBlock={isOwner ? toggleBlock : undefined}
-  onSelectRange={!isOwner && !loan && item.available ? handleSelectRange : undefined}
-  isOwner={isOwner}
+  onToggleBlock={hasOwnerAccess ? toggleBlock : undefined}
+  onSelectRange={!hasOwnerAccess && !loan && item.available ? handleSelectRange : undefined}
+  isOwner={hasOwnerAccess}
 />
 ```
 
 ---
 
 ### `src/app/notifications/page.tsx` — `NotificationsPage`
-
-### `src/app/search/page.tsx` — `SearchPage`
-
-**State**
-```ts
-tab: 'gjenstander' | 'kretser' | 'personer'
-query: string
-items: any[]        // items + profiles(id,name,avatar_url)
-communities: any[]  // communities rows
-people: any[]       // profiles rows
-loading: boolean
-```
-
-**Search logic**
-```ts
-// Debounced 280ms on query + tab change
-// gjenstander: SELECT items + profiles WHERE available=true, ilike name if query>=2, limit 40
-// kretser:     SELECT communities WHERE is_public=true, ilike name if query>=2, limit 40
-// personer:    SELECT profiles WHERE name/username ilike query (only if query>=2), neq self, limit 30
-```
-
-**Behaviour**
-- Gjenstander pre-loads on mount (empty query = show all available)
-- Kretser pre-loads on mount
-- Personer requires ≥2 chars before querying
-- Back button uses router.back()
-- Search input autofocuses on mount
 
 **State**
 ```ts
@@ -242,7 +227,7 @@ loading: boolean
 
 **Tab split**
 ```ts
-ACTION_TYPES = ['loan_request', 'friend_request', 'join_request', 'friend_accepted']
+ACTION_TYPES = ['loan_request', 'friend_request', 'join_request', 'friend_accepted', 'connection_request']
 actions = notifications.filter(n =>  ACTION_TYPES.includes(n.type))
 updates = notifications.filter(n => !ACTION_TYPES.includes(n.type))
 ```
@@ -264,6 +249,47 @@ WHERE user_id=$me ORDER BY created_at DESC
 // Adds n.id to handledRequests set
 ```
 
+**handleConnectionRequest(n, accept)**
+```ts
+// UPDATE profile_connections SET status='active'|'disconnected', accepted_at=now() WHERE id=$connectionId
+// If accept:
+//   UPDATE items SET connected_profile_id=$partnerId WHERE owner_id=$me
+//   UPDATE items SET connected_profile_id=$me WHERE owner_id=$partnerId
+//   INSERT notifications (type:'connection_accepted') to inviter
+// Adds n.id to handledRequests set
+```
+
+---
+
+### `src/app/search/page.tsx` — `SearchPage`
+
+**State**
+```ts
+tab: 'gjenstander' | 'kretser' | 'personer'
+query: string
+items: any[]        // items + profiles(id,name,avatar_url)
+communities: any[]  // communities rows
+people: any[]       // profiles rows
+loading: boolean
+```
+
+**Search logic**
+```ts
+// Debounced 280ms on query + tab change
+// gjenstander: SELECT items + profiles WHERE available=true, ilike name if query>=2, limit 40
+//   → deduplicate: items with connected_profile_id shown once, attributed to owner_id
+// kretser:     SELECT communities WHERE is_public=true, ilike name if query>=2, limit 40
+// personer:    SELECT profiles WHERE name/username ilike query (only if query>=2), neq self, limit 30
+//   → sortProfilesWithConnectionFirst() applied to results
+```
+
+**Behaviour**
+- Gjenstander pre-loads on mount (empty query = show all available)
+- Kretser pre-loads on mount
+- Personer requires ≥2 chars before querying
+- Back button uses router.back()
+- Search input autofocuses on mount
+
 ---
 
 ### `src/app/profile/[userId]/page.tsx` — `UserProfilePage`
@@ -272,12 +298,12 @@ WHERE user_id=$me ORDER BY created_at DESC
 ```ts
 viewer: any / viewerProfile: any    // auth user + their profiles row
 profile: any                        // target user's profiles row
-items: any[]                        // access-filtered items
+items: any[]                        // access-filtered items (deduplicated for connected profiles)
 accessLevel: 'self'|'friend'|'friend_of_friend'|'community'|'stranger'
 isStarred / friendRequestSent / isFriend: boolean
 sharedCommunities: any[]    // community_members rows viewer and target share
 publicCommunities: any[]    // target's is_public communities viewer is NOT in
-mutualFriends: any[]        // profiles of common friends
+mutualFriends: any[]        // profiles of common friends — sortProfilesWithConnectionFirst() applied
 itemSearch: string
 itemCategory: string
 loading: boolean
@@ -298,14 +324,8 @@ access_type 'public'            → always
 access_type 'friends'           → isFriend
 access_type 'friends_of_friends'→ isFriend || isFoF
 access_type 'community'         → myComIds.has(rule.community_id)
-```
-
-**Filtered items (search + category)**
-```ts
-matchSearch = itemSearch.length < 2 || item.name/description.includes(itemSearch)
-matchCat    = !itemCategory || item.category === itemCategory
-// Search input only shown if items.length > 3
-// Category filter only shown if availableCategories.length > 1
+// Items with connected_profile_id: shown on both owners' profile pages with 🔗 badge
+// Deduplication in feeds: if viewer is friends with both owner and co-owner, show under owner_id only
 ```
 
 **Key functions**
@@ -322,12 +342,97 @@ sendFriendRequest()
 
 ---
 
+### `src/app/connections/page.tsx` — `ConnectionsPage` *(new)*
+
+**Purpose:** Manage the single connected profile (Tilkoblet profil). Accessible from settings or own profile.
+
+**State**
+```ts
+connection: any | null   // profile_connections row + partner profile
+loading: boolean
+searchQuery: string
+searchResults: any[]     // profiles for invite search
+inviteSent: boolean
+```
+
+**Key functions**
+```ts
+loadConnection()
+  // SELECT profile_connections WHERE (user_a=$me OR user_b=$me) AND status='active' LIMIT 1
+  // Joins partner profile
+
+sendInvite(targetId)
+  // INSERT profile_connections (user_a=min(me,target), user_b=max(me,target), initiated_by=$me, status='pending')
+  // INSERT notifications (type:'connection_request') to target
+  // Sets inviteSent=true
+  // track(Events.CONNECTION_INVITE_SENT)
+
+disconnect()
+  // UPDATE profile_connections SET status='disconnected'
+  // UPDATE items SET connected_profile_id=null WHERE owner_id=$me OR owner_id=$partnerId
+  // INSERT notifications (type:'connection_disconnected') to partner
+  // track(Events.CONNECTION_DISCONNECTED)
+```
+
+**Render**
+```
+active connection  → partner card with avatar, name, 🔗 label + "Koble fra" button (confirm modal)
+pending (outgoing) → "Venter på svar fra [name]" + cancel option
+pending (incoming) → handled via notifications page (Godta/Avslå inline)
+no connection      → search field + "Send tilkobling" CTA
+```
+
+---
+
+## Shared utilities
+
+### `src/lib/sortProfiles.ts` *(new)*
+```ts
+// Pins connected profile to top of any profile list, then sorts by name
+export function sortProfilesWithConnectionFirst(
+  profiles: any[],
+  connectedProfileId: string | null
+): any[] {
+  return [...profiles].sort((a, b) => {
+    if (a.id === connectedProfileId) return -1
+    if (b.id === connectedProfileId) return 1
+    return a.name.localeCompare(b.name, 'no')
+  })
+}
+// Usage: friend lists, mutual friends, community member lists, people search results
+// Rendering: connected profile row prefixed with 🔗 before name
+```
+
+### Item deduplication utility
+```ts
+// Applied in feeds, search, community item lists
+// Items with connected_profile_id are shown once:
+//   - If viewer friends with owner_id only → attributed to owner
+//   - If viewer friends with connected_profile_id only → attributed to co-owner
+//   - If viewer friends with both → attributed to owner_id
+//   - If viewer friends with neither (public item) → attributed to owner_id
+// Never shown twice regardless of access path
+```
+
+### Loan request routing
+```ts
+// On sendRequest(): resolve notification recipient
+const friendOfOwner   = viewerFriendIds.includes(item.owner_id)
+const friendOfCoOwner = item.connected_profile_id && viewerFriendIds.includes(item.connected_profile_id)
+const notifyUserId = friendOfOwner ? item.owner_id
+  : friendOfCoOwner ? item.connected_profile_id
+  : item.owner_id  // fallback (public item, no friendship)
+// Only one notification inserted; both owners can act on the loan via item page
+```
+
+---
+
 ## DB Tables
 
 | Table | Key columns | Notes |
 |---|---|---|
 | `profiles` | id, name, username, email, avatar_url | 1:1 with auth.users |
-| `items` | id, owner_id, name, category, description, image_url, price, vipps_number, available, community_id | |
+| `items` | id, owner_id, name, category, description, image_url, price, vipps_number, available, community_id, **connected_profile_id** | `connected_profile_id` → nullable FK to profiles; set symmetrically on both partners' items when connection activates |
 | `loans` | id, item_id, owner_id, borrower_id, status, start_date, due_date, message, community_id | status: pending/active/change_proposed/declined/returned |
 | `loan_messages` | id, loan_id, sender_id, type, body, metadata (jsonb), created_at | FK sender_id→profiles named `_sender_fkey`; type: chat/change_proposal/system |
 | `notifications` | id, user_id, type, title, body, loan_id, action_url, read | |
@@ -338,21 +443,26 @@ sendFriendRequest()
 | `item_blocked_dates` | item_id, date | |
 | `item_access` | item_id, access_type, community_id | access_type: public/friends/friends_of_friends/community |
 | `starred_users` | user_id, starred_id | |
+| **`profile_connections`** | id, user_a, user_b, status, initiated_by, created_at, accepted_at | status: pending/active/disconnected; UNIQUE(user_a,user_b); CHECK(user_a < user_b); max one active per user |
 
 ## Notification types
 
-| type | inserted when |
-|---|---|
-| `loan_request` | borrower sends request |
-| `loan_accepted` / `loan_declined` | owner responds to pending loan |
-| `loan_message` | chat message sent in thread |
-| `loan_change_proposal` | proposal sent |
-| `proposal_accepted` / `proposal_declined` | proposal responded to |
-| `friend_request` | friend request sent |
-| `friend_accepted` | request accepted |
-| `join_request` | community join |
-| `join_accepted` / `join_declined` | community response |
-| `starred` | user starred |
+| type | recipient | inserted when |
+|---|---|---|
+| `loan_request` | owner or co-owner (friend of borrower) | borrower sends request |
+| `loan_accepted` / `loan_declined` | borrower | either owner or co-owner responds |
+| `loan_accepted_coowner` / `loan_declined_coowner` | non-acting co-owner | the other owner acts on a loan |
+| `loan_message` | counterpart | chat message sent in thread |
+| `loan_change_proposal` | counterpart | proposal sent |
+| `proposal_accepted` / `proposal_declined` | proposal sender | proposal responded to |
+| `friend_request` | target | friend request sent |
+| `friend_accepted` | requester | request accepted |
+| `join_request` | community admin | community join |
+| `join_accepted` / `join_declined` | applicant | community response |
+| `starred` | target | user starred |
+| **`connection_request`** | invitee | connection invite sent |
+| **`connection_accepted`** | inviter | invite accepted |
+| **`connection_disconnected`** | both partners | either party disconnects |
 
 ## Analytics & Tracking
 
@@ -385,7 +495,7 @@ track(event: string, properties?: Record<string, unknown>): void
 | `v_item_metrics` | Antall ting lagt ut per uke |
 
 
-## Tillegg til 02_architecture.md
+---
 
 ### `src/app/schedule/page.tsx` — `SchedulePage`
 
@@ -417,16 +527,16 @@ type Loan = {
 
 **Queries**
 ```ts
-// Utlån (jeg er owner)
+// Utlån (jeg er owner eller co-owner)
 SELECT loans + items + profiles!loans_borrower_id_fkey
-WHERE owner_id=$me AND status IN('pending','active','change_proposed')
+WHERE (owner_id=$me OR items.connected_profile_id=$me) AND status IN('pending','active','change_proposed')
 
 // Innlån (jeg er borrower)
 SELECT loans + items + profiles!loans_owner_id_fkey
 WHERE borrower_id=$me AND status IN('pending','active','change_proposed')
 
 // Historikk utlån
-SELECT ... WHERE owner_id=$me AND status IN('returned','declined')
+SELECT ... WHERE (owner_id=$me OR items.connected_profile_id=$me) AND status IN('returned','declined')
 ORDER BY due_date DESC LIMIT 30
 
 // Historikk innlån
@@ -448,4 +558,3 @@ const normalize = (rows, role) => rows.map(r => ({ ...r, role, counterpart: r.pr
 - Filtrerer begge lister samtidig
 
 **Routing:** `/schedule` — lenkes fra stats-boksen "avtaler" i `profile/page.tsx`
-

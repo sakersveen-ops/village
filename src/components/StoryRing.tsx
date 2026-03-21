@@ -9,9 +9,11 @@ interface Story {
   type: 'category' | 'custom'
   category: string | null
   cover_url: string | null
+  cover_text: string | null
   slides: {
     item_id: string
     sort_order: number
+    caption: string | null
     items: {
       id: string
       name: string
@@ -46,8 +48,8 @@ export default function StoryRing({ ownerId, isOwner, canView = false, onCreateS
       const { data } = await supabase
         .from('item_stories')
         .select(`
-          id, title, type, category, cover_url, sort_order,
-          item_story_slides(item_id, sort_order,
+          id, title, type, category, cover_url, cover_text, sort_order,
+          item_story_slides(item_id, sort_order, caption,
             items(id, name, image_url, category, available, price)
           )
         `)

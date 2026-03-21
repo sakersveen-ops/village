@@ -83,10 +83,38 @@ export default function NavBar() {
       const coveredLoanIds = new Set((loanRequestNotifs || []).map((n: any) => n.loan_id))
       const uncoveredLoans = (pendingLoans || []).filter((l: any) => !coveredLoanIds.has(l.id)).length
       setUnread((notifCount || 0) + uncoveredLoans)
+
+      return user.id
     }
-    load()
+
+    let channel: any = null
+
+    load().then(userId => {
+      if (!userId) return
+      const supabase = createClient()
+      channel = supabase
+        .channel('navbar_notifications')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${userId}`,
+          },
+          () => { load() }
+        )
+        .subscribe()
+    })
+
     const interval = setInterval(load, 30000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      if (channel) {
+        const supabase = createClient()
+        supabase.removeChannel(channel)
+      }
+    }
   }, [])
 
   const signOut = async () => {

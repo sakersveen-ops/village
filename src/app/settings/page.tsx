@@ -151,14 +151,21 @@ export default function SettingsPage() {
     const supabase = createClient()
     const userA = user.id < targetId ? user.id : targetId
     const userB = user.id < targetId ? targetId : user.id
+
+    // Clear any stale disconnected row to avoid unique constraint violation
+    await supabase
+      .from('profile_connections')
+      .delete()
+      .eq('user_a', userA)
+      .eq('user_b', userB)
+      .eq('status', 'disconnected')
+
     const { data: newConn, error } = await supabase
       .from('profile_connections')
-      .upsert(
-        { user_a: userA, user_b: userB, initiated_by: user.id, status: 'pending' },
-        { onConflict: 'user_a,user_b' }
-      )
+      .insert({ user_a: userA, user_b: userB, initiated_by: user.id, status: 'pending' })
       .select()
       .single()
+
     if (error || !newConn) { setConnActionLoading(false); return }
 
     await supabase.from('notifications').insert({
@@ -178,6 +185,7 @@ export default function SettingsPage() {
     track(Events.CONNECTION_INVITE_SENT, { target_id: targetId })
     setConnActionLoading(false)
   }
+  
 
   const cancelInvite = async () => {
     if (!pendingOutgoing) return

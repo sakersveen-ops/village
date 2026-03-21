@@ -628,7 +628,7 @@ export default function CommunityPage() {
                 </div>
               )}
             </div>
-            </div>
+            
 
             {/* Danger zone */}
             <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(185,28,28,0.2)' }}>

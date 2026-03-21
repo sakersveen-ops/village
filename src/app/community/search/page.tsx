@@ -211,7 +211,7 @@ export default function CommunitiesPage() {
             {isAdmin && (
               <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium mt-1.5"
                 style={{ background: 'rgba(196,103,58,0.85)', color: 'white' }}>
-                ⭐ Admin
+                🔑 Admin
               </span>
             )}
           </div>
@@ -300,7 +300,7 @@ export default function CommunitiesPage() {
                   color: filterAdminOnly ? 'white' : 'var(--terra)',
                   letterSpacing: '-0.01em',
                 }}>
-                {filterAdminOnly ? '⭐ Jeg administrerer' : 'Alle kretser'}
+                {filterAdminOnly ? '🔑 Jeg administrerer' : 'Alle kretser'}
               </button>
             )}
           </div>

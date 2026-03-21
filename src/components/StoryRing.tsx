@@ -1,4 +1,4 @@
-xq'use client'
+'use client'
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import StoryViewer from './StoryViewer'

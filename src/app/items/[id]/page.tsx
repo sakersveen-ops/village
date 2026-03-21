@@ -118,32 +118,41 @@ export default function ItemPage() {
     if (!message.trim() || !startDate || !dueDate) return
     const t = startTimer()
     const supabase = createClient()
-    const { data: newLoan } = await supabase.from('loans').insert({
-      item_id: id,
-      borrower_id: user.id,
-      owner_id: item.owner_id,
-      message,
-      start_date: startDate,
-      due_date: dueDate,
-      status: 'pending',
-      community_id: item.community_id || null,
-    }).select().single()
 
-    if (newLoan?.id) {
+      const { data: newLoan, error: loanError } = await supabase
+        .from('loans')
+        .insert({
+          item_id: id,
+          borrower_id: user.id,
+          owner_id: item.owner_id,
+          message,
+          start_date: startDate,
+          due_date: dueDate,
+          status: 'pending',
+          community_id: item.community_id || null,
+        })
+        .select()
+        .single()
+
+      if (loanError || !newLoan?.id) {
+        console.error('Loan insert failed:', loanError)
+        alert('Kunne ikke sende forespørsel. Sjekk at du er logget inn og prøv igjen.')
+        return
+      }
+
       await supabase.from('loan_messages').insert({
         loan_id: newLoan.id,
         sender_id: user.id,
         type: 'chat',
         body: message,
       })
-    }
 
     await supabase.from('notifications').insert({
       user_id: item.owner_id,
       type: 'loan_request',
       title: 'Ny låneforespørsel',
-      body: `${user.email?.split('@')[0]} vil låne «${item.name}»`,
-      loan_id: newLoan?.id,
+      body: `${user.user_metadata?.name || user.email?.split('@')[0]} vil låne «${item.name}»`,
+      loan_id: newLoan.id,
     })
 
     setSentRange({ start: startDate, end: dueDate })
@@ -152,7 +161,9 @@ export default function ItemPage() {
     track(Events.LOAN_REQUEST_SENT, {
       item_id: item.id,
       duration_ms: t(),
-      days_requested: Math.ceil((new Date(dueDate).getTime() - new Date(startDate).getTime()) / 86400000),
+      days_requested: Math.ceil(
+        (new Date(dueDate).getTime() - new Date(startDate).getTime()) / 86400000
+      ),
     })
   }
 

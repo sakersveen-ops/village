@@ -31,10 +31,14 @@ export default function FeedPage() {
 
       const { data: friendships } = await supabase
         .from('friendships')
-        .select('user_b')
-        .eq('user_a', user.id)
-      const friendIds = new Set((friendships || []).map((f: any) => f.user_b))
-      setFriendCount(friendIds.size)
+        .select('user_a, user_b')
+        .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
+
+      const friendIds = new Set(
+        (friendships || []).map((f: any) =>
+          f.user_a === user.id ? f.user_b : f.user_a
+        )
+      )
 
       const { data: items, error } = await supabase
         .from('items')

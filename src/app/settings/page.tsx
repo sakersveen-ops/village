@@ -102,13 +102,35 @@ export default function SettingsPage() {
     if (q.trim().length < 2) { setConnSearchResults([]); return }
     setConnSearchLoading(true)
     const supabase = createClient()
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, name, email, avatar_url')
-      .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
-      .neq('id', user.id)
-      .limit(8)
-    setConnSearchResults(data || [])
+
+    // 1. My friends only
+    const { data: friendships } = await supabase
+      .from('friendships')
+      .select('user_b, profiles!friendships_user_b_fkey(id, name, email, avatar_url)')
+      .eq('user_a', user.id)
+
+    const friends = (friendships || []).map((f: any) => f.profiles).filter(Boolean)
+
+    // 2. Find all users already in an active/pending connection (to exclude them)
+    const { data: existingConns } = await supabase
+      .from('profile_connections')
+      .select('user_a, user_b')
+      .in('status', ['active', 'pending'])
+
+    const alreadyConnected = new Set<string>()
+    ;(existingConns || []).forEach((c: any) => {
+      alreadyConnected.add(c.user_a)
+      alreadyConnected.add(c.user_b)
+    })
+
+    // 3. Filter friends by query and exclude already-connected
+    const lq = q.toLowerCase()
+    const results = friends.filter((p: any) =>
+      !alreadyConnected.has(p.id) &&
+      (p.name?.toLowerCase().includes(lq) || p.email?.toLowerCase().includes(lq))
+    )
+
+    setConnSearchResults(results.slice(0, 8))
     setConnSearchLoading(false)
   }, [user])
 

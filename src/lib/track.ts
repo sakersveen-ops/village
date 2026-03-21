@@ -104,12 +104,18 @@ export const Events = {
   FRIEND_REQUEST_SENT:    'friend_request_sent',
   FRIEND_REQUEST_HANDLED: 'friend_request_handled',
 
+  // Tilkoblede profiler
+  CONNECTION_INVITE_SENT:  'connection_invite_sent',
+  CONNECTION_ACCEPTED:     'connection_accepted',
+  CONNECTION_DECLINED:     'connection_declined',
+  CONNECTION_DISCONNECTED: 'connection_disconnected',
+
   // Sesjon
   SESSION_START:          'session_start',
 
   // Feed
-  FEED_VIEWED: 'feed_viewed',
-  CATEGORY_FILTERED: 'category_filtered',
+  FEED_VIEWED:            'feed_viewed',
+  CATEGORY_FILTERED:      'category_filtered',
 } as const
 
 export type EventName = typeof Events[keyof typeof Events]

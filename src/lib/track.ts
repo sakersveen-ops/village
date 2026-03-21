@@ -136,7 +136,8 @@ export const Events = {
   PREMIUM_UPGRADED: 'premium_upgraded',
 
   ITEM_REQUEST_RESPONSE: 'item_request_response',
-  
+  ITEM_REQUEST_POSTED: 'item_request_posted',
+
 } as const
 
 export type EventName = typeof Events[keyof typeof Events]

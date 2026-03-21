@@ -49,7 +49,7 @@ export default function ItemPage() {
 
       const { data: item } = await supabase
         .from('items')
-        .select('*, profiles(id, name, email, avatar_url)')
+        .select('*, profiles!items_owner_id_fkey(id, name, email, avatar_url)')
         .eq('id', id)
         .single()
       setItem(item)

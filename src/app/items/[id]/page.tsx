@@ -199,13 +199,20 @@ export default function ItemPage() {
 
     if (!updated) {
       alert('Denne forespørselen er allerede behandlet.')
-      // Refresh pending loans to reflect reality
       const { data: fresh } = await supabase
         .from('loans').select('*, profiles!loans_borrower_id_fkey(id, name, email, avatar_url)')
         .eq('item_id', id).in('status', ['pending', 'change_proposed'])
       setPendingLoans(fresh || [])
       return
     }
+
+    // Merk loan_request-varselet som lest
+    await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('loan_id', loanId)
+      .eq('type', 'loan_request')
+      .eq('user_id', user.id)
 
     if (accept) {
       await supabase.from('items').update({ available: false }).eq('id', id)

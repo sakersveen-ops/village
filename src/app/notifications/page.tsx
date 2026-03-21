@@ -149,7 +149,14 @@ export default function NotificationsPage() {
         .order('created_at', { ascending: false })
       setNotifications(data || [])
 
-      await supabase.from('notifications').update({ read: true }).eq('user_id', user.id).eq('read', false)
+      // Merk kun ikke-handlingsvarsler som lest ved sidebesøk
+        await supabase
+          .from('notifications')
+          .update({ read: true })
+          .eq('user_id', user.id)
+          .eq('read', false)
+          .not('type', 'in', '("loan_request","friend_request","connection_request")')
+
       setLoading(false)
     }
     load()
@@ -192,6 +199,11 @@ export default function NotificationsPage() {
         body: 'Dere er nå venner',
       })
     }
+
+    // Merk varselet som lest
+    await supabase.from('notifications').update({ read: true }).eq('id', n.id)
+    setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
+
     track(Events.FRIEND_REQUEST_HANDLED, { accepted: accept })
     setHandledRequests(prev => new Set([...prev, n.id]))
   }
@@ -201,7 +213,6 @@ export default function NotificationsPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    // Find pending connection where I am the invitee
     const { data: conn } = await supabase
       .from('profile_connections')
       .select('*')
@@ -218,8 +229,6 @@ export default function NotificationsPage() {
         .update({ status: 'active', accepted_at: new Date().toISOString() })
         .eq('id', conn.id)
 
-      // Populate connected_profile_id on all items (trigger should handle this,
-      // but belt-and-suspenders in case of trigger latency)
       await supabase.from('items').update({ connected_profile_id: conn.user_b === user.id ? conn.user_a : conn.user_b })
         .eq('owner_id', user.id)
       await supabase.from('items').update({ connected_profile_id: user.id })
@@ -238,9 +247,12 @@ export default function NotificationsPage() {
       track(Events.CONNECTION_DECLINED, { connection_id: conn.id })
     }
 
+    // Merk varselet som lest
+    await supabase.from('notifications').update({ read: true }).eq('id', n.id)
+    setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
+
     setHandledRequests(prev => new Set([...prev, n.id]))
   }
-
   const groupByDate = (list: any[]) => {
     const today = new Date().toDateString()
     const yesterday = new Date(Date.now() - 86400000).toDateString()

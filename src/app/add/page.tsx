@@ -54,7 +54,7 @@ const MODES = [
   { id: 'shelf',  label: 'Bokhylle', icon: ModeIcons.shelf  },
 ]
 
-function AddPageInnerComponent() {
+function AddPageContent() {
   const [mode, setMode] = useState<'manual' | 'url' | 'image' | 'shelf'>('manual')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -672,7 +672,7 @@ Returner KUN JSON, ingen annen tekst.` }
   )
 }
 
-const AddPageInner = dynamic(() => Promise.resolve(AddPageInnerComponent), { ssr: false })
+const AddPageInner = dynamic(() => Promise.resolve(AddPageContent), { ssr: false })
 
 export default function AddPage() {
   return <AddPageInner />

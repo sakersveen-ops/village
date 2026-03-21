@@ -153,7 +153,10 @@ export default function SettingsPage() {
     const userB = user.id < targetId ? targetId : user.id
     const { data: newConn, error } = await supabase
       .from('profile_connections')
-      .insert({ user_a: userA, user_b: userB, initiated_by: user.id, status: 'pending' })
+      .upsert(
+        { user_a: userA, user_b: userB, initiated_by: user.id, status: 'pending' },
+        { onConflict: 'user_a,user_b' }
+      )
       .select()
       .single()
     if (error || !newConn) { setConnActionLoading(false); return }

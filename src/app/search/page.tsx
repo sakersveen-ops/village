@@ -43,7 +43,7 @@ export default function SearchPage() {
     if (t === 'gjenstander') {
       let query = supabase
         .from('items')
-        .select('id, name, category, image_url, available, owner_id, profiles(id, name, avatar_url)')
+        .select('id, name, category, image_url, available, owner_id, profiles!items_owner_id_fkey(id, name, avatar_url)')
         .eq('available', true)
         .order('created_at', { ascending: false })
         .limit(40)

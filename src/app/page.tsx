@@ -34,7 +34,7 @@ export default function FeedPage() {
         .select('user_a, user_b')
         .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
 
-      cconst friendIds = new Set(
+      const friendIds = new Set(
         (friendships || []).map((f: any) =>
           f.user_a === user.id ? f.user_b : f.user_a
         )

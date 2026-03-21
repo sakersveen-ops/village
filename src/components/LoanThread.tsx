@@ -87,7 +87,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
       (payload) => {
         const newMsg = payload.new as any
         setMessages(prev => {
-          // Ikke legg til hvis vi allerede har den (optimistisk eller ekte)
           const exists = prev.some(m => m.id === newMsg.id || (m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id))
           if (exists) return prev.map(m =>
             m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id
@@ -96,6 +95,20 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
           )
           return [...prev, newMsg]
         })
+
+        // Hent profiles for meldinger fra andre
+        if (newMsg.sender_id !== user.id) {
+          supabase
+            .from('profiles')
+            .select('id, name, email, avatar_url')
+            .eq('id', newMsg.sender_id)
+            .single()
+            .then(({ data: profile }) => {
+              setMessages(prev => prev.map(m =>
+                m.id === newMsg.id ? { ...m, profiles: profile } : m
+              ))
+            })
+        }
       }
     )
     .subscribe()

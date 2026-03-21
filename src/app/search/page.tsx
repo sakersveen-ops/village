@@ -91,14 +91,12 @@ export default function SearchPage() {
     setLoading(false)
   }, [user])
 
-  // Debounce search
   useEffect(() => {
     if (!ready) return
     const timer = setTimeout(() => search(query, tab), 280)
     return () => clearTimeout(timer)
   }, [query, tab, ready, search])
 
-  // Pre-load items on mount
   useEffect(() => {
     if (ready) search('', 'gjenstander')
   }, [ready])
@@ -115,6 +113,9 @@ export default function SearchPage() {
     inputRef.current?.focus()
   }
 
+  // Spør kretsen CTA — vises når søk på gjenstander gir 0 treff eller alltid under resultater
+  const showAskCta = tab === 'gjenstander' && query.trim().length >= 2
+
   if (!ready) return null
 
   return (
@@ -130,7 +131,6 @@ export default function SearchPage() {
           </svg>
         </button>
 
-        {/* Search input inside header */}
         <div style={{ flex: 1, margin: '0 10px', position: 'relative' }}>
           <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.4, flexShrink: 0 }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,#2C1A0E)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -208,13 +208,16 @@ export default function SearchPage() {
             {query.length > 0 && query.length < 2 && (
               <p style={{ color: 'var(--terra-mid)', fontSize: 13, textAlign: 'center', padding: '32px 0' }}>Skriv minst 2 tegn for å søke</p>
             )}
+
+            {/* Ingen treff */}
             {items.length === 0 && query.length >= 2 && (
-              <div style={{ textAlign: 'center', padding: '48px 0' }}>
+              <div style={{ textAlign: 'center', padding: '40px 0 24px' }}>
                 <p style={{ fontSize: 32, marginBottom: 8 }}>🔍</p>
                 <p style={{ color: 'var(--terra-dark)', fontWeight: 600, fontSize: 15 }}>Ingen treff på «{query}»</p>
                 <p style={{ color: 'var(--terra-mid)', fontSize: 13, marginTop: 4 }}>Prøv et annet søkeord</p>
               </div>
             )}
+
             {items.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {query.length < 2 && (
@@ -261,6 +264,39 @@ export default function SearchPage() {
                 ))}
               </div>
             )}
+
+            {/* ── Spør kretsen CTA ── */}
+            {showAskCta && (
+              <Link
+                href={`/ask?name=${encodeURIComponent(query.trim())}`}
+                style={{ textDecoration: 'none', display: 'block', marginTop: items.length > 0 ? 16 : 0 }}
+              >
+                <div style={{
+                  borderRadius: 16,
+                  border: '1.5px dashed rgba(196,103,58,0.35)',
+                  background: 'rgba(196,103,58,0.04)',
+                  padding: '14px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+                    background: 'rgba(196,103,58,0.10)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 20,
+                  }}>🙋</div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ color: 'var(--terra-dark)', fontSize: 13, fontWeight: 600, margin: 0 }}>
+                      Finner du ikke det du leter etter?
+                    </p>
+                    <p style={{ color: 'var(--terra)', fontSize: 12, margin: '2px 0 0', fontWeight: 500 }}>
+                      Spør kretsen om «{query.trim()}» →
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            )}
           </>
         )}
 
@@ -282,7 +318,8 @@ export default function SearchPage() {
             {communities.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {communities.map(c => (
-                  <Link key={c.id} href={`/community/${c.id}`} style={{ textDecoration: 'none' }}>
+                  // BUG FIX: var /community/${c.id}, skal være /communities/${c.id}
+                  <Link key={c.id} href={`/communities/${c.id}`} style={{ textDecoration: 'none' }}>
                     <div style={{
                       borderRadius: 16,
                       border: '1px solid rgba(196,103,58,0.18)',

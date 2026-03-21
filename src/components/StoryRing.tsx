@@ -8,7 +8,7 @@ interface Story {
   id: string
   title: string
   type: 'category' | 'custom'
-  category: string | nullxqdqd
+  category: string | null
   cover_url: string | null
   cover_text: string | null
   slides: {

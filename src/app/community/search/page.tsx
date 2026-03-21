@@ -248,64 +248,64 @@ export default function CommunitiesPage() {
   return (
     <div className="max-w-lg mx-auto">
 
-      <header className="page-header glass"
-        style={{ borderRadius: '0 0 20px 20px', position: 'sticky', top: 0, zIndex: 40 }}>
-        <div className="px-4 pt-10 pb-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h1 className="page-header-title font-display">Kretser</h1>
-            <Link href="/community/new">
+      {/* Search + filter subbar — sits below NavBar's header */}
+      <div
+        className="glass"
+        style={{ position: 'sticky', top: 60, zIndex: 30, borderRadius: '0 0 16px 16px', borderTop: 'none' }}
+      >
+        <div className="px-4 py-3 flex items-center gap-2">
+          <div className="flex items-center overflow-hidden transition-all duration-300 rounded-full"
+            style={{
+              width: searchOpen ? '100%' : '40px',
+              minWidth: searchOpen ? '0' : '40px',
+              flexShrink: searchOpen ? 1 : 0,
+              background: 'rgba(255,248,243,0.7)',
+              border: '1px solid rgba(196,103,58,0.2)',
+              backdropFilter: 'blur(10px)',
+            }}>
+            <button onClick={searchOpen ? undefined : openSearch}
+              className="w-10 h-9 flex items-center justify-center flex-shrink-0" aria-label="Søk">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--terra)" strokeWidth="2.2" strokeLinecap="round">
+                <circle cx="11" cy="11" r="7" /><path d="m21 21-4.35-4.35" />
+              </svg>
+            </button>
+            {searchOpen && (
+              <>
+                <input ref={searchInputRef} type="text" value={query}
+                  onChange={e => search(e.target.value)}
+                  placeholder="Søk etter kretser…"
+                  className="flex-1 bg-transparent text-sm text-[#2C1A0E] outline-none placeholder:text-[#C4A882] pr-2"
+                  style={{ minWidth: 0 }} />
+                <button onClick={closeSearch}
+                  className="w-9 h-9 flex items-center justify-center flex-shrink-0 text-[#9C7B65] text-xl pr-1">×</button>
+              </>
+            )}
+          </div>
+
+          {!searchOpen && adminCommunities.length > 0 && (
+            <button onClick={() => setFilterAdminOnly(f => !f)}
+              className="flex-1 h-9 rounded-full text-xs font-medium transition-all whitespace-nowrap"
+              style={{
+                background: filterAdminOnly ? 'var(--terra)' : 'rgba(255,248,243,0.7)',
+                border: `1px solid ${filterAdminOnly ? 'var(--terra)' : 'rgba(196,103,58,0.2)'}`,
+                backdropFilter: 'blur(10px)',
+                color: filterAdminOnly ? 'white' : 'var(--terra)',
+                letterSpacing: '-0.01em',
+              }}>
+              {filterAdminOnly ? '🔑 Jeg administrerer' : 'Alle kretser'}
+            </button>
+          )}
+
+          {!searchOpen && (
+            <Link href="/community/new" className="flex-shrink-0">
               <div className="h-9 px-4 flex items-center justify-center rounded-full text-xs font-medium whitespace-nowrap"
                 style={{ background: 'var(--terra)', color: 'white', letterSpacing: '-0.01em' }}>
                 + Opprett
               </div>
             </Link>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex items-center overflow-hidden transition-all duration-300 rounded-full"
-              style={{
-                width: searchOpen ? '100%' : '40px',
-                minWidth: searchOpen ? '0' : '40px',
-                flexShrink: searchOpen ? 1 : 0,
-                background: 'rgba(255,248,243,0.7)',
-                border: '1px solid rgba(196,103,58,0.2)',
-                backdropFilter: 'blur(10px)',
-              }}>
-              <button onClick={searchOpen ? undefined : openSearch}
-                className="w-10 h-9 flex items-center justify-center flex-shrink-0" aria-label="Søk">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--terra)" strokeWidth="2.2" strokeLinecap="round">
-                  <circle cx="11" cy="11" r="7" /><path d="m21 21-4.35-4.35" />
-                </svg>
-              </button>
-              {searchOpen && (
-                <>
-                  <input ref={searchInputRef} type="text" value={query}
-                    onChange={e => search(e.target.value)}
-                    placeholder="Søk etter kretser…"
-                    className="flex-1 bg-transparent text-sm text-[#2C1A0E] outline-none placeholder:text-[#C4A882] pr-2"
-                    style={{ minWidth: 0 }} />
-                  <button onClick={closeSearch}
-                    className="w-9 h-9 flex items-center justify-center flex-shrink-0 text-[#9C7B65] text-xl pr-1">×</button>
-                </>
-              )}
-            </div>
-
-            {!searchOpen && adminCommunities.length > 0 && (
-              <button onClick={() => setFilterAdminOnly(f => !f)}
-                className="flex-1 h-9 rounded-full text-xs font-medium transition-all whitespace-nowrap"
-                style={{
-                  background: filterAdminOnly ? 'var(--terra)' : 'rgba(255,248,243,0.7)',
-                  border: `1px solid ${filterAdminOnly ? 'var(--terra)' : 'rgba(196,103,58,0.2)'}`,
-                  backdropFilter: 'blur(10px)',
-                  color: filterAdminOnly ? 'white' : 'var(--terra)',
-                  letterSpacing: '-0.01em',
-                }}>
-                {filterAdminOnly ? '🔑 Jeg administrerer' : 'Alle kretser'}
-              </button>
-            )}
-          </div>
+          )}
         </div>
-      </header>
+      </div>
 
       <div className="px-4 pt-5 pb-28 flex flex-col gap-8">
 

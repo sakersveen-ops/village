@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { track, Events } from '@/lib/track'
+export const dynamic = 'force-dynamic'
 
 const CATEGORIES = [
   { id: 'barn',     label: 'Barn',    emoji: '🧸' },

@@ -20,6 +20,7 @@ const CAT_EMOJI: Record<string, string> = {
 
 export default function FeedPage() {
   const [user, setUser]               = useState<any>(null)
+  const [profile, setProfile]         = useState<any>(null)
   const [feedItems, setFeedItems]     = useState<any[]>([])
   const [friendCount, setFriendCount] = useState(0)
   const [requests, setRequests]       = useState<any[]>([])
@@ -35,6 +36,13 @@ export default function FeedPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setUser(user)
+
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', user.id)
+        .single()
+      setProfile(profileData)
 
       const { data: friendships } = await supabase
         .from('friendships')
@@ -110,22 +118,28 @@ export default function FeedPage() {
 
   const closeStory = () => setActiveStory(null)
 
-  const handleHarDette = () => {
+  const handleHarDette = async () => {
     if (!activeStory) return
     const params = new URLSearchParams()
     if (activeStory.item_name) params.set('name', activeStory.item_name)
     if (activeStory.category) params.set('category', activeStory.category)
     if (activeStory.image_url) params.set('image_url', activeStory.image_url)
-    // Varsle den som spurte
+
+    const senderName = profile?.name || user?.email?.split('@')[0] || 'Noen'
+
     try {
       const supabase = createClient()
-      supabase.from('notifications').insert({
+      const { error } = await supabase.from('notifications').insert({
         user_id: activeStory.user_id,
         type: 'item_request_response',
         title: 'Noen har dette!',
-        body: `${user?.user_metadata?.name || user?.email?.split('@')[0]} svarte på forespørselen din om ${activeStory.item_name}`,
+        body: `${senderName} svarte på forespørselen din om ${activeStory.item_name}`,
       })
-    } catch { /* ignorer */ }
+      if (error) console.error('Notification error:', error)
+    } catch (e) {
+      console.error('Notification exception:', e)
+    }
+
     track(Events.ITEM_REQUEST_RESPONSE, { request_id: activeStory.id })
     router.push(`/add?${params.toString()}`)
   }

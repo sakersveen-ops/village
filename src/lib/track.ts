@@ -116,6 +116,27 @@ export const Events = {
   // Feed
   FEED_VIEWED:            'feed_viewed',
   CATEGORY_FILTERED:      'category_filtered',
+
+  // VillagePoints
+  POINTS_EARNED: 'points_earned',           // { user_id, delta, reason }
+  POINTS_SPENT: 'points_spent',             // { user_id, delta, item_id }
+
+  // Bodega browsing
+  BODEGA_OPENED: 'bodega_opened',
+  BODEGA_ITEM_VIEWED: 'bodega_item_viewed', // { item_id }
+  BODEGA_LOAN_STARTED: 'bodega_loan_started', // { item_id, points_cost, days }
+  BODEGA_LOAN_COMPLETED: 'bodega_loan_completed', // { item_id, loan_id }
+
+  // Item requests
+  BODEGA_REQUEST_SUBMITTED: 'bodega_request_submitted', // { item_name }
+  BODEGA_REQUEST_VOTED: 'bodega_request_voted',          // { request_id }
+
+  // Premium
+  PREMIUM_UPGRADE_TAPPED: 'premium_upgrade_tapped',
+  PREMIUM_UPGRADED: 'premium_upgraded',
+
+  ITEM_REQUEST_RESPONSE: 'item_request_response',
+  
 } as const
 
 export type EventName = typeof Events[keyof typeof Events]

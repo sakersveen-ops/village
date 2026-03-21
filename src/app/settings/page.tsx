@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { track, Events } from '@/lib/track'
 
 const INTERESTS = ['Barn', 'Bøker', 'Kjoler', 'Verktøy', 'Sport', 'Musikk', 'Matlaging', 'Hage', 'Kunst', 'Reise']
-const LANGUAGES = [{ id: 'no', label: 'Norsk' }, { id: 'en', label: 'English' }]
 
 function Avatar({ profile, size = 40 }: { profile: any; size?: number }) {
   const name = profile?.name || profile?.email?.split('@')[0] || '?'
@@ -21,17 +20,37 @@ function Avatar({ profile, size = 40 }: { profile: any; size?: number }) {
   )
 }
 
+function Toggle({ value, onChange }: { value: boolean; onChange: () => void }) {
+  return (
+    <button
+      onClick={onChange}
+      role="switch"
+      aria-checked={value}
+      className="flex-shrink-0"
+      style={{
+        width: 44, height: 26, borderRadius: 13,
+        background: value ? 'var(--terra)' : 'rgba(196,103,58,0.15)',
+        border: `1.5px solid ${value ? 'var(--terra)' : 'rgba(196,103,58,0.25)'}`,
+        position: 'relative', transition: 'background 200ms, border-color 200ms', cursor: 'pointer',
+      }}
+    >
+      <span style={{
+        position: 'absolute', top: 3, left: value ? 19 : 3,
+        width: 18, height: 18, borderRadius: '50%',
+        background: '#fff', boxShadow: '0 1px 3px rgba(44,26,14,0.2)',
+        transition: 'left 200ms',
+      }} />
+    </button>
+  )
+}
+
 export default function SettingsPage() {
   const [profile, setProfile] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [newPassword, setNewPassword] = useState('')
-  const [passwordSaved, setPasswordSaved] = useState(false)
 
-  // Connected profile
   const [connection, setConnection] = useState<any>(null)
   const [connectedProfile, setConnectedProfile] = useState<any>(null)
   const [pendingOutgoing, setPendingOutgoing] = useState<any>(null)
@@ -60,7 +79,6 @@ export default function SettingsPage() {
   }, [])
 
   const loadConnection = async (supabase: any, userId: string) => {
-    // Active
     const { data: active } = await supabase
       .from('profile_connections')
       .select('*')
@@ -72,13 +90,11 @@ export default function SettingsPage() {
     if (active) {
       setConnection(active)
       const partnerId = active.user_a === userId ? active.user_b : active.user_a
-      const { data: partner } = await supabase
-        .from('profiles').select('id, name, email, avatar_url').eq('id', partnerId).single()
+      const { data: partner } = await supabase.from('profiles').select('id, name, email, avatar_url').eq('id', partnerId).single()
       setConnectedProfile(partner)
       return
     }
 
-    // Pending outgoing
     const { data: outgoing } = await supabase
       .from('profile_connections')
       .select('*')
@@ -91,8 +107,7 @@ export default function SettingsPage() {
     if (outgoing) {
       setPendingOutgoing(outgoing)
       const partnerId = outgoing.user_a === userId ? outgoing.user_b : outgoing.user_a
-      const { data: partner } = await supabase
-        .from('profiles').select('id, name, email, avatar_url').eq('id', partnerId).single()
+      const { data: partner } = await supabase.from('profiles').select('id, name, email, avatar_url').eq('id', partnerId).single()
       setConnectedProfile(partner)
     }
   }
@@ -103,7 +118,6 @@ export default function SettingsPage() {
     setConnSearchLoading(true)
     const supabase = createClient()
 
-    // 1. My friends only
     const { data: friendships } = await supabase
       .from('friendships')
       .select('user_b, profiles!friendships_user_b_fkey(id, name, email, avatar_url)')
@@ -111,7 +125,6 @@ export default function SettingsPage() {
 
     const friends = (friendships || []).map((f: any) => f.profiles).filter(Boolean)
 
-    // 2. Find all users already in an active/pending connection (to exclude them)
     const { data: existingConns } = await supabase
       .from('profile_connections')
       .select('user_a, user_b')
@@ -123,7 +136,6 @@ export default function SettingsPage() {
       alreadyConnected.add(c.user_b)
     })
 
-    // 3. Filter friends by query and exclude already-connected
     const lq = q.toLowerCase()
     const results = friends.filter((p: any) =>
       !alreadyConnected.has(p.id) &&
@@ -151,7 +163,8 @@ export default function SettingsPage() {
       type: 'connection_request',
       title: '🔗 Tilkoblingsforespørsel',
       body: `${profile?.name || user.email?.split('@')[0]} vil koble profiler med deg`,
-      action_url: '/settings',
+      action_url: '/notifications',
+      metadata: { connection_id: newConn.id },
     })
 
     setPendingOutgoing(newConn)
@@ -179,7 +192,6 @@ export default function SettingsPage() {
     setConnActionLoading(true)
     const supabase = createClient()
     await supabase.from('profile_connections').update({ status: 'disconnected' }).eq('id', connection.id)
-    // Clear connected_profile_id on all items (trigger handles this, but belt-and-suspenders)
     await supabase.from('items').update({ connected_profile_id: null })
       .or(`owner_id.eq.${user.id},owner_id.eq.${connectedProfile?.id}`)
 
@@ -218,7 +230,6 @@ export default function SettingsPage() {
       phone: profile.phone,
       address: profile.address,
       interests: profile.interests,
-      language: profile.language,
       privacy_profile: profile.privacy_profile,
       privacy_search: profile.privacy_search,
       notif_loan_request: profile.notif_loan_request,
@@ -231,66 +242,60 @@ export default function SettingsPage() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const changePassword = async () => {
-    if (!newPassword || newPassword.length < 6) return
-    const supabase = createClient()
-    await supabase.auth.updateUser({ password: newPassword })
-    setNewPassword('')
-    setPasswordSaved(true)
-    setTimeout(() => setPasswordSaved(false), 2000)
-  }
-
-  const deleteAccount = async () => {
-    const supabase = createClient()
-    await supabase.from('profiles').delete().eq('id', user.id)
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
-
-  if (loading) return <div className="p-8 text-center text-[#9C7B65]">Laster…</div>
+  if (loading) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
 
   const hasActiveConnection = !!connection
   const hasPendingOutgoing = !!pendingOutgoing && !connection
 
   return (
-    <div className="max-w-lg mx-auto pb-24">
-      <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-4 z-10">
-        <button onClick={() => router.back()} className="text-[#C4673A] text-sm mb-2 block">← Tilbake</button>
-        <h1 className="text-xl font-bold text-[#2C1A0E]">Innstillinger</h1>
+    <div className="max-w-lg mx-auto">
+      <div className="sticky top-0 z-40 page-header glass" style={{ borderRadius: '0 0 20px 20px' }}>
+        <button onClick={() => router.back()} className="text-sm mb-2 block" style={{ color: 'var(--terra)' }}>← Tilbake</button>
+        <h1 className="page-header-title font-display">Innstillinger</h1>
       </div>
 
       <div className="px-4 pt-5 flex flex-col gap-6">
 
         {/* ── Profil ── */}
         <section>
-          <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">Profil</p>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--terra-mid)' }}>Profil</p>
           <div className="flex flex-col gap-3">
+            {/* Email — read-only, first */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-[#9C7B65]">Visningsnavn</label>
+              <label className="text-xs" style={{ color: 'var(--terra-mid)' }}>E-post</label>
+              <div className="glass rounded-xl px-4 py-3 text-sm" style={{ color: 'var(--terra-mid)', opacity: 0.8 }}>
+                {user?.email}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs" style={{ color: 'var(--terra-mid)' }}>Visningsnavn</label>
               <input
                 value={profile?.name || ''}
                 onChange={e => update('name', e.target.value)}
                 placeholder="Ditt navn"
-                className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
+                className="glass rounded-xl px-4 py-3 text-sm outline-none"
+                style={{ color: 'var(--terra-dark)' }}
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-[#9C7B65]">Telefon</label>
+              <label className="text-xs" style={{ color: 'var(--terra-mid)' }}>Telefon</label>
               <input
                 value={profile?.phone || ''}
                 onChange={e => update('phone', e.target.value)}
                 placeholder="+47 000 00 000"
                 type="tel"
-                className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
+                className="glass rounded-xl px-4 py-3 text-sm outline-none"
+                style={{ color: 'var(--terra-dark)' }}
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-[#9C7B65]">Adresse</label>
+              <label className="text-xs" style={{ color: 'var(--terra-mid)' }}>Adresse</label>
               <input
                 value={profile?.address || ''}
                 onChange={e => update('address', e.target.value)}
                 placeholder="Gate, postnummer, by"
-                className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
+                className="glass rounded-xl px-4 py-3 text-sm outline-none"
+                style={{ color: 'var(--terra-dark)' }}
               />
             </div>
           </div>
@@ -298,49 +303,36 @@ export default function SettingsPage() {
 
         {/* ── Tilkoblet profil ── */}
         <section>
-          <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-1">Tilkoblet profil</p>
-          <p className="text-xs text-[#9C7B65] mb-3">
+          <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--terra-mid)' }}>Tilkoblet profil</p>
+          <p className="text-xs mb-3" style={{ color: 'var(--terra-mid)' }}>
             Koble til én annen bruker (f.eks. partner) slik at gjenstander deles automatisk mellom profilene.
           </p>
 
-          {/* ACTIVE CONNECTION */}
           {hasActiveConnection && connectedProfile && (
-            <div className="bg-white rounded-2xl border border-[#E8DDD0] overflow-hidden">
+            <div className="glass rounded-2xl overflow-hidden">
               <div className="px-4 py-3 flex items-center gap-3">
                 <Avatar profile={connectedProfile} size={44} />
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-[#2C1A0E] flex items-center gap-1.5">
+                  <p className="font-semibold text-sm flex items-center gap-1.5" style={{ color: 'var(--terra-dark)' }}>
                     🔗 {connectedProfile.name || connectedProfile.email?.split('@')[0]}
                   </p>
-                  <p className="text-xs text-[#9C7B65] mt-0.5">Tilkoblet – gjenstander deles automatisk</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Tilkoblet – gjenstander deles automatisk</p>
                 </div>
               </div>
-              <div className="border-t border-[#E8DDD0] px-4 py-3">
+              <div className="px-4 py-3" style={{ borderTop: '1px solid rgba(196,103,58,0.12)' }}>
                 {!showDisconnectConfirm ? (
-                  <button
-                    onClick={() => setShowDisconnectConfirm(true)}
-                    className="text-sm text-red-400 font-medium"
-                  >
+                  <button onClick={() => setShowDisconnectConfirm(true)} className="text-sm font-medium text-red-400">
                     Koble fra…
                   </button>
                 ) : (
                   <div>
-                    <p className="text-sm font-medium text-[#2C1A0E] mb-1">Er du sikker?</p>
-                    <p className="text-xs text-[#9C7B65] mb-3">
-                      Gjenstander vil ikke lenger vises på hverandres profiler.
-                    </p>
+                    <p className="text-sm font-medium mb-1" style={{ color: 'var(--terra-dark)' }}>Er du sikker?</p>
+                    <p className="text-xs mb-3" style={{ color: 'var(--terra-mid)' }}>Gjenstander vil ikke lenger vises på hverandres profiler.</p>
                     <div className="flex gap-2">
-                      <button
-                        onClick={disconnect}
-                        disabled={connActionLoading}
-                        className="flex-1 bg-red-500 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
-                      >
+                      <button onClick={disconnect} disabled={connActionLoading} className="flex-1 bg-red-500 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50">
                         {connActionLoading ? 'Kobler fra…' : 'Ja, koble fra'}
                       </button>
-                      <button
-                        onClick={() => setShowDisconnectConfirm(false)}
-                        className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-2.5 text-sm"
-                      >
+                      <button onClick={() => setShowDisconnectConfirm(false)} className="btn-glass flex-1 py-2.5 text-sm rounded-xl">
                         Avbryt
                       </button>
                     </div>
@@ -350,31 +342,23 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* PENDING OUTGOING */}
           {hasPendingOutgoing && connectedProfile && (
-            <div className="bg-white rounded-2xl border border-[#E8DDD0] px-4 py-3 flex items-center gap-3">
+            <div className="glass rounded-2xl px-4 py-3 flex items-center gap-3">
               <Avatar profile={connectedProfile} size={40} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[#2C1A0E]">
-                  {connectedProfile.name || connectedProfile.email?.split('@')[0]}
-                </p>
-                <p className="text-xs text-[#9C7B65] mt-0.5">Venter på svar…</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>{connectedProfile.name || connectedProfile.email?.split('@')[0]}</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Venter på svar…</p>
               </div>
-              <button
-                onClick={cancelInvite}
-                disabled={cancelLoading}
-                className="text-xs px-3 py-1.5 rounded-full border border-[#E8DDD0] text-[#9C7B65] disabled:opacity-50"
-              >
+              <button onClick={cancelInvite} disabled={cancelLoading} className="btn-glass text-xs px-3 py-1.5 rounded-full disabled:opacity-50">
                 {cancelLoading ? '…' : 'Trekk tilbake'}
               </button>
             </div>
           )}
 
-          {/* NO CONNECTION — search + invite */}
           {!hasActiveConnection && !hasPendingOutgoing && (
             <div className="flex flex-col gap-2">
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#9C7B65]">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--terra-mid)' }}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                   </svg>
@@ -383,39 +367,26 @@ export default function SettingsPage() {
                   value={connSearchQuery}
                   onChange={e => searchConnProfiles(e.target.value)}
                   placeholder="Søk etter navn eller e-post…"
-                  className="w-full bg-white border border-[#E8DDD0] rounded-xl pl-10 pr-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
+                  className="glass w-full rounded-xl pl-10 pr-4 py-3 text-sm outline-none"
+                  style={{ color: 'var(--terra-dark)' }}
                 />
               </div>
 
-              {connSearchLoading && (
-                <p className="text-xs text-[#9C7B65] px-1">Søker…</p>
-              )}
+              {connSearchLoading && <p className="text-xs px-1" style={{ color: 'var(--terra-mid)' }}>Søker…</p>}
 
               {connSearchResults.length > 0 && (
                 <div className="flex flex-col gap-2">
                   {connSearchResults.map(result => (
-                    <div
-                      key={result.id}
-                      className="bg-white rounded-2xl border border-[#E8DDD0] px-4 py-3 flex items-center gap-3"
-                    >
+                    <div key={result.id} className="glass rounded-2xl px-4 py-3 flex items-center gap-3">
                       <Avatar profile={result} size={40} />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm text-[#2C1A0E] truncate">
-                          {result.name || result.email?.split('@')[0]}
-                        </p>
-                        <p className="text-xs text-[#9C7B65] truncate">{result.email}</p>
+                        <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{result.name || result.email?.split('@')[0]}</p>
+                        <p className="text-xs truncate" style={{ color: 'var(--terra-mid)' }}>{result.email}</p>
                       </div>
                       {connInviteSentTo === result.id ? (
-                        <span className="text-xs px-3 py-1.5 rounded-full bg-[#FAF7F2] text-[#9C7B65]">
-                          Sendt ✓
-                        </span>
+                        <span className="text-xs px-3 py-1.5 rounded-full" style={{ background: 'rgba(196,103,58,0.08)', color: 'var(--terra-mid)' }}>Sendt ✓</span>
                       ) : (
-                        <button
-                          onClick={() => sendConnectionInvite(result.id, result.name)}
-                          disabled={connActionLoading}
-                          className="text-xs px-3 py-1.5 rounded-full font-medium disabled:opacity-50"
-                          style={{ background: 'var(--terra)', color: '#fff' }}
-                        >
+                        <button onClick={() => sendConnectionInvite(result.id, result.name)} disabled={connActionLoading} className="btn-primary text-xs px-3 py-1.5 rounded-full disabled:opacity-50">
                           🔗 Koble til
                         </button>
                       )}
@@ -425,7 +396,7 @@ export default function SettingsPage() {
               )}
 
               {connSearchQuery.length >= 2 && !connSearchLoading && connSearchResults.length === 0 && (
-                <p className="text-xs text-[#9C7B65] px-1">Ingen brukere funnet.</p>
+                <p className="text-xs px-1" style={{ color: 'var(--terra-mid)' }}>Ingen brukere funnet.</p>
               )}
             </div>
           )}
@@ -433,7 +404,7 @@ export default function SettingsPage() {
 
         {/* ── Interesser ── */}
         <section>
-          <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">Interesser</p>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--terra-mid)' }}>Interesser</p>
           <div className="flex flex-wrap gap-2">
             {INTERESTS.map(interest => {
               const selected = (profile?.interests || []).includes(interest)
@@ -441,9 +412,7 @@ export default function SettingsPage() {
                 <button
                   key={interest}
                   onClick={() => toggleInterest(interest)}
-                  className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
-                    selected ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
-                  }`}
+                  className={`pill ${selected ? 'active' : ''} text-sm`}
                 >
                   {interest}
                 </button>
@@ -452,31 +421,13 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* ── Språk ── */}
-        <section>
-          <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">Språk</p>
-          <div className="flex gap-2">
-            {LANGUAGES.map(lang => (
-              <button
-                key={lang.id}
-                onClick={() => update('language', lang.id)}
-                className={`flex-1 py-3 rounded-xl text-sm font-medium border transition-colors ${
-                  profile?.language === lang.id ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'
-                }`}
-              >
-                {lang.label}
-              </button>
-            ))}
-          </div>
-        </section>
-
         {/* ── Personvern ── */}
         <section>
-          <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">Personvern</p>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--terra-mid)' }}>Personvern</p>
           <div className="flex flex-col gap-3">
-            <div className="bg-white rounded-2xl px-4 py-3 shadow-sm">
-              <p className="text-sm font-medium text-[#2C1A0E] mb-2">Hvem kan se profilen din?</p>
-              <div className="flex flex-col gap-2">
+            <div className="glass rounded-2xl px-4 py-3">
+              <p className="text-sm font-medium mb-3" style={{ color: 'var(--terra-dark)' }}>Hvem kan se profilen din?</p>
+              <div className="flex flex-col gap-1">
                 {[
                   { id: 'public', label: '🌍 Alle' },
                   { id: 'friends', label: '👥 Kun venner' },
@@ -485,108 +436,79 @@ export default function SettingsPage() {
                   <button
                     key={opt.id}
                     onClick={() => update('privacy_profile', opt.id)}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${
-                      profile?.privacy_profile === opt.id ? 'bg-[#FFF0E6] text-[#C4673A] font-medium' : 'text-[#6B4226]'
-                    }`}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors text-left"
+                    style={{
+                      background: profile?.privacy_profile === opt.id ? 'rgba(196,103,58,0.10)' : 'transparent',
+                      color: profile?.privacy_profile === opt.id ? 'var(--terra)' : 'var(--terra-dark)',
+                      fontWeight: profile?.privacy_profile === opt.id ? 600 : 400,
+                    }}
                   >
-                    {profile?.privacy_profile === opt.id && <span>✓</span>}
+                    {profile?.privacy_profile === opt.id && <span style={{ color: 'var(--terra)' }}>✓</span>}
                     {opt.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="flex items-center justify-between bg-white rounded-2xl px-4 py-3 shadow-sm">
+            <div className="glass rounded-2xl px-4 py-3 flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-medium text-[#2C1A0E]">Synlig i søk</p>
-                <p className="text-xs text-[#9C7B65] mt-0.5">Andre kan finne deg via navn eller e-post</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Synlig i søk</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Andre kan finne deg via navn eller e-post</p>
               </div>
-              <button
-                onClick={() => update('privacy_search', !profile?.privacy_search)}
-                className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${profile?.privacy_search ? 'bg-[#C4673A]' : 'bg-[#E8DDD0]'}`}
-              >
-                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${profile?.privacy_search ? 'translate-x-7' : 'translate-x-1'}`} />
-              </button>
+              <Toggle value={!!profile?.privacy_search} onChange={() => update('privacy_search', !profile?.privacy_search)} />
             </div>
           </div>
         </section>
 
         {/* ── Varsler ── */}
         <section>
-          <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">Varsler</p>
-          <div className="bg-white rounded-2xl shadow-sm divide-y divide-[#E8DDD0]">
+          <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--terra-mid)' }}>Varsler</p>
+          <div className="glass rounded-2xl divide-y" style={{ '--tw-divide-opacity': 1 } as any}>
             {[
               { key: 'notif_loan_request', label: 'Nye låneforespørsler' },
               { key: 'notif_loan_accepted', label: 'Forespørsel godtatt/avslått' },
               { key: 'notif_friend_request', label: 'Venneforespørsler' },
               { key: 'notif_join_request', label: 'Forespørsler om å bli med i krets' },
-            ].map(({ key, label }) => (
-              <div key={key} className="flex items-center justify-between px-4 py-3">
-                <p className="text-sm text-[#2C1A0E]">{label}</p>
-                <button
-                  onClick={() => update(key, !profile?.[key])}
-                  className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${profile?.[key] ? 'bg-[#C4673A]' : 'bg-[#E8DDD0]'}`}
-                >
-                  <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${profile?.[key] ? 'translate-x-7' : 'translate-x-1'}`} />
-                </button>
+            ].map(({ key, label }, i, arr) => (
+              <div
+                key={key}
+                className="flex items-center justify-between px-4 py-3"
+                style={i < arr.length - 1 ? { borderBottom: '1px solid rgba(196,103,58,0.10)' } : undefined}
+              >
+                <p className="text-sm" style={{ color: 'var(--terra-dark)' }}>{label}</p>
+                <Toggle value={!!profile?.[key]} onChange={() => update(key, !profile?.[key])} />
               </div>
             ))}
           </div>
         </section>
 
-        {/* ── Endre passord ── */}
-        <section>
-          <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">Endre passord</p>
-          <div className="flex gap-2">
-            <input
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-              type="password"
-              placeholder="Nytt passord (min. 6 tegn)"
-              className="flex-1 bg-white border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
-            />
-            <button
-              onClick={changePassword}
-              disabled={newPassword.length < 6}
-              className="bg-[#2C1A0E] text-white rounded-xl px-4 py-3 text-sm font-medium disabled:opacity-30"
-            >
-              {passwordSaved ? '✓' : 'Lagre'}
-            </button>
-          </div>
-        </section>
-
         {/* ── Lagre ── */}
-        <button
-          onClick={save}
-          disabled={saving}
-          className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium disabled:opacity-50"
-        >
+        <button onClick={save} disabled={saving} className="btn-primary w-full py-3 rounded-xl font-medium disabled:opacity-50">
           {saved ? '✓ Lagret!' : saving ? 'Lagrer…' : 'Lagre endringer'}
         </button>
 
-        {/* ── Slett konto ── */}
-        <section className="pb-4">
-          <p className="text-xs font-semibold text-[#9C7B65] uppercase tracking-wide mb-3">Faresone</p>
-          {!showDeleteConfirm ? (
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="w-full bg-white border border-red-200 text-red-400 rounded-xl py-3 text-sm font-medium"
-            >
-              Slett konto
-            </button>
-          ) : (
-            <div className="bg-red-50 rounded-2xl p-4 border border-red-200">
-              <p className="text-sm text-red-600 font-medium mb-1">Er du sikker?</p>
-              <p className="text-xs text-red-400 mb-4">Dette kan ikke angres. All data slettes permanent.</p>
-              <div className="flex gap-2">
-                <button onClick={deleteAccount} className="flex-1 bg-red-500 text-white rounded-xl py-2.5 text-sm font-medium">Ja, slett kontoen</button>
-                <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-2.5 text-sm">Avbryt</button>
-              </div>
-            </div>
-          )}
+        {/* ── Konto ── */}
+        <section className="flex flex-col gap-3 pb-4">
+          <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Konto</p>
+          <button
+            onClick={() => router.push('/settings/change-password')}
+            className="glass w-full rounded-xl py-3 text-sm font-medium text-left px-4 flex items-center justify-between"
+            style={{ color: 'var(--terra-dark)' }}
+          >
+            <span>Endre passord</span>
+            <span style={{ color: 'var(--terra-mid)' }}>→</span>
+          </button>
+          <button
+            onClick={() => router.push('/settings/delete-account')}
+            className="glass w-full rounded-xl py-3 text-sm font-medium text-left px-4"
+            style={{ color: '#ef4444' }}
+          >
+            Slett konto
+          </button>
         </section>
 
       </div>
+      <div className="nav-spacer" />
     </div>
   )
 }

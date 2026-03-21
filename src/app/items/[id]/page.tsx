@@ -124,8 +124,6 @@ export default function ItemPage() {
     const t = startTimer()
     const supabase = createClient()
 
-    // Resolve who to notify: the owner the borrower is friends with
-    // Prefer owner_id; fall back to connected_profile_id; fall back to owner_id
     let notifyUserId = item.owner_id
     if (item.connected_profile_id) {
       const { data: friendWithOwner } = await supabase
@@ -188,7 +186,6 @@ export default function ItemPage() {
   const respondToLoan = async (loanId: string, accept: boolean) => {
     const supabase = createClient()
 
-    // Concurrency lock: only succeeds if still pending
     const { data: updated } = await supabase
       .from('loans')
       .update({ status: accept ? 'active' : 'declined' })
@@ -206,7 +203,6 @@ export default function ItemPage() {
       return
     }
 
-    // Merk loan_request-varselet som lest
     await supabase
       .from('notifications')
       .update({ read: true })
@@ -232,7 +228,6 @@ export default function ItemPage() {
         : `❌ Forespørsel avslått`,
     })
 
-    // Notify borrower
     await supabase.from('notifications').insert({
       user_id: targetLoan?.borrower_id,
       type: accept ? 'loan_accepted' : 'loan_declined',
@@ -241,7 +236,6 @@ export default function ItemPage() {
       loan_id: loanId,
     })
 
-    // Notify the other co-owner if connection exists
     const nonActorId = isCoOwner ? item.owner_id : item.connected_profile_id
     if (nonActorId) {
       await supabase.from('notifications').insert({
@@ -379,7 +373,7 @@ export default function ItemPage() {
             </div>
             {hasOwnerAccess && (
               <button onClick={() => markReturned(activeLoan.id)}
-                className="btn-sm btn-accept mt-3 w-full">
+                className="btn-primary mt-3 w-full">
                 ✓ Bekreft at {activeLoan.profiles?.name || activeLoan.profiles?.email?.split('@')[0]} har levert tilbake
               </button>
             )}
@@ -388,6 +382,13 @@ export default function ItemPage() {
 
         {item.description && (
           <p style={{ color: 'var(--terra-dark)', letterSpacing: '-0.01em' }}>{item.description}</p>
+        )}
+
+        {item.location && (
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 15 }}>📍</span>
+            <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>{item.location}</p>
+          </div>
         )}
 
         {/* ── Owner card ── */}

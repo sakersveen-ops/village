@@ -1,5 +1,5 @@
 'use client'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
@@ -16,7 +16,6 @@ type BookResult = {
   genre: string; isbn: string; image_url: string; selected: boolean
 }
 
-// 2D stroke icons matching glass design language
 const ModeIcons = {
   manual: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -60,6 +59,7 @@ export default function AddPage() {
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('')
   const [subcategory, setSubcategory] = useState('')
+  const [location, setLocation] = useState('')
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState('')
   const [suggestedImageUrl, setSuggestedImageUrl] = useState('')
@@ -75,6 +75,17 @@ export default function AddPage() {
   const [saveProgress, setSaveProgress] = useState(0)
   const shelfRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
+
+  useEffect(() => {
+    const load = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: prof } = await supabase.from('profiles').select('location').eq('id', user.id).single()
+      if (prof?.location) setLocation(prof.location)
+    }
+    load()
+  }, [])
 
   const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -281,6 +292,7 @@ Returner KUN JSON, ingen annen tekst.` }
         category: 'bok',
         image_url: book.image_url || null,
         available: true,
+        location: location || null,
       })
       done++
       setSaveProgress(Math.round((done / selected.length) * 100))
@@ -335,6 +347,7 @@ Returner KUN JSON, ingen annen tekst.` }
       category,
       image_url: image_url || null,
       available: true,
+      location: location || null,
     }).select().single()
 
     if (insertError || !item?.id) {
@@ -382,7 +395,7 @@ Returner KUN JSON, ingen annen tekst.` }
                 {book.isbn      && <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>ISBN: {book.isbn}</p>}
                 {book.description && <p className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--terra-dark)' }}>{book.description}</p>}
               </div>
-              <div className={`w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center`}
+              <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center"
                 style={{ background: book.selected ? 'var(--terra)' : 'transparent', border: book.selected ? 'none' : '2px solid rgba(196,103,58,0.25)' }}>
                 {book.selected && <span className="text-white text-xs">✓</span>}
               </div>
@@ -413,7 +426,7 @@ Returner KUN JSON, ingen annen tekst.` }
   return (
     <div className="max-w-lg mx-auto pb-24">
 
-      {/* ── Header: modusvelger med tittel ───────────────────────────────── */}
+      {/* ── Header ── */}
       <div className="page-header glass sticky top-0 z-10 px-4 pb-3"
         style={{ borderRadius: '0 0 20px 20px', paddingTop: 12, display: 'flex', flexDirection: 'column' }}>
         <h1 className="font-display font-bold mb-3"
@@ -490,7 +503,7 @@ Returner KUN JSON, ingen annen tekst.` }
               <button onClick={() => setSelectedImage('own')}
                 className={`rounded-2xl overflow-hidden border-2 transition-colors ${selectedImage === 'own' ? 'border-[var(--terra)]' : 'border-transparent'}`}>
                 <img src={imagePreview} className="w-full h-32 object-cover" />
-                <div className={`py-2 text-xs font-medium text-center ${selectedImage === 'own' ? 'text-white' : ''}`}
+                <div className="py-2 text-xs font-medium text-center"
                   style={{ background: selectedImage === 'own' ? 'var(--terra)' : 'rgba(196,103,58,0.08)', color: selectedImage === 'own' ? 'white' : 'var(--terra-dark)' }}>
                   {selectedImage === 'own' ? '✓ Ditt bilde' : 'Ditt bilde'}
                 </div>
@@ -566,11 +579,9 @@ Returner KUN JSON, ingen annen tekst.` }
           </div>
         )}
 
-        {/* Skjema (manual, url, image etter analyse) */}
+        {/* Skjema */}
         {(mode === 'manual' || mode === 'url' || (mode === 'image' && (imageAnalyzed || (!imageAnalyzing && imagePreview)))) && (
           <>
-
-
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Kategori *</label>
               <div className="flex flex-wrap gap-2">
@@ -582,7 +593,7 @@ Returner KUN JSON, ingen annen tekst.` }
                 ))}
               </div>
             </div>
-            
+
             {selectedCat && selectedCat.subcategories.length > 0 && (
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Underkategori</label>
@@ -597,12 +608,11 @@ Returner KUN JSON, ingen annen tekst.` }
               </div>
             )}
 
-             {imageAnalyzed && (
+            {imageAnalyzed && (
               <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
                 <span className="status-pill active">✓ Gjenkjent – sjekk og juster under</span>
               </div>
             )}
-
 
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Tittel *</label>
@@ -610,10 +620,6 @@ Returner KUN JSON, ingen annen tekst.` }
                 className="glass outline-none"
                 style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)' }} />
             </div>
-
-           
-
-            
 
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Beskrivelse</label>
@@ -623,9 +629,13 @@ Returner KUN JSON, ingen annen tekst.` }
                 style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)' }} />
             </div>
 
-            
-
-            
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Sted</label>
+              <input value={location} onChange={e => setLocation(e.target.value)}
+                placeholder="Hvor hentes gjenstanden?"
+                className="glass outline-none"
+                style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)' }} />
+            </div>
 
             {/* Bilde – kun manual og url */}
             {(mode === 'manual' || mode === 'url') && (

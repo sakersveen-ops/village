@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -14,10 +14,17 @@ const CATEGORIES = [
   { id: 'annet',    label: 'Annet',   emoji: '📦' },
 ]
 
+const CAT_EMOJI: Record<string, string> = {
+  barn: '🧸', kjole: '👗', 'verktøy': '🔧', bok: '📚', annet: '📦',
+}
+
 export default function FeedPage() {
   const [user, setUser]               = useState<any>(null)
   const [feedItems, setFeedItems]     = useState<any[]>([])
   const [friendCount, setFriendCount] = useState(0)
+  const [requests, setRequests]       = useState<any[]>([])
+  const [seenIds, setSeenIds]         = useState<Set<string>>(new Set())
+  const [activeStory, setActiveStory] = useState<any | null>(null)
   const [loading, setLoading]         = useState(true)
   const [activeCategory, setActiveCategory] = useState('all')
   const router = useRouter()
@@ -39,7 +46,7 @@ export default function FeedPage() {
           f.user_a === user.id ? f.user_b : f.user_a
         )
       )
-      setFriendCount(friendIds.size)  
+      setFriendCount(friendIds.size)
 
       const { data: items, error } = await supabase
         .from('items')
@@ -56,13 +63,74 @@ export default function FeedPage() {
         if (aFriend !== bFriend) return aFriend - bFriend
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       })
-
       setFeedItems(sorted)
       track(Events.FEED_VIEWED, { item_count: sorted.length })
+
+      // Hent item_requests fra venner — graceful fallback hvis tabell mangler
+      try {
+        const { data: reqs } = await supabase
+          .from('item_requests')
+          .select('*, profiles!item_requests_user_id_fkey(id, name, avatar_url)')
+          .in('user_id', [...friendIds])
+          .eq('status', 'open')
+          .gt('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false })
+          .limit(20)
+
+        if (reqs) setRequests(reqs)
+
+        // Hent hvilke requests brukeren allerede har sett
+        const { data: views } = await supabase
+          .from('item_request_views')
+          .select('request_id')
+          .eq('user_id', user.id)
+        setSeenIds(new Set((views || []).map((v: any) => v.request_id)))
+      } catch {
+        // item_requests-tabellen finnes ikke ennå — ignorer
+      }
+
       setLoading(false)
     }
     load()
   }, [])
+
+  // Merk story som sett og åpne drawer
+  const openStory = async (req: any) => {
+    setActiveStory(req)
+    if (seenIds.has(req.id)) return
+    setSeenIds(prev => new Set([...prev, req.id]))
+    try {
+      const supabase = createClient()
+      await supabase.from('item_request_views').insert({
+        user_id: user.id,
+        request_id: req.id,
+      })
+    } catch { /* tabell mangler */ }
+  }
+
+  const closeStory = () => setActiveStory(null)
+
+  const handleHarDette = () => {
+    if (!activeStory) return
+    const params = new URLSearchParams()
+    if (activeStory.item_name) params.set('name', activeStory.item_name)
+    if (activeStory.category) params.set('category', activeStory.category)
+    if (activeStory.image_url) params.set('image_url', activeStory.image_url)
+    // Varsle den som spurte
+    try {
+      const supabase = createClient()
+      supabase.from('notifications').insert({
+        user_id: activeStory.user_id,
+        type: 'item_request_response',
+        title: 'Noen har dette!',
+        body: `${user?.user_metadata?.name || user?.email?.split('@')[0]} svarte på forespørselen din om ${activeStory.item_name}`,
+      })
+    } catch { /* ignorer */ }
+    track(Events.ITEM_REQUEST_RESPONSE, { request_id: activeStory.id })
+    router.push(`/add?${params.toString()}`)
+  }
+
+  // --- Derived values ---
 
   const countByCategory = (catId: string) => {
     if (catId === 'all') return feedItems.filter(i => i.available).length
@@ -109,12 +177,72 @@ export default function FeedPage() {
 
   const noFriends = friendCount === 0
   const noItems   = feedItems.length === 0
+  const hasNewRequests = requests.some(r => !seenIds.has(r.id))
 
   return (
     <div className="max-w-lg mx-auto">
       <div className="px-4 pt-5 flex flex-col gap-6">
 
-        {/* Tom tilstand: ingen venner */}
+        {/* ── RequestStory-rad ── */}
+        {requests.length > 0 && (
+          <div>
+            <div className="flex justify-between items-baseline mb-3">
+              <h2 className="font-display text-[#2C1A0E] text-base font-semibold">
+                Kretsen trenger
+              </h2>
+              {hasNewRequests && (
+                <span className="text-[10px] font-semibold text-[var(--terra)] uppercase tracking-wide">
+                  Nytt
+                </span>
+              )}
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4"
+              style={{ scrollbarWidth: 'none' }}>
+              {requests.map(req => {
+                const isSeen = seenIds.has(req.id)
+                const avatar = req.profiles?.avatar_url
+                const initials = (req.profiles?.name || '?')[0].toUpperCase()
+                return (
+                  <button
+                    key={req.id}
+                    onClick={() => openStory(req)}
+                    className="flex flex-col items-center gap-1.5 flex-shrink-0 w-16"
+                  >
+                    {/* Story-ring */}
+                    <div
+                      className="w-14 h-14 rounded-full flex items-center justify-center"
+                      style={{
+                        padding: '2px',
+                        background: isSeen
+                          ? 'rgba(156,123,101,0.3)'
+                          : 'var(--terra)',
+                        opacity: isSeen ? 0.5 : 1,
+                        transition: 'opacity 300ms ease',
+                      }}
+                    >
+                      <div className="w-full h-full rounded-full bg-[#FAF7F2] flex items-center justify-center overflow-hidden"
+                        style={{ padding: '2px' }}>
+                        {avatar ? (
+                          <img src={avatar} className="w-full h-full rounded-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full rounded-full bg-[#E8DDD0] flex items-center justify-center text-sm font-bold text-[#6B4226]">
+                            {initials}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {/* Kategori-emoji + kortet navn */}
+                    <span className="text-[10px] text-[#2C1A0E] text-center leading-tight w-full truncate">
+                      {CAT_EMOJI[req.category] ?? '📦'} {req.item_name}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Tom tilstand: ingen venner ── */}
         {noFriends && (
           <div className="glass rounded-[20px] p-8 text-center flex flex-col items-center gap-4">
             <span className="text-4xl">🏘️</span>
@@ -135,7 +263,7 @@ export default function FeedPage() {
           </div>
         )}
 
-        {/* Tom tilstand: har venner, ingen items */}
+        {/* ── Tom tilstand: har venner, ingen items ── */}
         {!noFriends && noItems && (
           <div className="glass rounded-[20px] p-8 text-center flex flex-col items-center gap-4">
             <span className="text-4xl">📭</span>
@@ -156,7 +284,7 @@ export default function FeedPage() {
           </div>
         )}
 
-        {/* Feed med innhold */}
+        {/* ── Feed med innhold ── */}
         {!noItems && (
           <>
             <div>
@@ -175,7 +303,6 @@ export default function FeedPage() {
                 const count = countByCategory(cat.id)
                 const isCatEmpty = cat.id !== 'all' && count === 0
                 const isActive = activeCategory === cat.id
-
                 return (
                   <button
                     key={cat.id}
@@ -239,7 +366,6 @@ export default function FeedPage() {
                           title={item.available ? 'Ledig' : 'Utlånt'}
                         />
                       </div>
-
                       <div className="item-card-body flex-1 min-w-0" style={{ background: 'transparent' }}>
                         <p className="item-name font-display text-[#2C1A0E] text-sm font-semibold truncate">
                           {item.name}
@@ -248,7 +374,6 @@ export default function FeedPage() {
                           {item.profiles?.name ?? 'Ukjent'} · {relativeTime(item.created_at)}
                         </p>
                       </div>
-
                       <span className="text-[#9C7B65] text-sm flex-shrink-0">›</span>
                     </div>
                   </Link>
@@ -272,6 +397,77 @@ export default function FeedPage() {
         )}
 
       </div>
+
+      {/* ── Story-drawer ── */}
+      {activeStory && (
+        <>
+          <div
+            className="modal-backdrop"
+            onClick={closeStory}
+          />
+          <div className="drawer-sheet glass-heavy" style={{ borderRadius: '24px 24px 0 0' }}>
+            <div className="drawer-handle" />
+
+            {/* Header: avatar + navn + tidspunkt */}
+            <div className="flex items-center gap-3 px-5 pt-2 pb-4">
+              <Link href={`/profile/${activeStory.user_id}`} onClick={closeStory}>
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-[#E8DDD0] flex items-center justify-center flex-shrink-0">
+                  {activeStory.profiles?.avatar_url
+                    ? <img src={activeStory.profiles.avatar_url} className="w-full h-full object-cover" />
+                    : <span className="text-sm font-bold text-[#6B4226]">
+                        {(activeStory.profiles?.name || '?')[0].toUpperCase()}
+                      </span>}
+                </div>
+              </Link>
+              <div className="flex-1 min-w-0">
+                <Link href={`/profile/${activeStory.user_id}`} onClick={closeStory}>
+                  <p className="font-semibold text-[#2C1A0E] text-sm truncate">
+                    {activeStory.profiles?.name ?? 'Ukjent'}
+                  </p>
+                </Link>
+                <p className="text-[10px] text-[#9C7B65]">{relativeTime(activeStory.created_at)}</p>
+              </div>
+              <button onClick={closeStory} className="text-[#9C7B65] text-lg px-1">✕</button>
+            </div>
+
+            {/* Bilde hvis finnes */}
+            {activeStory.image_url && (
+              <div className="mx-5 mb-4 rounded-[16px] overflow-hidden" style={{ aspectRatio: '4/3' }}>
+                <img src={activeStory.image_url} className="w-full h-full object-cover" />
+              </div>
+            )}
+
+            {/* Innhold */}
+            <div className="px-5 pb-2">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xl">{CAT_EMOJI[activeStory.category] ?? '📦'}</span>
+                <h2 className="font-display text-[#2C1A0E] text-xl font-semibold">
+                  {activeStory.item_name}
+                </h2>
+              </div>
+              {activeStory.category && (
+                <p className="text-[#9C7B65] text-sm capitalize">{activeStory.category}</p>
+              )}
+            </div>
+
+            {/* Handlinger */}
+            <div className="px-5 pt-4 pb-6 flex flex-col gap-3">
+              <button
+                onClick={handleHarDette}
+                className="btn-primary w-full py-3"
+              >
+                Jeg har dette! →
+              </button>
+              <Link href={`/profile/${activeStory.user_id}`} onClick={closeStory}>
+                <button className="btn-glass w-full py-3">
+                  Se profil
+                </button>
+              </Link>
+            </div>
+          </div>
+        </>
+      )}
+
       <div className="nav-spacer" />
     </div>
   )

@@ -1,8 +1,8 @@
 'use client'
+import dynamic from 'next/dynamic'
 import { useEffect, useRef, useState, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
-export const dynamic = 'force-dynamic'
 
 const CATEGORIES = [
   { id: 'barn', label: 'Barn', emoji: '🧸', subcategories: ['Spise', 'Leke', 'Tur', 'Stelle', 'Sove', 'Bade', 'Klær'] },
@@ -54,7 +54,7 @@ const MODES = [
   { id: 'shelf',  label: 'Bokhylle', icon: ModeIcons.shelf  },
 ]
 
-export default function AddPage() {
+function AddPageInnerComponent() {
   const [mode, setMode] = useState<'manual' | 'url' | 'image' | 'shelf'>('manual')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -86,7 +86,6 @@ export default function AddPage() {
       const { data: prof } = await supabase.from('profiles').select('location').eq('id', user.id).single()
       if (prof?.location) setLocation(prof.location)
 
-      // Forhåndsutfyll fra query params (fra "Spør kretsen" / "Jeg har dette!"-flyt)
       const paramName     = searchParams.get('name')
       const paramCategory = searchParams.get('category')
       const paramImageUrl = searchParams.get('image_url')
@@ -378,7 +377,6 @@ Returner KUN JSON, ingen annen tekst.` }
   const selectedCat = CATEGORIES.find(c => c.id === category)
   const canSubmit = name.trim() && category
 
-  // ── BOKHYLLE: resultater ──
   if (mode === 'shelf' && shelfStep === 'results') {
     return (
       <div className="max-w-lg mx-auto pb-24">
@@ -440,8 +438,6 @@ Returner KUN JSON, ingen annen tekst.` }
 
   return (
     <div className="max-w-lg mx-auto pb-24">
-
-      {/* ── Header ── */}
       <div className="page-header glass sticky top-0 z-10 px-4 pb-3"
         style={{ borderRadius: '0 0 20px 20px', paddingTop: 12, display: 'flex', flexDirection: 'column' }}>
         <h1 className="font-display font-bold mb-3"
@@ -465,8 +461,6 @@ Returner KUN JSON, ingen annen tekst.` }
       </div>
 
       <div className="px-4 pt-5 flex flex-col gap-4">
-
-        {/* Fra bilde */}
         {mode === 'image' && !imagePreview && (
           <div className="flex flex-col gap-3">
             <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>
@@ -488,7 +482,6 @@ Returner KUN JSON, ingen annen tekst.` }
           </div>
         )}
 
-        {/* Analyserer */}
         {mode === 'image' && imagePreview && imageAnalyzing && (
           <div className="flex flex-col gap-3">
             <img src={imagePreview} className="w-full h-48 object-cover rounded-2xl" />
@@ -499,7 +492,6 @@ Returner KUN JSON, ingen annen tekst.` }
           </div>
         )}
 
-        {/* Ikke gjenkjent */}
         {mode === 'image' && imagePreview && !imageAnalyzing && !imageAnalyzed && name === '' && (
           <div className="flex flex-col gap-3">
             <img src={imagePreview} className="w-full h-48 object-cover rounded-2xl" />
@@ -510,7 +502,6 @@ Returner KUN JSON, ingen annen tekst.` }
           </div>
         )}
 
-        {/* Bildevalg etter gjenkjenning */}
         {mode === 'image' && imagePreview && imageAnalyzed && suggestedImageUrl && (
           <div className="flex flex-col gap-2">
             <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Velg bilde</label>
@@ -536,12 +527,10 @@ Returner KUN JSON, ingen annen tekst.` }
           </div>
         )}
 
-        {/* Eget bilde uten produktbilde */}
         {mode === 'image' && imagePreview && imageAnalyzed && !suggestedImageUrl && (
           <img src={imagePreview} className="w-full h-48 object-cover rounded-2xl" />
         )}
 
-        {/* URL-modus */}
         {mode === 'url' && (
           <div className="flex flex-col gap-3">
             <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>
@@ -564,7 +553,6 @@ Returner KUN JSON, ingen annen tekst.` }
           </div>
         )}
 
-        {/* Bokhylle */}
         {mode === 'shelf' && shelfStep === 'upload' && (
           <div className="flex flex-col gap-3">
             <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>
@@ -594,7 +582,6 @@ Returner KUN JSON, ingen annen tekst.` }
           </div>
         )}
 
-        {/* Skjema */}
         {(mode === 'manual' || mode === 'url' || (mode === 'image' && (imageAnalyzed || (!imageAnalyzing && imagePreview)))) && (
           <>
             <div className="flex flex-col gap-1">
@@ -652,7 +639,6 @@ Returner KUN JSON, ingen annen tekst.` }
                 style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)' }} />
             </div>
 
-            {/* Bilde – kun manual og url */}
             {(mode === 'manual' || mode === 'url') && (
               <div>
                 <label className="text-xs font-medium uppercase tracking-wide block mb-2" style={{ color: 'var(--terra-mid)' }}>Bilde</label>
@@ -684,4 +670,10 @@ Returner KUN JSON, ingen annen tekst.` }
       </div>
     </div>
   )
+}
+
+const AddPageInner = dynamic(() => Promise.resolve(AddPageInnerComponent), { ssr: false })
+
+export default function AddPage() {
+  return <AddPageInner />
 }

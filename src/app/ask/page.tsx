@@ -1,4 +1,5 @@
 'use client'
+import dynamic from 'next/dynamic'
 import { useEffect, useState, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -12,7 +13,7 @@ const CATEGORIES = [
   { id: 'annet',    label: 'Annet',   emoji: '📦' },
 ]
 
-function AskPageInner() {
+function AskPageInnerComponent() {
   const router       = useRouter()
   const searchParams = useSearchParams()
 
@@ -228,10 +229,8 @@ function AskPageInner() {
   )
 }
 
-export default function AskPage() {
-  return (
-    <Suspense>
-      <AskPageInner />
-    </Suspense>
-  )
+const AddPageInner = dynamic(() => Promise.resolve(AddPageInnerComponent), { ssr: false })
+
+export default function AddPage() {
+  return <AddPageInner />
 }

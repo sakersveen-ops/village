@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { track } from '@/lib/track'
 import StoryRing from '@/components/StoryRing'
 import StoryCreator from '@/components/StoryCreator'
+import ItemRequestCard from '@/components/ItemRequestCard'
 
 function IconBtn({
   onClick, href, label, children,
@@ -46,20 +47,16 @@ export default function ProfilePage() {
   const [activeLoansCount, setActiveLoansCount] = useState(0)
   const [pendingRequests, setPendingRequests] = useState<any[]>([])
   const [sentRequests, setSentRequests] = useState<any[]>([])
-  // Venner-søk
   const [friendSearch, setFriendSearch] = useState('')
   const [friendSearchOpen, setFriendSearchOpen] = useState(false)
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [mutualMap, setMutualMap] = useState<Record<string, any[]>>({})
   const [expandedMutual, setExpandedMutual] = useState<string | null>(null)
-  // Gjenstander-søk
   const [itemSearchOpen, setItemSearchOpen] = useState(false)
   const [itemSearch, setItemSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
-  // Stories
   const [showStoryCreator, setShowStoryCreator] = useState(false)
   const [storyRefreshKey, setStoryRefreshKey] = useState(0)
-  // UI
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
   const router = useRouter()
@@ -224,7 +221,7 @@ export default function ProfilePage() {
   return (
     <div className="max-w-lg mx-auto pb-24">
 
-      {/* ── Profilhode: avatar + navn ── */}
+      {/* ── Profilhode ── */}
       <div style={{ background: '#FAF7F2', borderBottom: '1px solid #E8DDD0' }} className="px-4 pt-6 pb-4">
         <div className="flex items-center gap-4">
           <label className="relative cursor-pointer flex-shrink-0">
@@ -249,10 +246,14 @@ export default function ProfilePage() {
               {displayName}
             </h2>
             <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>{user?.email}</p>
+            {/* By — vises kun hvis profile.city er satt */}
+            {profile?.city && (
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>📍 {profile.city}</p>
+            )}
           </div>
         </div>
 
-        {/* ── Stats-bokser ── */}
+        {/* Stats-bokser */}
         <div className="flex gap-2 mt-5">
           <Link href="/items/manage" className="flex-1">
             <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16, cursor: 'pointer' }}>
@@ -277,7 +278,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* ── Stories ── */}
+      {/* Stories */}
       {user && (
         <div style={{ borderBottom: '1px solid #E8DDD0', background: '#FAF7F2' }}>
           <StoryRing
@@ -289,9 +290,19 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* ItemRequest — alltid før stories */}
+      {user && (
+        <ItemRequestCard
+          profileUserId={user.id}
+          viewerId={user.id}
+          isOwner={true}
+          ownerName={displayName}
+        />
+      )}
+
       <div className="px-4 pt-5 flex flex-col gap-6">
 
-        {/* ── Innkommende venneforespørsler ── */}
+        {/* Innkommende venneforespørsler */}
         {pendingRequests.length > 0 && (
           <div>
             <h2 className="text-base font-bold mb-3" style={{ color: 'var(--terra-dark)' }}>
@@ -300,15 +311,9 @@ export default function ProfilePage() {
             </h2>
             <div className="flex flex-col gap-2">
               {pendingRequests.map(req => (
-                <div
-                  key={req.id}
-                  className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm"
-                  style={{ background: '#fff' }}
-                >
-                  <div
-                    className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
-                    style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}
-                  >
+                <div key={req.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
+                  <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
+                    style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
                     {req.profiles?.avatar_url
                       ? <img src={req.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
                       : (req.profiles?.name || req.profiles?.email)?.[0]?.toUpperCase()}
@@ -316,18 +321,14 @@ export default function ProfilePage() {
                   <p className="flex-1 font-medium text-sm" style={{ color: 'var(--terra-dark)' }}>
                     {req.profiles?.name || req.profiles?.email?.split('@')[0]}
                   </p>
-                  <button
-                    onClick={() => respondToFriendRequest(req.id, req.from_id, true)}
+                  <button onClick={() => respondToFriendRequest(req.id, req.from_id, true)}
                     className="text-xs rounded-full px-3 py-1.5 font-medium"
-                    style={{ background: 'var(--terra-green)', color: '#fff' }}
-                  >
+                    style={{ background: 'var(--terra-green)', color: '#fff' }}>
                     ✓ Godta
                   </button>
-                  <button
-                    onClick={() => respondToFriendRequest(req.id, req.from_id, false)}
+                  <button onClick={() => respondToFriendRequest(req.id, req.from_id, false)}
                     className="text-xs rounded-full px-3 py-1.5"
-                    style={{ border: '1px solid #E8DDD0', color: 'var(--terra-mid)' }}
-                  >
+                    style={{ border: '1px solid #E8DDD0', color: 'var(--terra-mid)' }}>
                     Avslå
                   </button>
                 </div>
@@ -336,44 +337,35 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* ── Sendte venneforespørsler ── */}
+        {/* Sendte venneforespørsler */}
         {sentRequests.length > 0 && (
-          <div>
-            <div className="flex flex-col gap-2">
-              {sentRequests.map(req => (
-                <div
-                  key={req.id}
-                  className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm"
-                  style={{ background: '#FAF7F2', border: '1px solid #E8DDD0' }}
-                >
-                  <div
-                    className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
-                    style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}
-                  >
-                    {req.profiles?.avatar_url
-                      ? <img src={req.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
-                      : (req.profiles?.name || req.profiles?.email)?.[0]?.toUpperCase()}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-sm" style={{ color: 'var(--terra-dark)' }}>
-                      {req.profiles?.name || req.profiles?.email?.split('@')[0]}
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Forespørsel sendt</p>
-                  </div>
-                  <button
-                    onClick={() => cancelFriendRequest(req.id)}
-                    className="text-xs rounded-full px-3 py-1.5"
-                    style={{ border: '1px solid #E8DDD0', color: 'var(--terra-mid)' }}
-                  >
-                    Trekk tilbake
-                  </button>
+          <div className="flex flex-col gap-2">
+            {sentRequests.map(req => (
+              <div key={req.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm"
+                style={{ background: '#FAF7F2', border: '1px solid #E8DDD0' }}>
+                <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
+                  style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
+                  {req.profiles?.avatar_url
+                    ? <img src={req.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
+                    : (req.profiles?.name || req.profiles?.email)?.[0]?.toUpperCase()}
                 </div>
-              ))}
-            </div>
+                <div className="flex-1">
+                  <p className="font-medium text-sm" style={{ color: 'var(--terra-dark)' }}>
+                    {req.profiles?.name || req.profiles?.email?.split('@')[0]}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Forespørsel sendt</p>
+                </div>
+                <button onClick={() => cancelFriendRequest(req.id)}
+                  className="text-xs rounded-full px-3 py-1.5"
+                  style={{ border: '1px solid #E8DDD0', color: 'var(--terra-mid)' }}>
+                  Trekk tilbake
+                </button>
+              </div>
+            ))}
           </div>
         )}
 
-        {/* ── Venner ── */}
+        {/* Venner */}
         <div>
           <div className="flex items-center gap-2 mb-3">
             <h2 className="font-bold flex-1" style={{ color: 'var(--terra-dark)' }}>
@@ -392,11 +384,9 @@ export default function ProfilePage() {
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
             </IconBtn>
-            <Link
-              href="/invite"
+            <Link href="/invite"
               className="flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-full"
-              style={{ background: 'var(--terra)', color: '#fff' }}
-            >
+              style={{ background: 'var(--terra)', color: '#fff' }}>
               + Inviter
             </Link>
           </div>
@@ -410,10 +400,7 @@ export default function ProfilePage() {
                     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                   </svg>
                 </span>
-                <input
-                  autoFocus
-                  value={friendSearch}
-                  onChange={e => searchUsers(e.target.value)}
+                <input autoFocus value={friendSearch} onChange={e => searchUsers(e.target.value)}
                   placeholder="Navn eller e-post…"
                   className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none"
                   style={{ background: '#fff', border: '1px solid #E8DDD0', color: 'var(--terra-dark)' }}
@@ -424,15 +411,9 @@ export default function ProfilePage() {
               {searchResults.length > 0 && (
                 <div className="flex flex-col gap-2 mt-2">
                   {searchResults.map(result => (
-                    <div
-                      key={result.id}
-                      className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm"
-                      style={{ background: '#fff' }}
-                    >
-                      <div
-                        className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
-                        style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}
-                      >
+                    <div key={result.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
+                      <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
+                        style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
                         {result.avatar_url
                           ? <img src={result.avatar_url} className="w-full h-full object-cover" alt="" />
                           : (result.name || result.email)?.[0]?.toUpperCase()}
@@ -442,22 +423,16 @@ export default function ProfilePage() {
                           {result.name || result.email?.split('@')[0]}
                         </p>
                         {mutualMap[result.id]?.length > 0 && (
-                          <button
-                            onClick={() => setExpandedMutual(expandedMutual === result.id ? null : result.id)}
-                            className="text-xs mt-0.5"
-                            style={{ color: 'var(--terra-mid)' }}
-                          >
+                          <button onClick={() => setExpandedMutual(expandedMutual === result.id ? null : result.id)}
+                            className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
                             {mutualMap[result.id].length} felles {mutualMap[result.id].length === 1 ? 'venn' : 'venner'} ↓
                           </button>
                         )}
                         {expandedMutual === result.id && (
                           <div className="flex flex-wrap gap-1 mt-1">
                             {mutualMap[result.id].map((m: any) => (
-                              <span
-                                key={m.id}
-                                className="text-xs px-2 py-0.5 rounded-full"
-                                style={{ background: '#FAF7F2', color: '#6B4226' }}
-                              >
+                              <span key={m.id} className="text-xs px-2 py-0.5 rounded-full"
+                                style={{ background: '#FAF7F2', color: '#6B4226' }}>
                                 {m.name || m.email?.split('@')[0]}
                               </span>
                             ))}
@@ -465,25 +440,15 @@ export default function ProfilePage() {
                         )}
                       </div>
                       {result.isFriend ? (
-                        <span
-                          className="text-xs px-3 py-1.5 rounded-full"
-                          style={{ background: '#EEF4F0', color: 'var(--terra-green)' }}
-                        >
-                          Venn ✓
-                        </span>
+                        <span className="text-xs px-3 py-1.5 rounded-full"
+                          style={{ background: '#EEF4F0', color: 'var(--terra-green)' }}>Venn ✓</span>
                       ) : result.requestSent ? (
-                        <span
-                          className="text-xs px-3 py-1.5 rounded-full"
-                          style={{ background: '#FAF7F2', color: 'var(--terra-mid)' }}
-                        >
-                          Sendt
-                        </span>
+                        <span className="text-xs px-3 py-1.5 rounded-full"
+                          style={{ background: '#FAF7F2', color: 'var(--terra-mid)' }}>Sendt</span>
                       ) : (
-                        <button
-                          onClick={() => sendFriendRequest(result.id)}
+                        <button onClick={() => sendFriendRequest(result.id)}
                           className="text-xs px-3 py-1.5 rounded-full font-medium"
-                          style={{ background: 'var(--terra)', color: '#fff' }}
-                        >
+                          style={{ background: 'var(--terra)', color: '#fff' }}>
                           + Legg til
                         </button>
                       )}
@@ -494,12 +459,9 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Avatar-rad / tom-tilstand */}
+          {/* Avatar-rad — hvert avatar lenker til vennens profil */}
           {friends.length === 0 ? (
-            <div
-              className="rounded-2xl p-5 text-center text-sm"
-              style={{ background: '#fff', color: 'var(--terra-mid)' }}
-            >
+            <div className="rounded-2xl p-5 text-center text-sm" style={{ background: '#fff', color: 'var(--terra-mid)' }}>
               Du har ingen venner i Village ennå.{' '}
               <button onClick={() => setFriendSearchOpen(true)} style={{ color: 'var(--terra)' }}>
                 Finn folk du kjenner
@@ -508,46 +470,38 @@ export default function ProfilePage() {
               <Link href="/invite" style={{ color: 'var(--terra)' }}>inviter noen.</Link>
             </div>
           ) : (
-            <Link href="/friends">
-              <div
-                className="rounded-2xl px-4 py-3 flex items-center gap-1 shadow-sm flex-wrap"
-                style={{ background: '#fff' }}
-              >
-                {[...friends]
-                  .sort((a, b) => (starred.has(a.user_b) ? -1 : 1))
-                  .slice(0, 8)
-                  .map((f: any) => (
-                    <div key={f.user_b} className="relative">
-                      <div
-                        className="flex items-center justify-center font-bold text-sm overflow-hidden"
-                        style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #fff' }}
-                      >
-                        {f.profiles?.avatar_url
-                          ? <img src={f.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
-                          : <span className="text-xs" style={{ color: '#6B4226' }}>
-                              {(f.profiles?.name || f.profiles?.email)?.[0]?.toUpperCase()}
-                            </span>
-                        }
-                      </div>
-                      {starred.has(f.user_b) && (
-                        <span className="absolute -top-0.5 -right-0.5 text-xs">❤️</span>
-                      )}
+            <div className="rounded-2xl px-4 py-3 flex items-center gap-1 shadow-sm flex-wrap" style={{ background: '#fff' }}>
+              {[...friends]
+                .sort((a, b) => (starred.has(a.user_b) ? -1 : 1))
+                .slice(0, 8)
+                .map((f: any) => (
+                  <Link key={f.user_b} href={`/profile/${f.user_b}`} className="relative block">
+                    <div className="flex items-center justify-center font-bold text-sm overflow-hidden"
+                      style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #fff' }}>
+                      {f.profiles?.avatar_url
+                        ? <img src={f.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
+                        : <span className="text-xs" style={{ color: '#6B4226' }}>
+                            {(f.profiles?.name || f.profiles?.email)?.[0]?.toUpperCase()}
+                          </span>
+                      }
                     </div>
-                  ))}
-                {friends.length > 8 && (
-                  <div
-                    className="flex items-center justify-center text-xs font-bold"
-                    style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #fff', color: '#6B4226' }}
-                  >
-                    +{friends.length - 8}
-                  </div>
-                )}
-              </div>
-            </Link>
+                    {starred.has(f.user_b) && (
+                      <span className="absolute -top-0.5 -right-0.5 text-xs">❤️</span>
+                    )}
+                  </Link>
+                ))}
+              {friends.length > 8 && (
+                <Link href="/friends"
+                  className="flex items-center justify-center text-xs font-bold"
+                  style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #fff', color: '#6B4226' }}>
+                  +{friends.length - 8}
+                </Link>
+              )}
+            </div>
           )}
         </div>
 
-        {/* ── Mine gjenstander ── */}
+        {/* Mine gjenstander */}
         <div>
           <div className="flex items-center gap-2 mb-3">
             <h2 className="font-bold flex-1" style={{ color: 'var(--terra-dark)' }}>
@@ -558,24 +512,18 @@ export default function ProfilePage() {
                 </span>
               )}
             </h2>
-            <IconBtn
-              onClick={() => { setItemSearchOpen(o => !o); setItemSearch('') }}
-              label="Søk i gjenstander"
-            >
+            <IconBtn onClick={() => { setItemSearchOpen(o => !o); setItemSearch('') }} label="Søk i gjenstander">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
             </IconBtn>
-            <Link
-              href="/add"
+            <Link href="/add"
               className="flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-full"
-              style={{ background: 'var(--terra)', color: '#fff' }}
-            >
+              style={{ background: 'var(--terra)', color: '#fff' }}>
               + Legg ut
             </Link>
           </div>
 
-          {/* Søkefelt */}
           {itemSearchOpen && (
             <div className="relative mb-3">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--terra-mid)' }}>
@@ -583,10 +531,7 @@ export default function ProfilePage() {
                   <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                 </svg>
               </span>
-              <input
-                autoFocus
-                value={itemSearch}
-                onChange={e => setItemSearch(e.target.value)}
+              <input autoFocus value={itemSearch} onChange={e => setItemSearch(e.target.value)}
                 placeholder="Søk i gjenstander…"
                 className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none"
                 style={{ background: '#fff', border: '1px solid #E8DDD0', color: 'var(--terra-dark)' }}
@@ -596,21 +541,18 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Kategorifilter */}
           {myItems.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-2 mb-3" style={{ scrollbarWidth: 'none' }}>
               {CATEGORIES
                 .filter(c => c.id === 'all' || myItems.some(i => i.category === c.id))
                 .map(cat => (
-                  <button
-                    key={cat.id}
+                  <button key={cat.id}
                     onClick={() => { setActiveCategory(cat.id); setItemSearch('') }}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0 transition-colors"
                     style={activeCategory === cat.id
                       ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
                       : { background: '#fff', color: '#6B4226', border: '1px solid #E8DDD0' }
-                    }
-                  >
+                    }>
                     {cat.emoji && <span>{cat.emoji}</span>}
                     <span>{cat.label}</span>
                   </button>
@@ -619,75 +561,57 @@ export default function ProfilePage() {
           )}
 
           {filteredItems.length === 0 ? (
-            <div
-              className="rounded-2xl p-5 text-center text-sm"
-              style={{ background: '#fff', color: 'var(--terra-mid)' }}
-            >
-              {myItems.length === 0
-                ? 'Du har ikke lagt ut noe ennå'
-                : 'Ingen gjenstander matcher søket'}
+            <div className="rounded-2xl p-5 text-center text-sm" style={{ background: '#fff', color: 'var(--terra-mid)' }}>
+              {myItems.length === 0 ? 'Du har ikke lagt ut noe ennå' : 'Ingen gjenstander matcher søket'}
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {filteredItems.map(item => (
+              {/* Maks 5 items, resten skjules bak "Vis alle"-knapp */}
+              {filteredItems.slice(0, 5).map(item => (
                 <Link key={item.id} href={`/items/${item.id}`}>
-                  <div
-                    className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm"
-                    style={{ background: '#fff' }}
-                  >
+                  <div className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
                     {item.image_url
-                      ? <img
-                          src={item.image_url}
-                          className="rounded-xl object-cover flex-shrink-0"
-                          style={{ width: 48, height: 48 }}
-                          alt={item.name}
-                        />
-                      : <div
-                          className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                          style={{ width: 48, height: 48, background: '#E8DDD0' }}
-                        >
+                      ? <img src={item.image_url} className="rounded-xl object-cover flex-shrink-0"
+                          style={{ width: 48, height: 48 }} alt={item.name} />
+                      : <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                          style={{ width: 48, height: 48, background: '#E8DDD0' }}>
                           {catEmoji(item.category)}
                         </div>
                     }
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>
-                        {item.name}
-                      </p>
-                      <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--terra-mid)' }}>
-                        {item.category}
-                      </p>
+                      <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
+                      <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--terra-mid)' }}>{item.category}</p>
                     </div>
-                    <span
-                      className="px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
-                      style={{
-                        fontSize: 10,
-                        ...(item.available
-                          ? { background: '#EEF4F0', color: 'var(--terra-green)' }
-                          : { background: '#FFF0E6', color: 'var(--terra)' })
-                      }}
-                    >
+                    <span className="px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
+                      style={{ fontSize: 10, ...(item.available
+                        ? { background: '#EEF4F0', color: 'var(--terra-green)' }
+                        : { background: '#FFF0E6', color: 'var(--terra)' }) }}>
                       {item.available ? 'Ledig' : 'Utlånt'}
                     </span>
                   </div>
                 </Link>
               ))}
+              {filteredItems.length > 5 && (
+                <Link href="/items/manage"
+                  className="flex items-center justify-center text-sm w-full py-2.5 rounded-xl"
+                  style={{ color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.2)', background: 'rgba(196,103,58,0.04)' }}>
+                  Vis alle {filteredItems.length} gjenstander →
+                </Link>
+              )}
             </div>
           )}
         </div>
 
         {/* Sekundær inviter-lenke */}
-        <Link
-          href="/invite"
+        <Link href="/invite"
           className="flex items-center justify-center gap-1.5 text-sm w-full py-2.5 rounded-xl mb-4"
-          style={{ color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.25)', background: 'rgba(196,103,58,0.04)' }}
-        >
+          style={{ color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.25)', background: 'rgba(196,103,58,0.04)' }}>
           <span>👥</span>
           <span>Inviter venner til Village</span>
         </Link>
 
       </div>
 
-      {/* ── Story Creator overlay ── */}
       {showStoryCreator && (
         <StoryCreator
           onClose={() => setShowStoryCreator(false)}

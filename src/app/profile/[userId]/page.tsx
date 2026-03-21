@@ -3,143 +3,131 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import { track, Events } from '@/lib/track'
-import StoryRing from '@/components/StoryRing'
+import ItemRequestCard from '@/components/ItemRequestCard'
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  barn: '🧸', kjole: '👗', verktøy: '🔧', bok: '📚', annet: '📦',
-}
+const CATEGORIES = [
+  { id: 'barn', label: 'Barn', emoji: '🧸' },
+  { id: 'kjole', label: 'Kjoler', emoji: '👗' },
+  { id: 'verktøy', label: 'Verktøy', emoji: '🔧' },
+  { id: 'bok', label: 'Bøker', emoji: '📚' },
+  { id: 'annet', label: 'Annet', emoji: '📦' },
+]
 
 type AccessLevel = 'friend' | 'friend_of_friend' | 'community' | 'stranger'
 
 export default function UserProfilePage() {
-  const params = useParams()
-  const userId = params?.userId as string
-  const router = useRouter()
-
   const [viewer, setViewer] = useState<any>(null)
   const [viewerProfile, setViewerProfile] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [items, setItems] = useState<any[]>([])
+  const [friends, setFriends] = useState<any[]>([])
   const [accessLevel, setAccessLevel] = useState<AccessLevel>('stranger')
   const [isStarred, setIsStarred] = useState(false)
-  const [isFriend, setIsFriend] = useState(false)
-  const [isFoF, setIsFoF] = useState(false)
   const [friendRequestSent, setFriendRequestSent] = useState(false)
+  const [isFriend, setIsFriend] = useState(false)
   const [sharedCommunities, setSharedCommunities] = useState<any[]>([])
   const [publicCommunities, setPublicCommunities] = useState<any[]>([])
   const [mutualFriends, setMutualFriends] = useState<any[]>([])
   const [itemSearch, setItemSearch] = useState('')
   const [itemCategory, setItemCategory] = useState('')
   const [loading, setLoading] = useState(true)
+  const router = useRouter()
+  const { userId } = useParams()
 
   useEffect(() => {
-    if (!userId) return
     const load = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setViewer(user)
 
-      // Redirect self → own profile
-      if (user.id === userId) { router.replace('/profile'); return }
+      // Egen profil → redirect
+      if (userId === user.id) { router.push('/profile'); return }
 
-      const [{ data: vp }, { data: tp }] = await Promise.all([
-        supabase.from('profiles').select('*').eq('id', user.id).single(),
-        supabase.from('profiles').select('*').eq('id', userId).single(),
-      ])
+      const { data: vp } = await supabase.from('profiles').select('*').eq('id', user.id).single()
       setViewerProfile(vp)
-      if (!tp) { setLoading(false); return }
-      setProfile(tp)
 
-      track(Events.PROFILE_VIEWED, { profile_id: userId })
+      const { data: targetProfile } = await supabase.from('profiles').select('*').eq('id', userId).single()
+      setProfile(targetProfile)
 
-      // ── Friendship ──
-      const { data: friendshipRow } = await supabase
-        .from('friendships').select('user_b')
-        .eq('user_a', user.id).eq('user_b', userId).maybeSingle()
-      const friend = !!friendshipRow
+      const { data: starredRow } = await supabase
+        .from('starred_users').select('id').eq('user_id', user.id).eq('starred_id', userId).maybeSingle()
+      setIsStarred(!!starredRow)
+
+      const { data: friendship } = await supabase
+        .from('friendships').select('id').eq('user_a', user.id).eq('user_b', userId).maybeSingle()
+      const friend = !!friendship
       setIsFriend(friend)
 
       const { data: sentReq } = await supabase
-        .from('friend_requests').select('id')
-        .eq('from_id', user.id).eq('to_id', userId).eq('status', 'pending').maybeSingle()
+        .from('friend_requests').select('id').eq('from_id', user.id).eq('to_id', userId).eq('status', 'pending').maybeSingle()
       setFriendRequestSent(!!sentReq)
 
-      // ── Friend id sets ──
-      const { data: myFriendships } = await supabase
-        .from('friendships').select('user_b').eq('user_a', user.id)
-      const myFriendIds: string[] = (myFriendships || []).map((f: any) => f.user_b)
+      let isFoF = false
+      const { data: myFriends } = await supabase.from('friendships').select('user_b').eq('user_a', user.id)
+      const myFriendIds = (myFriends || []).map((f: any) => f.user_b)
+      const { data: theirFriends } = await supabase.from('friendships').select('user_b').eq('user_a', userId as string)
+      const theirFriendIds = (theirFriends || []).map((f: any) => f.user_b)
+      if (!friend) isFoF = myFriendIds.some(id => theirFriendIds.includes(id))
 
-      const { data: theirFriendships } = await supabase
-        .from('friendships')
-        .select('user_b, profiles!friendships_user_b_fkey(id, name, avatar_url)')
-        .eq('user_a', userId)
-      const theirFriendIds: string[] = (theirFriendships || []).map((f: any) => f.user_b)
-
-      const fof = myFriendIds.some(id => theirFriendIds.includes(id))
-      setIsFoF(fof)
-
-      // Mutual friends
-      const mutual = (theirFriendships || [])
-        .filter((f: any) => myFriendIds.includes(f.user_b))
-        .map((f: any) => f.profiles)
-      setMutualFriends(mutual)
-
-      // ── Communities ──
       const { data: myMemberships } = await supabase
-        .from('community_members')
-        .select('community_id, communities(id, name, avatar_emoji, is_public)')
-        .eq('user_id', user.id).eq('status', 'active')
-      const myComIds = new Set((myMemberships || []).map((m: any) => m.community_id))
-
+        .from('community_members').select('community_id').eq('user_id', user.id).eq('status', 'active')
       const { data: theirMemberships } = await supabase
         .from('community_members')
         .select('community_id, communities(id, name, avatar_emoji, is_public)')
-        .eq('user_id', userId).eq('status', 'active')
-
-      const shared = (theirMemberships || [])
-        .filter((m: any) => myComIds.has(m.community_id))
-        .map((m: any) => m.communities)
+        .eq('user_id', userId as string).eq('status', 'active')
+      const myComIds = new Set((myMemberships || []).map((m: any) => m.community_id))
+      const shared = (theirMemberships || []).filter((m: any) => myComIds.has(m.community_id))
       setSharedCommunities(shared)
 
-      const pub = (theirMemberships || [])
-        .filter((m: any) => !myComIds.has(m.community_id) && m.communities?.is_public)
-        .map((m: any) => m.communities)
-      setPublicCommunities(pub)
+      const publicComs = (theirMemberships || []).filter((m: any) =>
+        m.communities?.is_public && !myComIds.has(m.community_id)
+      )
+      setPublicCommunities(publicComs)
 
-      // ── Access level ──
+      // Felles venner
+      const { data: myFriendsFull } = await supabase
+        .from('friendships')
+        .select('user_b, profiles!friendships_user_b_fkey(id, name, username, avatar_url)')
+        .eq('user_a', user.id)
+      const theirFriendSet = new Set(theirFriendIds)
+      const mutual = (myFriendsFull || []).filter((f: any) => theirFriendSet.has(f.user_b))
+      setMutualFriends(mutual.map((f: any) => f.profiles))
+
       let level: AccessLevel = 'stranger'
       if (friend) level = 'friend'
-      else if (fof) level = 'friend_of_friend'
+      else if (isFoF) level = 'friend_of_friend'
       else if (shared.length > 0) level = 'community'
       setAccessLevel(level)
 
-      // ── Starred ──
-      const { data: starRow } = await supabase
-        .from('starred_users').select('starred_id')
-        .eq('user_id', user.id).eq('starred_id', userId).maybeSingle()
-      setIsStarred(!!starRow)
+      // Gjenstander — kun hvis venn
+      if (friend) {
+        const { data: allItems } = await supabase
+          .from('items').select('*, item_access(*)')
+          .eq('owner_id', userId as string)
+          .order('created_at', { ascending: false })
 
-      // ── Items with access filter ──
-      const { data: allItems } = await supabase
-        .from('items')
-        .select('*, item_access(access_type, community_id)')
-        .eq('owner_id', userId)
-        .order('created_at', { ascending: false })
-
-      const visible = (allItems || []).filter((item: any) => {
-        const rules: any[] = item.item_access || []
-        if (rules.length === 0) return true
-        return rules.some((r: any) => {
-          if (r.access_type === 'public') return true
-          if (r.access_type === 'friends') return friend
-          if (r.access_type === 'friends_of_friends') return friend || fof
-          if (r.access_type === 'community') return myComIds.has(r.community_id)
-          return false
+        const visible = (allItems || []).filter((item: any) => {
+          const access: any[] = item.item_access || []
+          if (access.length === 0) return true
+          return access.some((rule: any) => {
+            if (rule.access_type === 'public') return true
+            if (rule.access_type === 'friends') return true
+            if (rule.access_type === 'friends_of_friends') return true
+            if (rule.access_type === 'community' && myComIds.has(rule.community_id)) return true
+            return false
+          })
         })
-      })
-      setItems(visible)
+        setItems(visible)
+
+        // Venneliste til denne brukeren (for venner-seksjonen)
+        const { data: theirFriendsFull } = await supabase
+          .from('friendships')
+          .select('user_b, profiles!friendships_user_b_fkey(id, name, username, avatar_url)')
+          .eq('user_a', userId as string)
+          .limit(12)
+        setFriends((theirFriendsFull || []).map((f: any) => f.profiles))
+      }
 
       setLoading(false)
     }
@@ -149,340 +137,334 @@ export default function UserProfilePage() {
   const toggleStar = async () => {
     const supabase = createClient()
     if (isStarred) {
-      await supabase.from('starred_users')
-        .delete().eq('user_id', viewer.id).eq('starred_id', userId)
+      await supabase.from('starred_users').delete().eq('user_id', viewer.id).eq('starred_id', userId)
       setIsStarred(false)
     } else {
-      await supabase.from('starred_users')
-        .insert({ user_id: viewer.id, starred_id: userId })
-      await supabase.from('notifications').insert({
-        user_id: userId,
-        type: 'starred',
-        title: 'Noen likte profilen din',
-        body: `${viewerProfile?.name || viewer.email?.split('@')[0]} fulgte deg`,
-      })
+      await supabase.from('starred_users').insert({ user_id: viewer.id, starred_id: userId })
       setIsStarred(true)
+      await supabase.from('notifications').insert({
+        user_id: userId, type: 'starred',
+        title: '❤️ Noen følger deg',
+        body: `${viewerProfile?.name || viewer.email?.split('@')[0]} vil få varsel når du legger ut noe`,
+      })
     }
   }
 
   const sendFriendRequest = async () => {
     const supabase = createClient()
-    await supabase.from('friend_requests')
-      .insert({ from_id: viewer.id, to_id: userId })
+    await supabase.from('friend_requests').insert({ from_id: viewer.id, to_id: userId })
     await supabase.from('notifications').insert({
-      user_id: userId,
-      type: 'friend_request',
+      user_id: userId, type: 'friend_request',
       title: 'Ny venneforespørsel',
       body: `${viewerProfile?.name || viewer.email?.split('@')[0]} vil bli venner`,
     })
     setFriendRequestSent(true)
-    track(Events.FRIEND_REQUEST_SENT)
   }
 
-  const availableCategories = [...new Set(items.map(i => i.category).filter(Boolean))]
-  const filteredItems = items.filter(i => {
-    const matchCat = !itemCategory || i.category === itemCategory
-    const matchSearch = itemSearch.length < 2
-      || i.name?.toLowerCase().includes(itemSearch.toLowerCase())
-      || i.description?.toLowerCase().includes(itemSearch.toLowerCase())
-    return matchCat && matchSearch
+  const displayName = (p: any) => p?.name || p?.username || p?.email?.split('@')[0]
+  const catEmoji = (cat: string) => CATEGORIES.find(c => c.id === cat)?.emoji || '📦'
+  const availableCategories = CATEGORIES.filter(c => items.some(i => i.category === c.id))
+  const filteredItems = items.filter(item => {
+    const matchSearch = itemSearch.trim().length < 2 ||
+      item.name?.toLowerCase().includes(itemSearch.toLowerCase()) ||
+      item.description?.toLowerCase().includes(itemSearch.toLowerCase())
+    const matchCat = !itemCategory || item.category === itemCategory
+    return matchSearch && matchCat
   })
 
-  const displayName = profile?.name || profile?.email?.split('@')[0] || 'Bruker'
+  if (loading) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
+  if (!profile) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Fant ikke brukeren</div>
 
-  if (loading) return (
-    <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
-  )
+  // ── Fremmed-visning ──
+  // Kun profilbilde, navn, brukernavn og legg-til-venn-knapp
+  if (!isFriend) {
+    return (
+      <div className="max-w-lg mx-auto pb-24">
+        <div style={{ background: '#FAF7F2', borderBottom: '1px solid #E8DDD0' }} className="px-4 pt-6 pb-8">
 
-  if (!profile) return (
-    <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>
-      Fant ikke denne brukeren.
-    </div>
-  )
+          {/* Avatar + navn */}
+          <div className="flex flex-col items-center text-center pt-4">
+            <div className="flex items-center justify-center text-white font-bold text-3xl overflow-hidden mb-4"
+              style={{ width: 88, height: 88, borderRadius: '50%', background: 'var(--terra)' }}>
+              {profile.avatar_url
+                ? <img src={profile.avatar_url} className="w-full h-full object-cover" alt={displayName(profile)} />
+                : displayName(profile)?.[0]?.toUpperCase()}
+            </div>
 
+            <h1 className="font-display text-xl font-bold" style={{ color: 'var(--terra-dark)' }}>
+              {displayName(profile)}
+            </h1>
+            {profile.username && (
+              <p className="text-sm mt-0.5" style={{ color: 'var(--terra-mid)' }}>@{profile.username}</p>
+            )}
+            {profile.city && (
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>📍 {profile.city}</p>
+            )}
+
+            {/* Relasjons-hint */}
+            <p className="text-xs mt-2" style={{ color: 'var(--terra-mid)' }}>
+              {accessLevel === 'friend_of_friend'
+                ? `${mutualFriends.length > 0 ? mutualFriends.length : ''} felles ${mutualFriends.length === 1 ? 'venn' : 'venner'}`
+                : accessLevel === 'community'
+                ? '🏘️ Dere er i samme krets'
+                : '👤 Ikke tilkoblet'}
+            </p>
+
+            {/* Følg-knapp */}
+            <button onClick={toggleStar} className="mt-3 text-xl" aria-label={isStarred ? 'Slutt å følge' : 'Følg'}>
+              {isStarred ? '❤️' : '🤍'}
+            </button>
+          </div>
+
+          {/* Legg til som venn */}
+          <div className="mt-6">
+            {!friendRequestSent ? (
+              <button onClick={sendFriendRequest} className="btn-primary w-full"
+                style={{ borderRadius: 12, padding: '12px 0', fontSize: 15 }}>
+                + Legg til som venn
+              </button>
+            ) : (
+              <div className="w-full rounded-xl py-3 text-sm text-center"
+                style={{ background: '#FAF7F2', border: '1px solid #E8DDD0', color: 'var(--terra-mid)' }}>
+                Forespørsel sendt
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="nav-spacer" />
+      </div>
+    )
+  }
+
+  // ── Venn-visning ──
+  // Full profil: gjenstander, venner, kretser
   return (
     <div className="max-w-lg mx-auto pb-24">
 
-      {/* ── Topbar ── */}
-      <div
-        className="flex items-center gap-3 px-4 pb-3"
-        style={{ paddingTop: 'max(env(safe-area-inset-top), 16px)' }}
-      >
-        <button
-          onClick={() => router.back()}
-          className="w-9 h-9 flex items-center justify-center rounded-full flex-shrink-0"
-          style={{ background: '#fff', border: '1px solid #E8DDD0', color: '#6B4226' }}
-          aria-label="Tilbake"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
-        </button>
-        <div className="flex-1" />
-        <button
-          onClick={toggleStar}
-          className="w-9 h-9 flex items-center justify-center rounded-full flex-shrink-0"
-          style={{ background: '#fff', border: '1px solid #E8DDD0', color: isStarred ? 'var(--terra)' : '#9C7B65' }}
-          aria-label={isStarred ? 'Fjern stjerne' : 'Stjernemark'}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24"
-            fill={isStarred ? 'currentColor' : 'none'}
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-          </svg>
-        </button>
-      </div>
-
-      {/* ── Profile header ── */}
-      <div style={{ background: '#FAF7F2', borderBottom: '1px solid #E8DDD0' }} className="px-4 pt-2 pb-4">
-        <div className="flex items-center gap-4">
-          <div
-            className="flex items-center justify-center text-white font-bold text-2xl overflow-hidden flex-shrink-0"
-            style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--terra)' }}
-          >
-            {profile?.avatar_url
-              ? <img src={profile.avatar_url} className="w-full h-full object-cover" alt={displayName} />
-              : displayName?.[0]?.toUpperCase()
-            }
+      {/* Profilhode */}
+      <div style={{ background: '#FAF7F2', borderBottom: '1px solid #E8DDD0' }} className="px-4 pt-6 pb-6">
+        <div className="flex items-start gap-4">
+          <div className="flex items-center justify-center text-white font-bold text-2xl overflow-hidden flex-shrink-0"
+            style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--terra)' }}>
+            {profile.avatar_url
+              ? <img src={profile.avatar_url} className="w-full h-full object-cover" alt={displayName(profile)} />
+              : displayName(profile)?.[0]?.toUpperCase()}
           </div>
 
           <div className="flex-1 min-w-0">
-            <h1 className="font-display text-xl font-bold truncate" style={{ color: 'var(--terra-dark)' }}>
-              {displayName}
+            <h1 className="font-display text-xl font-bold" style={{ color: 'var(--terra-dark)' }}>
+              {displayName(profile)}
             </h1>
-            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-              {isFriend && (
-                <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                  style={{ background: '#EEF4F0', color: 'var(--terra-green)' }}>
-                  ✓ Venn
-                </span>
-              )}
-              {!isFriend && isFoF && (
-                <span className="text-xs px-2 py-0.5 rounded-full"
-                  style={{ background: '#FAF7F2', color: 'var(--terra-mid)', border: '1px solid #E8DDD0' }}>
-                  Felles venner
-                </span>
-              )}
-              {accessLevel === 'stranger' && (
-                <span className="text-xs" style={{ color: 'var(--terra-mid)' }}>Ukjent</span>
-              )}
-            </div>
+            {profile.username && (
+              <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>@{profile.username}</p>
+            )}
+            {profile.city && (
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>📍 {profile.city}</p>
+            )}
+            <p className="text-xs mt-1" style={{ color: 'var(--terra-mid)' }}>👥 Dere er venner</p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+            {/* Direktemelding */}
+            <Link href={`/messages/${userId}`} aria-label="Send melding"
+              className="w-9 h-9 flex items-center justify-center rounded-full"
+              style={{ background: 'rgba(196,103,58,0.10)', border: '1px solid rgba(196,103,58,0.15)', color: 'var(--terra-dark)' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </Link>
+            <button onClick={toggleStar} className="text-2xl" aria-label={isStarred ? 'Slutt å følge' : 'Følg'}>
+              {isStarred ? '❤️' : '🤍'}
+            </button>
           </div>
         </div>
 
-        {/* Mutual friends */}
+        {/* Felles venner */}
         {mutualFriends.length > 0 && (
-          <div className="flex items-center gap-2 mt-3">
-            <div className="flex -space-x-1">
-              {mutualFriends.slice(0, 4).map((f: any) => (
-                <div
-                  key={f.id}
-                  className="flex items-center justify-center text-xs font-bold overflow-hidden"
-                  style={{ width: 24, height: 24, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #FAF7F2', color: '#6B4226' }}
-                >
-                  {f.avatar_url
-                    ? <img src={f.avatar_url} className="w-full h-full object-cover" alt="" />
-                    : f.name?.[0]?.toUpperCase()
-                  }
-                </div>
-              ))}
-            </div>
-            <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>
+          <div className="mt-4">
+            <p className="text-xs mb-2" style={{ color: 'var(--terra-mid)' }}>
               {mutualFriends.length} felles {mutualFriends.length === 1 ? 'venn' : 'venner'}
             </p>
+            <div className="flex gap-1 flex-wrap">
+              {mutualFriends.slice(0, 5).map((m: any) => (
+                <Link key={m.id} href={`/profile/${m.id}`}>
+                  <div className="flex items-center gap-1.5 rounded-full px-2 py-1"
+                    style={{ background: '#fff', border: '1px solid #E8DDD0' }}>
+                    <div className="flex items-center justify-center text-xs overflow-hidden flex-shrink-0"
+                      style={{ width: 20, height: 20, borderRadius: '50%', background: '#E8DDD0' }}>
+                      {m.avatar_url
+                        ? <img src={m.avatar_url} className="w-full h-full object-cover" alt="" />
+                        : displayName(m)?.[0]?.toUpperCase()}
+                    </div>
+                    <span className="text-xs" style={{ color: '#6B4226' }}>{displayName(m)}</span>
+                  </div>
+                </Link>
+              ))}
+              {mutualFriends.length > 5 && (
+                <span className="text-xs self-center" style={{ color: 'var(--terra-mid)' }}>+{mutualFriends.length - 5} til</span>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Communities */}
-        {(sharedCommunities.length > 0 || publicCommunities.length > 0) && (
-          <div className="flex flex-wrap gap-1.5 mt-3">
-            {sharedCommunities.map((c: any) => (
-              <Link key={c.id} href={`/communities/${c.id}`}>
-                <span className="text-xs px-2.5 py-1 rounded-full font-medium"
-                  style={{ background: '#EEF4F0', color: 'var(--terra-green)', border: '1px solid #B8D8C4' }}>
-                  {c.avatar_emoji} {c.name}
-                </span>
-              </Link>
-            ))}
-            {publicCommunities.map((c: any) => (
-              <Link key={c.id} href={`/communities/${c.id}`}>
-                <span className="text-xs px-2.5 py-1 rounded-full"
-                  style={{ background: '#FAF7F2', color: 'var(--terra-mid)', border: '1px solid #E8DDD0' }}>
-                  {c.avatar_emoji} {c.name}
-                </span>
-              </Link>
-            ))}
+        {/* Felles kretser */}
+        {sharedCommunities.length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs mb-1.5" style={{ color: 'var(--terra-mid)' }}>Felles kretser</p>
+            <div className="flex flex-wrap gap-2">
+              {sharedCommunities.map((m: any) => (
+                <Link key={m.community_id} href={`/community/${m.community_id}`}>
+                  <span className="rounded-full px-3 py-1.5 text-xs shadow-sm"
+                    style={{ background: '#fff', border: '1px solid #E8DDD0', color: '#6B4226' }}>
+                    {m.communities?.avatar_emoji} {m.communities?.name}
+                  </span>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Stats */}
-        <div className="flex gap-2 mt-4">
-          <div className="glass flex-1 rounded-2xl p-3 text-center" style={{ borderRadius: 16 }}>
-            <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{items.length}</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>gjenstander</p>
-          </div>
-          <div className="glass flex-1 rounded-2xl p-3 text-center" style={{ borderRadius: 16 }}>
-            <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{mutualFriends.length}</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>felles venner</p>
-          </div>
-          <div className="glass flex-1 rounded-2xl p-3 text-center" style={{ borderRadius: 16 }}>
-            <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{sharedCommunities.length}</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>felles kretser</p>
-          </div>
-        </div>
-
-        {/* Friend request CTA */}
-        {!isFriend && (
-          <div className="mt-4">
-            {friendRequestSent ? (
-              <div
-                className="w-full py-3 rounded-2xl text-sm font-medium text-center"
-                style={{ background: '#FAF7F2', color: 'var(--terra-mid)', border: '1px solid #E8DDD0' }}
-              >
-                Forespørsel sendt ✓
-              </div>
-            ) : (
-              <button
-                onClick={sendFriendRequest}
-                className="w-full py-3 rounded-2xl text-sm font-semibold"
-                style={{ background: 'var(--terra)', color: '#fff' }}
-              >
-                + Legg til som venn
-              </button>
-            )}
+        {/* Offentlige kretser */}
+        {publicCommunities.length > 0 && (
+          <div className="mt-3">
+            <p className="text-xs mb-1.5" style={{ color: 'var(--terra-mid)' }}>Kretser</p>
+            <div className="flex flex-wrap gap-2">
+              {publicCommunities.map((m: any) => (
+                <Link key={m.community_id} href={`/community/${m.community_id}`}>
+                  <span className="rounded-full px-3 py-1.5 text-xs"
+                    style={{ background: '#FAF7F2', border: '1px solid #E8DDD0', color: '#6B4226' }}>
+                    {m.communities?.avatar_emoji} {m.communities?.name}
+                  </span>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
       </div>
 
-      {/* ── Stories — only visible to friends ── */}
-      <div style={{ borderBottom: '1px solid #E8DDD0', background: '#FAF7F2' }}>
-        <StoryRing
-          ownerId={userId}
+      {/* ItemRequest-kort — kun for venner */}
+      {viewer && (
+        <ItemRequestCard
+          profileUserId={userId as string}
+          viewerId={viewer.id}
           isOwner={false}
-          canView={isFriend}
+          ownerName={displayName(profile)}
         />
-      </div>
+      )}
 
-      {/* ── Items ── */}
-      <div className="px-4 pt-5">
-        <div className="flex items-center gap-2 mb-3">
-          <h2 className="font-bold flex-1" style={{ color: 'var(--terra-dark)' }}>
-            Gjenstander
-            {items.length > 0 && (
-              <span className="font-normal text-sm ml-1.5" style={{ color: 'var(--terra-mid)' }}>
-                ({items.length})
-              </span>
-            )}
-          </h2>
-        </div>
+      <div className="px-4 pt-5 flex flex-col gap-6 pb-8">
 
-        {/* Search — only if > 3 items */}
-        {items.length > 3 && (
-          <div className="relative mb-3">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--terra-mid)' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-            </span>
-            <input
-              value={itemSearch}
-              onChange={e => setItemSearch(e.target.value)}
-              placeholder="Søk i gjenstander…"
-              className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none"
-              style={{ background: '#fff', border: '1px solid #E8DDD0', color: 'var(--terra-dark)' }}
-              onFocus={e => e.currentTarget.style.borderColor = 'var(--terra)'}
-              onBlur={e => e.currentTarget.style.borderColor = '#E8DDD0'}
-            />
+        {/* Venner-seksjon */}
+        {friends.length > 0 && (
+          <div>
+            <h2 className="font-bold mb-3" style={{ color: 'var(--terra-dark)' }}>
+              Venner
+              <span className="font-normal text-sm ml-1.5" style={{ color: 'var(--terra-mid)' }}>({friends.length})</span>
+            </h2>
+            <div className="rounded-2xl px-4 py-3 flex items-center gap-1 shadow-sm flex-wrap" style={{ background: '#fff' }}>
+              {friends.slice(0, 10).map((f: any) => (
+                <Link key={f.id} href={`/profile/${f.id}`}>
+                  <div className="flex items-center justify-center font-bold text-sm overflow-hidden"
+                    style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #fff' }}>
+                    {f.avatar_url
+                      ? <img src={f.avatar_url} className="w-full h-full object-cover" alt="" />
+                      : <span className="text-xs" style={{ color: '#6B4226' }}>{displayName(f)?.[0]?.toUpperCase()}</span>}
+                  </div>
+                </Link>
+              ))}
+              {friends.length > 10 && (
+                <div className="flex items-center justify-center text-xs font-bold"
+                  style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
+                  +{friends.length - 10}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Category filter — only if > 1 category */}
-        {availableCategories.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto pb-2 mb-3" style={{ scrollbarWidth: 'none' }}>
-            <button
-              onClick={() => setItemCategory('')}
-              className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0"
-              style={!itemCategory
-                ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
-                : { background: '#fff', color: '#6B4226', border: '1px solid #E8DDD0' }
-              }
-            >
-              Alle
-            </button>
-            {availableCategories.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setItemCategory(cat)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0"
-                style={itemCategory === cat
+        {/* Delte gjenstander */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-bold" style={{ color: 'var(--terra-dark)' }}>
+              Delte gjenstander
+              {items.length > 0 && (
+                <span className="font-normal text-sm ml-1.5" style={{ color: 'var(--terra-mid)' }}>({items.length})</span>
+              )}
+            </h2>
+          </div>
+
+          {/* Søk — kun hvis > 3 gjenstander */}
+          {items.length > 3 && (
+            <div className="relative mb-3">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm pointer-events-none">🔍</span>
+              <input value={itemSearch} onChange={e => setItemSearch(e.target.value)}
+                placeholder="Søk i gjenstander…"
+                className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none"
+                style={{ background: '#fff', border: '1px solid #E8DDD0', color: 'var(--terra-dark)' }}
+                onFocus={e => e.currentTarget.style.borderColor = 'var(--terra)'}
+                onBlur={e => e.currentTarget.style.borderColor = '#E8DDD0'}
+              />
+            </div>
+          )}
+
+          {/* Kategorifilter */}
+          {availableCategories.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-1 mb-3">
+              <button onClick={() => setItemCategory('')}
+                className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0"
+                style={!itemCategory
                   ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
                   : { background: '#fff', color: '#6B4226', border: '1px solid #E8DDD0' }
-                }
-              >
-                <span>{CATEGORY_EMOJI[cat] ?? '📦'}</span>
-                <span className="capitalize">{cat}</span>
+                }>
+                Alle
               </button>
-            ))}
-          </div>
-        )}
+              {availableCategories.map(cat => (
+                <button key={cat.id} onClick={() => setItemCategory(itemCategory === cat.id ? '' : cat.id)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0"
+                  style={itemCategory === cat.id
+                    ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
+                    : { background: '#fff', color: '#6B4226', border: '1px solid #E8DDD0' }
+                  }>
+                  {cat.emoji} {cat.label}
+                </button>
+              ))}
+            </div>
+          )}
 
-        {/* Item list */}
-        {filteredItems.length === 0 ? (
-          <div
-            className="rounded-2xl p-5 text-center text-sm"
-            style={{ background: '#fff', color: 'var(--terra-mid)' }}
-          >
-            {items.length === 0
-              ? `${displayName} har ikke lagt ut noe ennå`
-              : 'Ingen gjenstander matcher søket'
-            }
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {filteredItems.map((item: any) => (
-              <Link key={item.id} href={`/items/${item.id}`}>
-                <div
-                  className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm"
-                  style={{ background: '#fff' }}
-                >
-                  {item.image_url
-                    ? <img
-                        src={item.image_url}
-                        className="rounded-xl object-cover flex-shrink-0"
-                        style={{ width: 48, height: 48 }}
-                        alt={item.name}
-                      />
-                    : <div
-                        className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                        style={{ width: 48, height: 48, background: '#E8DDD0' }}
-                      >
-                        {CATEGORY_EMOJI[item.category] ?? '📦'}
-                      </div>
-                  }
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>
-                      {item.name}
-                    </p>
-                    <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--terra-mid)' }}>
-                      {item.category}
-                    </p>
+          {filteredItems.length === 0 ? (
+            <div className="rounded-2xl p-6 text-center text-sm" style={{ background: '#fff', color: 'var(--terra-mid)' }}>
+              {items.length === 0 ? 'Ingen gjenstander delt ennå' : 'Ingen treff på søket'}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {filteredItems.map(item => (
+                <Link key={item.id} href={`/items/${item.id}`}>
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl shadow-sm" style={{ background: '#fff' }}>
+                    {item.image_url
+                      ? <img src={item.image_url} className="rounded-xl object-cover flex-shrink-0"
+                          style={{ width: 48, height: 48 }} alt={item.name} />
+                      : <div className="flex items-center justify-center text-xl flex-shrink-0 rounded-xl"
+                          style={{ width: 48, height: 48, background: '#E8DDD0' }}>
+                          {catEmoji(item.category)}
+                        </div>
+                    }
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
+                        {catEmoji(item.category)} {CATEGORIES.find(c => c.id === item.category)?.label || item.category}
+                      </p>
+                    </div>
+                    {item.price && (
+                      <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--terra)' }}>
+                        {item.price} kr/dag
+                      </span>
+                    )}
                   </div>
-                  <span
-                    className="px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
-                    style={{
-                      fontSize: 10,
-                      ...(item.available
-                        ? { background: '#EEF4F0', color: 'var(--terra-green)' }
-                        : { background: '#FFF0E6', color: 'var(--terra)' })
-                    }}
-                  >
-                    {item.available ? 'Ledig' : 'Utlånt'}
-                  </span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="nav-spacer" />

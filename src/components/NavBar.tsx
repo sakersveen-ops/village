@@ -129,7 +129,7 @@ export default function NavBar() {
   const title = getTitle(pathname)
 
   const navItems = [
-    { href: '/',                 icon: 'home',      label: 'Feed' },
+    { href: '/',                 icon: 'home',      label: 'Hjem' },
     { href: '/community/search', icon: 'community', label: 'Kretser' },
     { href: '/add',              icon: null,         label: 'Del gjenstand' },
     { href: '/schedule',         icon: 'schedule',  label: 'Avtaler' },

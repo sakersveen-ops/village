@@ -34,15 +34,16 @@ export default function FeedPage() {
         .select('user_a, user_b')
         .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
 
-      const friendIds = new Set(
+      cconst friendIds = new Set(
         (friendships || []).map((f: any) =>
           f.user_a === user.id ? f.user_b : f.user_a
         )
       )
+      setFriendCount(friendIds.size)  
 
       const { data: items, error } = await supabase
         .from('items')
-        .select('*, profiles(id, name, avatar_url)')
+        .select('*, profiles!items_owner_id_fkey(id, name, email, avatar_url)')
         .neq('owner_id', user.id)
         .order('created_at', { ascending: false })
         .limit(60)

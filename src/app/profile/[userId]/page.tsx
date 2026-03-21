@@ -10,7 +10,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
   barn: '🧸', kjole: '👗', verktøy: '🔧', bok: '📚', annet: '📦',
 }
 
-type AccessLevel = 'self' | 'friend' | 'friend_of_friend' | 'community' | 'stranger'
+type AccessLevel = 'friend' | 'friend_of_friend' | 'community' | 'stranger'
 
 export default function UserProfilePage() {
   const params = useParams()
@@ -72,7 +72,8 @@ export default function UserProfilePage() {
       const myFriendIds: string[] = (myFriendships || []).map((f: any) => f.user_b)
 
       const { data: theirFriendships } = await supabase
-        .from('friendships').select('user_b, profiles!friendships_user_b_fkey(id, name, avatar_url)')
+        .from('friendships')
+        .select('user_b, profiles!friendships_user_b_fkey(id, name, avatar_url)')
         .eq('user_a', userId)
       const theirFriendIds: string[] = (theirFriendships || []).map((f: any) => f.user_b)
 
@@ -122,8 +123,10 @@ export default function UserProfilePage() {
 
       // ── Items with access filter ──
       const { data: allItems } = await supabase
-        .from('items').select('*, item_access(access_type, community_id)')
-        .eq('owner_id', userId).order('created_at', { ascending: false })
+        .from('items')
+        .select('*, item_access(access_type, community_id)')
+        .eq('owner_id', userId)
+        .order('created_at', { ascending: false })
 
       const visible = (allItems || []).filter((item: any) => {
         const rules: any[] = item.item_access || []
@@ -153,7 +156,8 @@ export default function UserProfilePage() {
       await supabase.from('starred_users')
         .insert({ user_id: viewer.id, starred_id: userId })
       await supabase.from('notifications').insert({
-        user_id: userId, type: 'starred',
+        user_id: userId,
+        type: 'starred',
         title: 'Noen likte profilen din',
         body: `${viewerProfile?.name || viewer.email?.split('@')[0]} fulgte deg`,
       })
@@ -166,7 +170,8 @@ export default function UserProfilePage() {
     await supabase.from('friend_requests')
       .insert({ from_id: viewer.id, to_id: userId })
     await supabase.from('notifications').insert({
-      user_id: userId, type: 'friend_request',
+      user_id: userId,
+      type: 'friend_request',
       title: 'Ny venneforespørsel',
       body: `${viewerProfile?.name || viewer.email?.split('@')[0]} vil bli venner`,
     })
@@ -174,7 +179,6 @@ export default function UserProfilePage() {
     track(Events.FRIEND_REQUEST_SENT)
   }
 
-  // Filtered + searched items
   const availableCategories = [...new Set(items.map(i => i.category).filter(Boolean))]
   const filteredItems = items.filter(i => {
     const matchCat = !itemCategory || i.category === itemCategory
@@ -200,21 +204,25 @@ export default function UserProfilePage() {
     <div className="max-w-lg mx-auto pb-24">
 
       {/* ── Topbar ── */}
-      <div className="flex items-center gap-3 px-4 pt-safe pt-4 pb-3" style={{ paddingTop: 'max(env(safe-area-inset-top), 16px)' }}>
+      <div
+        className="flex items-center gap-3 px-4 pb-3"
+        style={{ paddingTop: 'max(env(safe-area-inset-top), 16px)' }}
+      >
         <button
           onClick={() => router.back()}
           className="w-9 h-9 flex items-center justify-center rounded-full flex-shrink-0"
           style={{ background: '#fff', border: '1px solid #E8DDD0', color: '#6B4226' }}
           aria-label="Tilbake"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
         </button>
         <div className="flex-1" />
-        {/* Star button */}
         <button
           onClick={toggleStar}
           className="w-9 h-9 flex items-center justify-center rounded-full flex-shrink-0"
-          style={{ background: '#fff', border: '1px solid #E8DDD0', color: isStarred ? '#C4673A' : '#9C7B65' }}
+          style={{ background: '#fff', border: '1px solid #E8DDD0', color: isStarred ? 'var(--terra)' : '#9C7B65' }}
           aria-label={isStarred ? 'Fjern stjerne' : 'Stjernemark'}
         >
           <svg width="16" height="16" viewBox="0 0 24 24"
@@ -225,25 +233,23 @@ export default function UserProfilePage() {
         </button>
       </div>
 
-      {/* ── Profilhode ── */}
+      {/* ── Profile header ── */}
       <div style={{ background: '#FAF7F2', borderBottom: '1px solid #E8DDD0' }} className="px-4 pt-2 pb-4">
         <div className="flex items-center gap-4">
-          {/* Avatar */}
           <div
             className="flex items-center justify-center text-white font-bold text-2xl overflow-hidden flex-shrink-0"
             style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--terra)' }}
           >
             {profile?.avatar_url
               ? <img src={profile.avatar_url} className="w-full h-full object-cover" alt={displayName} />
-              : displayName?.[0]?.toUpperCase()}
+              : displayName?.[0]?.toUpperCase()
+            }
           </div>
 
           <div className="flex-1 min-w-0">
             <h1 className="font-display text-xl font-bold truncate" style={{ color: 'var(--terra-dark)' }}>
               {displayName}
             </h1>
-
-            {/* Access level badge */}
             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
               {isFriend && (
                 <span className="text-xs px-2 py-0.5 rounded-full font-medium"
@@ -257,24 +263,27 @@ export default function UserProfilePage() {
                   Felles venner
                 </span>
               )}
-              {accessLevel === 'stranger' && !isFoF && (
+              {accessLevel === 'stranger' && (
                 <span className="text-xs" style={{ color: 'var(--terra-mid)' }}>Ukjent</span>
               )}
             </div>
           </div>
         </div>
 
-        {/* ── Mutual friends ── */}
+        {/* Mutual friends */}
         {mutualFriends.length > 0 && (
           <div className="flex items-center gap-2 mt-3">
             <div className="flex -space-x-1">
               {mutualFriends.slice(0, 4).map((f: any) => (
-                <div key={f.id}
+                <div
+                  key={f.id}
                   className="flex items-center justify-center text-xs font-bold overflow-hidden"
-                  style={{ width: 24, height: 24, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #FAF7F2', color: '#6B4226' }}>
+                  style={{ width: 24, height: 24, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #FAF7F2', color: '#6B4226' }}
+                >
                   {f.avatar_url
                     ? <img src={f.avatar_url} className="w-full h-full object-cover" alt="" />
-                    : f.name?.[0]?.toUpperCase()}
+                    : f.name?.[0]?.toUpperCase()
+                  }
                 </div>
               ))}
             </div>
@@ -284,7 +293,7 @@ export default function UserProfilePage() {
           </div>
         )}
 
-        {/* ── Communities ── */}
+        {/* Communities */}
         {(sharedCommunities.length > 0 || publicCommunities.length > 0) && (
           <div className="flex flex-wrap gap-1.5 mt-3">
             {sharedCommunities.map((c: any) => (
@@ -306,7 +315,7 @@ export default function UserProfilePage() {
           </div>
         )}
 
-        {/* ── Stats ── */}
+        {/* Stats */}
         <div className="flex gap-2 mt-4">
           <div className="glass flex-1 rounded-2xl p-3 text-center" style={{ borderRadius: 16 }}>
             <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{items.length}</p>
@@ -322,7 +331,7 @@ export default function UserProfilePage() {
           </div>
         </div>
 
-        {/* ── Friend request CTA ── */}
+        {/* Friend request CTA */}
         {!isFriend && (
           <div className="mt-4">
             {friendRequestSent ? (
@@ -345,15 +354,16 @@ export default function UserProfilePage() {
         )}
       </div>
 
-      {/* ── Stories ── */}
+      {/* ── Stories — only visible to friends ── */}
       <div style={{ borderBottom: '1px solid #E8DDD0', background: '#FAF7F2' }}>
         <StoryRing
           ownerId={userId}
           isOwner={false}
+          canView={isFriend}
         />
       </div>
 
-      {/* ── Gjenstander ── */}
+      {/* ── Items ── */}
       <div className="px-4 pt-5">
         <div className="flex items-center gap-2 mb-3">
           <h2 className="font-bold flex-1" style={{ color: 'var(--terra-dark)' }}>
@@ -424,7 +434,8 @@ export default function UserProfilePage() {
           >
             {items.length === 0
               ? `${displayName} har ikke lagt ut noe ennå`
-              : 'Ingen gjenstander matcher søket'}
+              : 'Ingen gjenstander matcher søket'
+            }
           </div>
         ) : (
           <div className="flex flex-col gap-2">

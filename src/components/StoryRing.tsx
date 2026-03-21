@@ -24,8 +24,9 @@ interface Story {
 }
 
 interface StoryRingProps {
-  ownerId: string           // whose stories to show
-  isOwner: boolean          // is the viewer the owner?
+  ownerId: string
+  isOwner: boolean    // true only when viewer === owner
+  canView?: boolean   // non-owners: only friends may view; ignored when isOwner=true
   onCreateStory?: () => void
 }
 
@@ -33,7 +34,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
   barn: '🧸', kjole: '👗', verktøy: '🔧', bok: '📚', annet: '📦',
 }
 
-export default function StoryRing({ ownerId, isOwner, onCreateStory }: StoryRingProps) {
+export default function StoryRing({ ownerId, isOwner, canView = false, onCreateStory }: StoryRingProps) {
   const [stories, setStories] = useState<Story[]>([])
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
@@ -57,7 +58,7 @@ export default function StoryRing({ ownerId, isOwner, onCreateStory }: StoryRing
         ...s,
         slides: (s.item_story_slides || [])
           .sort((a: any, b: any) => a.sort_order - b.sort_order)
-          .filter((sl: any) => sl.items), // guard against deleted items
+          .filter((sl: any) => sl.items),
       })).filter(s => s.slides.length > 0)
 
       setStories(normalized)
@@ -67,7 +68,31 @@ export default function StoryRing({ ownerId, isOwner, onCreateStory }: StoryRing
   }, [ownerId])
 
   if (loading) return null
+
+  // Non-owner who is not a friend: hide entirely
+  if (!isOwner && !canView) return null
+
+  // Friend but owner has no stories yet: hide (nothing to show)
   if (!isOwner && stories.length === 0) return null
+
+  // Own profile, no stories yet: show only the "+" bubble
+  if (isOwner && stories.length === 0) {
+    return (
+      <div className="flex gap-3 overflow-x-auto px-4 py-3" style={{ scrollbarWidth: 'none' }}>
+        <button onClick={onCreateStory} className="flex flex-col items-center gap-1.5 flex-shrink-0">
+          <div
+            className="flex items-center justify-center rounded-full"
+            style={{ width: 64, height: 64, background: '#FAF7F2', border: '2px dashed #E8DDD0' }}
+          >
+            <span style={{ fontSize: 24, color: 'var(--terra)' }}>+</span>
+          </div>
+          <span className="text-xs" style={{ color: 'var(--terra-mid)', maxWidth: 64, textAlign: 'center', lineHeight: 1.2 }}>
+            Ny story
+          </span>
+        </button>
+      </div>
+    )
+  }
 
   const openStory = (idx: number) => setActiveIndex(idx)
   const closeStory = () => setActiveIndex(null)
@@ -91,16 +116,12 @@ export default function StoryRing({ ownerId, isOwner, onCreateStory }: StoryRing
         className="flex gap-3 overflow-x-auto px-4 py-3"
         style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}
       >
-        {/* Owner: "+ Ny story" bubble */}
+        {/* Owner: "+ Ny story" bubble always first */}
         {isOwner && (
           <button onClick={onCreateStory} className="flex flex-col items-center gap-1.5 flex-shrink-0">
             <div
               className="flex items-center justify-center rounded-full"
-              style={{
-                width: 64, height: 64,
-                background: '#FAF7F2',
-                border: '2px dashed #E8DDD0',
-              }}
+              style={{ width: 64, height: 64, background: '#FAF7F2', border: '2px dashed #E8DDD0' }}
             >
               <span style={{ fontSize: 24, color: 'var(--terra)' }}>+</span>
             </div>
@@ -110,7 +131,6 @@ export default function StoryRing({ ownerId, isOwner, onCreateStory }: StoryRing
           </button>
         )}
 
-        {/* Story bubbles */}
         {stories.map((story, idx) => {
           const coverItem = story.slides[0]?.items
           const coverImg = story.cover_url || coverItem?.image_url
@@ -124,7 +144,6 @@ export default function StoryRing({ ownerId, isOwner, onCreateStory }: StoryRing
               onClick={() => openStory(idx)}
               className="flex flex-col items-center gap-1.5 flex-shrink-0"
             >
-              {/* Ring */}
               <div
                 style={{
                   width: 68, height: 68,
@@ -138,11 +157,10 @@ export default function StoryRing({ ownerId, isOwner, onCreateStory }: StoryRing
                   className="w-full h-full rounded-full overflow-hidden flex items-center justify-center"
                   style={{ background: '#E8DDD0', border: '2px solid #FAF7F2' }}
                 >
-                  {coverImg ? (
-                    <img src={coverImg} className="w-full h-full object-cover" alt={story.title} />
-                  ) : (
-                    <span style={{ fontSize: 24 }}>{emoji ?? '📦'}</span>
-                  )}
+                  {coverImg
+                    ? <img src={coverImg} className="w-full h-full object-cover" alt={story.title} />
+                    : <span style={{ fontSize: 24 }}>{emoji ?? '📦'}</span>
+                  }
                 </div>
               </div>
               <span
@@ -165,11 +183,11 @@ export default function StoryRing({ ownerId, isOwner, onCreateStory }: StoryRing
         })}
       </div>
 
-      {/* Viewer overlay */}
       {activeIndex !== null && (
         <StoryViewer
           story={stories[activeIndex]}
           ownerId={ownerId}
+          isOwner={isOwner}
           onClose={closeStory}
           onNext={nextStory}
           onPrev={activeIndex > 0 ? prevStory : undefined}

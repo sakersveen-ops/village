@@ -68,7 +68,40 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
   const suggestions = (isOwner ? OWNER_SUGGESTIONS : BORROWER_SUGGESTIONS)
     .filter(s => s.minStatus === 'pending' || isActive)
 
-  useEffect(() => { if (loan?.id) { loadMessages(); loadBorrowerContext() } }, [loan?.id])
+  useEffect(() => {
+  if (!loan?.id) return
+  loadMessages()
+  loadBorrowerContext()
+
+  const supabase = createClient()
+  const channel = supabase
+    .channel(`loan_messages_${loan.id}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'loan_messages',
+        filter: `loan_id=eq.${loan.id}`,
+      },
+      (payload) => {
+        const newMsg = payload.new as any
+        setMessages(prev => {
+          // Ikke legg til hvis vi allerede har den (optimistisk eller ekte)
+          const exists = prev.some(m => m.id === newMsg.id || (m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id))
+          if (exists) return prev.map(m =>
+            m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id
+              ? { ...newMsg, profiles: m.profiles }
+              : m
+          )
+          return [...prev, newMsg]
+        })
+      }
+    )
+    .subscribe()
+
+  return () => { supabase.removeChannel(channel) }
+}, [loan?.id])
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
   useEffect(() => {
     if (openProposal && !showProposal) {

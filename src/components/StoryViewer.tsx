@@ -311,7 +311,7 @@ export default function StoryViewer({
                   </p>
                   {currentSlide?.caption && (
                     <p className="text-sm mt-1 leading-snug" style={{ color: 'rgba(255,255,255,0.8)', fontStyle: 'italic' }}>
-                      "{currentSlide.caption}"
+                      {currentSlide.caption}
                     </p>
                   )}
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">

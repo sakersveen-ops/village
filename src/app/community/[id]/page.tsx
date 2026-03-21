@@ -73,13 +73,12 @@ export default function CommunityPage() {
         .order('created_at', { ascending: false })
       setItems(items || [])
 
-      // Load friends for invite modal
+      // Load friends for invite modal — friendships has user_a/user_b (both directions inserted on accept)
       const { data: friendsData } = await supabase
         .from('friendships')
-        .select('friend:profiles!friendships_friend_id_fkey(id, name, email, avatar_url)')
-        .eq('user_id', user.id)
-        .eq('status', 'accepted')
-      setFriends((friendsData || []).map((f: any) => f.friend))
+        .select('user_b, profiles!friendships_user_b_fkey(id, name, email, avatar_url)')
+        .eq('user_a', user.id)
+      setFriends((friendsData || []).map((f: any) => f.profiles).filter(Boolean))
 
       if (me?.role === 'admin') {
         const { data: log } = await supabase
@@ -326,7 +325,12 @@ export default function CommunityPage() {
       {/* Header */}
       <div className="glass" style={{ borderRadius: '0 0 20px 20px', position: 'sticky', top: 0, zIndex: 40, borderTop: 'none' }}>
         <div className="px-4 pt-10 pb-4">
-        <button onClick={() => router.back()} className="text-[#C4673A] text-sm mb-4 block">← Tilbake</button>
+        <button
+          onClick={() => editing ? setEditing(false) : router.back()}
+          className="text-[#C4673A] text-sm mb-4 block"
+        >
+          ← {editing ? 'Avbryt redigering' : 'Tilbake'}
+        </button>
 
         {editing ? (
           <div className="flex flex-col gap-3">
@@ -414,7 +418,7 @@ export default function CommunityPage() {
             >
               {t === 'feed' ? 'Feed'
                 : t === 'members' ? `Medlemmer (${members.length})`
-                : `Admin${pending.length > 0 ? ` (${pending.length})` : ''}`}
+                : `Administrer krets${pending.length > 0 ? ` (${pending.length})` : ''}`}
             </button>
           ))}
         </div>
@@ -427,23 +431,13 @@ export default function CommunityPage() {
         {tab === 'feed' && (
           <>
             {isAdmin && (
-              <div className="flex gap-2 mb-4">
-                {/* FIX: Invite link with copy feedback + invite friends */}
+              <div className="mb-4">
                 <button
                   onClick={() => setShowInviteModal(true)}
-                  className="flex-1 bg-white border border-dashed border-[#C4673A] rounded-2xl py-3 text-sm text-[#C4673A] font-medium"
+                  className="w-full border border-dashed rounded-2xl py-3 text-sm font-medium"
+                  style={{ borderColor: 'var(--terra)', color: 'var(--terra)', background: 'rgba(196,103,58,0.04)' }}
                 >
                   👥 Inviter venner
-                </button>
-                <button
-                  onClick={copyInvite}
-                  className={`bg-white border rounded-2xl py-3 px-4 text-sm font-medium transition-colors ${
-                    copySuccess
-                      ? 'border-[#4A7C59] text-[#4A7C59]'
-                      : 'border-[#E8DDD0] text-[#6B4226]'
-                  }`}
-                >
-                  {copySuccess ? '✓ Kopiert!' : '📋 Lenke'}
                 </button>
               </div>
             )}
@@ -628,23 +622,16 @@ export default function CommunityPage() {
                 </div>
               )}
             </div>
-            
 
-            {/* Danger zone */}
-            <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(185,28,28,0.2)' }}>
-              <div className="px-4 py-3" style={{ background: 'rgba(185,28,28,0.04)' }}>
-                <p className="text-sm font-semibold text-[#2C1A0E]">Faresone</p>
-                <p className="text-xs text-[#9C7B65] mt-0.5">Sletting er permanent og kan ikke angres</p>
-              </div>
-              <div className="px-4 py-3">
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="w-full py-2.5 rounded-xl text-sm font-medium"
-                  style={{ background: 'rgba(185,28,28,0.08)', color: '#B91C1C', border: '1px solid rgba(185,28,28,0.2)' }}
-                >
-                  🗑 Slett kretsen
-                </button>
-              </div>
+            {/* Slett krets */}
+            <div className="pt-2 pb-1 text-center">
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-xs font-medium"
+                style={{ color: '#B91C1C', opacity: 0.7 }}
+              >
+                🗑 Slett kretsen
+              </button>
             </div>
           </div>
         )}

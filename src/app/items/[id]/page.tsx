@@ -158,13 +158,6 @@ export default function ItemPage() {
       return
     }
 
-    await supabase.from('loan_messages').insert({
-      loan_id: newLoan.id,
-      sender_id: user.id,
-      type: 'chat',
-      body: message,
-    })
-
     await supabase.from('notifications').insert({
       user_id: notifyUserId,
       type: 'loan_request',

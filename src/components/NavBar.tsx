@@ -25,7 +25,6 @@ function getTitle(pathname: string): string {
   return 'Village'
 }
 
-// Toppnivå-sider: ingen tilbake-pil
 const ROOT_PATHS = ['/', '/community/search', '/add', '/schedule', '/profile']
 function isRootPath(pathname: string) {
   return ROOT_PATHS.includes(pathname)
@@ -59,7 +58,6 @@ export default function NavBar() {
   const showBack = !isRootPath(pathname)
 
   useEffect(() => {
-    // Lukk meny ved navigasjon
     setShowMenu(false)
   }, [pathname])
 
@@ -94,16 +92,7 @@ export default function NavBar() {
       const supabase = createClient()
       channel = supabase
         .channel('navbar_notifications')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'notifications',
-            filter: `user_id=eq.${userId}`,
-          },
-          () => { load() }
-        )
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, () => { load() })
         .subscribe()
     })
 
@@ -128,12 +117,13 @@ export default function NavBar() {
 
   const title = getTitle(pathname)
 
+  // data-tour attributes wire up the AppTour spotlight to each nav element
   const navItems = [
-    { href: '/',                 icon: 'home',      label: 'Hjem' },
-    { href: '/community/search', icon: 'community', label: 'Kretser' },
-    { href: '/add',              icon: null,         label: 'Del gjenstand' },
-    { href: '/schedule',         icon: 'schedule',  label: 'Avtaler' },
-    { href: '/profile',          icon: 'profile',   label: 'Profil' },
+    { href: '/',                 icon: 'home',      label: 'Hjem',         tour: 'feed' },
+    { href: '/community/search', icon: 'community', label: 'Kretser',      tour: 'communities' },
+    { href: '/add',              icon: null,         label: 'Del gjenstand', tour: 'add' },
+    { href: '/schedule',         icon: 'schedule',  label: 'Avtaler',      tour: 'schedule' },
+    { href: '/profile',          icon: 'profile',   label: 'Profil',       tour: 'profile' },
   ]
 
   return (
@@ -143,7 +133,6 @@ export default function NavBar() {
         className="page-header glass"
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}
       >
-        {/* Venstre: ← på undersider, søk på rotsider */}
         {showBack ? (
           <button onClick={() => router.back()} aria-label="Tilbake" style={iconBtnStyle()}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,#2C1A0E)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -158,14 +147,11 @@ export default function NavBar() {
           </Link>
         )}
 
-        {/* Tittel */}
         <h1 className="page-header-title font-display">{title}</h1>
 
-        {/* Høyre: varsler + meldinger + ··· (alltid) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-
-          {/* Varsler */}
-          <Link href="/notifications" aria-label="Varsler"
+          {/* Varsler — data-tour for top bar */}
+          <Link href="/notifications" aria-label="Varsler" data-tour="notifications"
             style={{ ...iconBtnStyle(pathname === '/notifications'), position: 'relative' }}>
             <BellIcon />
             {unread > 0 && (
@@ -184,13 +170,14 @@ export default function NavBar() {
           </Link>
 
           {/* Meldinger */}
-          <Link href="/messages" aria-label="Meldinger" style={iconBtnStyle(pathname === '/messages')}>
+          <Link href="/messages" aria-label="Meldinger" data-tour="messages"
+            style={iconBtnStyle(pathname === '/messages')}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,#2C1A0E)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
           </Link>
 
-          {/* ··· meny — alltid */}
+          {/* ··· meny */}
           <div style={{ position: 'relative' }}>
             <button onClick={() => setShowMenu(m => !m)} aria-label="Meny" style={iconBtnStyle(showMenu)}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -233,7 +220,7 @@ export default function NavBar() {
 
           if (!item.icon) {
             return (
-              <Link key={item.href} href={item.href}
+              <Link key={item.href} href={item.href} data-tour={item.tour}
                 style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, textDecoration: 'none' }}>
                 <div style={{
                   width: 44, height: 44, borderRadius: '50%',
@@ -253,7 +240,8 @@ export default function NavBar() {
           }
 
           return (
-            <Link key={item.href} href={item.href} className={`nav-item${isActive ? ' active' : ''}`}>
+            <Link key={item.href} href={item.href} data-tour={item.tour}
+              className={`nav-item${isActive ? ' active' : ''}`}>
               <span className="nav-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {item.icon === 'home' && (
                   <svg width="20" height="20" viewBox="0 0 24 24" fill={isActive ? 'var(--terra)' : 'none'} stroke={isActive ? 'var(--terra)' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

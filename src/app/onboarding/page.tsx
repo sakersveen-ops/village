@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { track } from '@/lib/track'
+import FinnImporter from '@/components/FinnImporter'
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 const IconShare = () => (
@@ -70,7 +71,7 @@ const ITEM_CATALOGUE: Record<string, { label: string; items: string[] }[]> = {
 }
 
 const ALL_CATEGORIES = Object.keys(ITEM_CATALOGUE)
-const TOTAL_STEPS = 7 // 1 Welcome · 2 Profile · 3 Friends · 4 Categories · 5 Share · 6 Wishlist · 7 Tour
+const TOTAL_STEPS = 7 // 1 Welcome · 2 Profile · 3 Friends · 4 Categories · 5 Share · 6 Wishlist · 7 Finn
 
 // ─── App tour items ───────────────────────────────────────────────────────────
 const TOUR_ITEMS = [
@@ -372,7 +373,7 @@ function OnboardingContent() {
   const [wantedItems, setWantedItems] = useState<Set<string>>(new Set())
 
   const [showWishModal, setShowWishModal] = useState(false)
-  const [tourIndex, setTourIndex] = useState(0)
+  const [showCongrats, setShowCongrats] = useState(false)
 
   // Guard: redirect if already onboarded
   useEffect(() => {
@@ -470,9 +471,10 @@ function OnboardingContent() {
     if (ownedItems.size > 0) {
       localStorage.setItem('village_owned_items', JSON.stringify([...ownedItems]))
     }
-    // Mark onboarding as done so guard doesn't re-show it
     if (currentUserId) localStorage.setItem('village_onboarding_done_' + currentUserId, '1')
-    router.push('/')
+    setShowCongrats(true)
+    // Redirect after splash animation
+    setTimeout(() => router.push('/'), 2800)
   }
 
   const activeCatalogue = selectedCategories.flatMap(cat => ITEM_CATALOGUE[cat] ?? [])
@@ -648,7 +650,31 @@ function OnboardingContent() {
           onSkip={goSkip} skipLabel="Hopp over" />
       </div>
     ),
-    7: StepTour,
+    7: (
+      <div className="flex flex-col gap-5 flex-1">
+        <div>
+          <h1 className="font-display text-2xl font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+            Leier du ut noe på Finn?
+          </h1>
+          <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--terra-mid)' }}>
+            Vi ELSKER Finn! Men ikke til utleie. Leier du ut noe på Finn allerede, kan du ta screenshots av det her og få hjelp til å sette opp annonser automatisk.
+          </p>
+        </div>
+        <FinnImporter
+          communityId={undefined}
+          onImported={(count) => {
+            track('onboarding_finn_imported', { count })
+          }}
+        />
+        <NavButtons
+          onNext={saveAndFinish}
+          onBack={goBack}
+          nextLabel="Kom i gang 🏡"
+          onSkip={saveAndFinish}
+          skipLabel="Hopp over"
+        />
+      </div>
+    ),
   }
 
   return (
@@ -661,6 +687,51 @@ function OnboardingContent() {
       </div>
       {steps[step]}
       {showWishModal && <WishConfirmModal count={wantedItems.size} onConfirm={confirmWishModal} />}
+
+      {/* Gratulerer-splash */}
+      {showCongrats && (
+        <div
+          className="fixed inset-0 z-[100] flex flex-col items-center justify-center px-8 text-center"
+          style={{ background: 'linear-gradient(160deg, #FFF5EE 0%, #F5E6D8 50%, #EDD5C0 100%)' }}
+        >
+          <div className="text-7xl mb-6" style={{ animation: 'popIn 0.5s cubic-bezier(0.175,0.885,0.32,1.275) both' }}>
+            🏡
+          </div>
+          <h1 className="font-display text-3xl font-bold mb-3"
+            style={{ color: 'var(--terra-dark)', letterSpacing: '-0.03em', animation: 'fadeUp 0.5s 0.2s both' }}>
+            Velkommen til Village!
+          </h1>
+          <p className="text-base leading-relaxed mb-8"
+            style={{ color: 'var(--terra-mid)', maxWidth: 300, animation: 'fadeUp 0.5s 0.35s both' }}>
+            Profilen din er klar. Nå kan du dele og låne med folk du stoler på.
+          </p>
+          <div className="flex gap-2" style={{ animation: 'fadeUp 0.5s 0.5s both' }}>
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="rounded-full"
+                style={{
+                  width: 8, height: 8,
+                  background: 'var(--terra)',
+                  opacity: 0.3,
+                  animation: `pulse 1.2s ${i * 0.2}s infinite`,
+                }} />
+            ))}
+          </div>
+          <style>{`
+            @keyframes popIn {
+              from { transform: scale(0.5); opacity: 0; }
+              to   { transform: scale(1);   opacity: 1; }
+            }
+            @keyframes fadeUp {
+              from { transform: translateY(16px); opacity: 0; }
+              to   { transform: translateY(0);    opacity: 1; }
+            }
+            @keyframes pulse {
+              0%, 100% { opacity: 0.3; transform: scale(1); }
+              50%       { opacity: 1;   transform: scale(1.3); }
+            }
+          `}</style>
+        </div>
+      )}
     </div>
   )
 }

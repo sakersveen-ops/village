@@ -2,7 +2,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 
-// ── Types ──
 type ItemRequest = {
   id: string
   user_id: string
@@ -25,30 +24,24 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
 }
 
-function DateRange({ from, to }: { from: string | null; to: string | null }) {
+function DateChip({ from, to }: { from: string | null; to: string | null }) {
   if (!from && !to) return null
   return (
-    <div className="flex items-center gap-2 justify-center mt-3">
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
-        style={{ background: 'rgba(255,248,243,0.15)', border: '1px solid rgba(255,248,243,0.25)' }}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,248,243,0.8)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-        </svg>
-        <span className="text-xs font-medium" style={{ color: 'rgba(255,248,243,0.9)' }}>
-          {from ? formatDate(from) : '?'} → {to ? formatDate(to) : '?'}
-        </span>
-      </div>
-    </div>
+    <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: 'var(--terra-mid)' }}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      {from ? formatDate(from) : '?'} → {to ? formatDate(to) : '?'}
+    </p>
   )
 }
 
-// ── Fullskjerm overlay ──
+// ── Fullskjerm viewer ──
 function RequestViewer({
-  request, isOwner, viewerId, ownerName, onClose, onEdit,
+  request, isOwner, ownerName, onClose, onEdit,
 }: {
   request: ItemRequest
   isOwner: boolean
-  viewerId: string
   ownerName: string
   onClose: () => void
   onEdit?: () => void
@@ -60,8 +53,7 @@ function RequestViewer({
     setSending(true)
     const supabase = createClient()
     const dateNote = request.loan_from && request.loan_to
-      ? ` (${formatDate(request.loan_from)} – ${formatDate(request.loan_to)})`
-      : ''
+      ? ` (${formatDate(request.loan_from)} – ${formatDate(request.loan_to)})` : ''
     await supabase.from('notifications').insert({
       user_id: request.user_id,
       type: 'loan_offer',
@@ -76,11 +68,9 @@ function RequestViewer({
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'rgba(44,26,14,0.94)' }}
       onClick={onClose}>
       <button onClick={onClose} className="absolute top-12 right-4 text-white text-2xl opacity-60 z-10">✕</button>
-
       <div className="flex-1 flex flex-col items-center justify-center px-6 max-w-lg mx-auto w-full"
         onClick={e => e.stopPropagation()}>
 
-        {/* Bilde eller emoji */}
         {request.image_url ? (
           <img src={request.image_url} alt={request.name}
             className="rounded-3xl object-cover mb-5 shadow-xl"
@@ -92,22 +82,31 @@ function RequestViewer({
           </div>
         )}
 
-        {/* Innhold */}
         <div className="w-full text-center">
           <p className="text-xs font-medium mb-1" style={{ color: 'rgba(255,248,243,0.55)' }}>
             {isOwner ? 'Din ønskeliste' : `${ownerName} ønsker å låne`}
           </p>
           <h2 className="font-display text-2xl font-bold text-white mb-1">{request.name}</h2>
 
-          {/* Datoperiode — fremtredende plassering rett under tittelen */}
-          <DateRange from={request.loan_from} to={request.loan_to} />
+          {(request.loan_from || request.loan_to) && (
+            <div className="flex items-center gap-2 justify-center mt-2">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+                style={{ background: 'rgba(255,248,243,0.15)', border: '1px solid rgba(255,248,243,0.25)' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,248,243,0.8)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <span className="text-xs font-medium" style={{ color: 'rgba(255,248,243,0.9)' }}>
+                  {request.loan_from ? formatDate(request.loan_from) : '?'} → {request.loan_to ? formatDate(request.loan_to) : '?'}
+                </span>
+              </div>
+            </div>
+          )}
 
           {request.description && (
             <p className="text-sm mt-3" style={{ color: 'rgba(255,248,243,0.7)' }}>{request.description}</p>
           )}
         </div>
 
-        {/* Handlinger */}
         <div className="w-full mt-5">
           {isOwner ? (
             <div className="flex gap-3">
@@ -140,14 +139,15 @@ function RequestViewer({
   )
 }
 
-// ── Creator/Editor ──
+// ── Creator / Editor — alltid ny hvis existing=null, rediger hvis existing satt ──
 function RequestCreator({
-  existing, userId, onClose, onSaved,
+  existing, userId, onClose, onSaved, onDeleted,
 }: {
   existing: ItemRequest | null
   userId: string
   onClose: () => void
   onSaved: (req: ItemRequest) => void
+  onDeleted?: () => void
 }) {
   const [name, setName] = useState(existing?.name ?? '')
   const [description, setDescription] = useState(existing?.description ?? '')
@@ -211,12 +211,12 @@ function RequestCreator({
     setDeleting(true)
     const supabase = createClient()
     await supabase.from('item_requests').delete().eq('id', existing.id)
+    setDeleting(false)
+    onDeleted?.()
     onClose()
   }
 
-  const inputStyle = {
-    background: '#fff', border: '1px solid #E8DDD0', color: 'var(--terra-dark)',
-  }
+  const inputStyle = { background: '#fff', border: '1px solid #E8DDD0', color: 'var(--terra-dark)' }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(44,26,14,0.6)' }}
@@ -233,7 +233,6 @@ function RequestCreator({
             <button onClick={onClose} style={{ color: 'var(--terra-mid)' }}>✕</button>
           </div>
 
-          {/* Bilde */}
           <button onClick={() => fileRef.current?.click()}
             className="w-full rounded-2xl flex items-center justify-center overflow-hidden"
             style={{ height: 160, background: '#F0E9E2', border: '2px dashed rgba(196,103,58,0.3)' }}>
@@ -247,7 +246,6 @@ function RequestCreator({
           </button>
           <input ref={fileRef} type="file" accept="image/*" onChange={pickImage} className="hidden" />
 
-          {/* Navn */}
           <div>
             <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--terra-mid)' }}>Hva leter du etter?</label>
             <input value={name} onChange={e => setName(e.target.value)}
@@ -259,7 +257,6 @@ function RequestCreator({
             />
           </div>
 
-          {/* Beskrivelse */}
           <div>
             <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--terra-mid)' }}>Beskrivelse (valgfritt)</label>
             <textarea value={description} onChange={e => setDescription(e.target.value)}
@@ -272,11 +269,8 @@ function RequestCreator({
             />
           </div>
 
-          {/* Lånedatoer */}
           <div>
-            <label className="text-xs font-medium mb-2 block" style={{ color: 'var(--terra-mid)' }}>
-              Lånedatoer (valgfritt)
-            </label>
+            <label className="text-xs font-medium mb-2 block" style={{ color: 'var(--terra-mid)' }}>Lånedatoer (valgfritt)</label>
             <div className="flex gap-2">
               <div className="flex-1">
                 <p className="text-xs mb-1" style={{ color: 'var(--terra-mid)' }}>Fra</p>
@@ -300,7 +294,6 @@ function RequestCreator({
             </div>
           </div>
 
-          {/* Toggles */}
           <div className="flex flex-col gap-3 rounded-2xl p-4" style={{ background: '#FAF7F2', border: '1px solid #E8DDD0' }}>
             <div className="flex items-center justify-between">
               <div>
@@ -314,7 +307,6 @@ function RequestCreator({
                   style={{ left: postToFriends ? 26 : 4 }} />
               </button>
             </div>
-
             {postToFriends && (
               <div className="flex items-center justify-between">
                 <div>
@@ -331,14 +323,12 @@ function RequestCreator({
             )}
           </div>
 
-          {/* Lagre */}
           <button onClick={save} disabled={saving || !name.trim()}
             className="btn-primary w-full py-3 rounded-2xl text-sm font-semibold"
             style={{ opacity: !name.trim() ? 0.5 : 1 }}>
-            {saving ? 'Lagrer…' : existing ? 'Oppdater ønskeliste' : 'Legg ut ønskeliste'}
+            {saving ? 'Lagrer…' : existing ? 'Oppdater' : 'Legg ut ønskeliste'}
           </button>
 
-          {/* Slett */}
           {existing && (
             <button onClick={deleteRequest} disabled={deleting}
               className="w-full py-2.5 rounded-2xl text-sm"
@@ -352,19 +342,6 @@ function RequestCreator({
   )
 }
 
-// ── Kort-rad — datoene vises kompakt under gjenstandsnavnet ──
-function DateChip({ from, to }: { from: string | null; to: string | null }) {
-  if (!from && !to) return null
-  return (
-    <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: 'var(--terra-mid)' }}>
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-      </svg>
-      {from ? formatDate(from) : '?'} → {to ? formatDate(to) : '?'}
-    </p>
-  )
-}
-
 // ── Hovedkomponent ──
 export default function ItemRequestCard({
   profileUserId, viewerId, isOwner, ownerName,
@@ -374,100 +351,146 @@ export default function ItemRequestCard({
   isOwner: boolean
   ownerName: string
 }) {
-  const [request, setRequest] = useState<ItemRequest | null>(null)
+  const [requests, setRequests] = useState<ItemRequest[]>([])
   const [loading, setLoading] = useState(true)
-  const [showViewer, setShowViewer] = useState(false)
-  const [showCreator, setShowCreator] = useState(false)
+  const [viewingRequest, setViewingRequest] = useState<ItemRequest | null>(null)
+  const [editingRequest, setEditingRequest] = useState<ItemRequest | null>(null)
+  const [showNewCreator, setShowNewCreator] = useState(false)
 
-  useEffect(() => {
-    const load = async () => {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from('item_requests').select('*')
-        .eq('user_id', profileUserId)
-        .order('created_at', { ascending: false })
-        .limit(1).maybeSingle()
-      setRequest(data)
-      setLoading(false)
-    }
-    load()
-  }, [profileUserId])
+  const loadRequests = async () => {
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('item_requests')
+      .select('*')
+      .eq('user_id', profileUserId)
+      .order('created_at', { ascending: false })
+    setRequests(data || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { loadRequests() }, [profileUserId])
 
   if (loading) return null
-  if (!isOwner && (!request || !request.post_to_friends)) return null
+
+  // Andres profil: skjul hvis ingen requests eller ingen post_to_friends
+  const visibleRequests = isOwner
+    ? requests
+    : requests.filter(r => r.post_to_friends)
+
+  if (!isOwner && visibleRequests.length === 0) return null
 
   return (
     <>
-      <button onClick={() => request ? setShowViewer(true) : setShowCreator(true)} className="w-full text-left">
-        <div className="mx-4 my-3 rounded-2xl overflow-hidden shadow-sm"
-          style={{ border: '1.5px solid rgba(196,103,58,0.25)' }}>
-          <div className="flex items-center gap-3 px-4 py-3"
-            style={{ background: 'linear-gradient(135deg, rgba(196,103,58,0.08) 0%, rgba(74,124,89,0.06) 100%)' }}>
+      <div className="mx-4 my-3 rounded-2xl overflow-hidden shadow-sm"
+        style={{ border: '1.5px solid rgba(196,103,58,0.25)' }}>
 
-            {request?.image_url ? (
-              <img src={request.image_url} alt={request.name}
-                className="rounded-xl object-cover flex-shrink-0" style={{ width: 48, height: 48 }} />
-            ) : (
-              <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                style={{ width: 48, height: 48, background: 'rgba(196,103,58,0.12)' }}>
-                {request ? (CAT_EMOJI[request.category ?? ''] ?? '🔍') : '✨'}
-              </div>
+        {/* Header */}
+        <div className="px-4 pt-3 pb-2 flex items-center justify-between"
+          style={{ background: 'linear-gradient(135deg, rgba(196,103,58,0.08) 0%, rgba(74,124,89,0.06) 100%)' }}>
+          <p className="text-xs font-semibold" style={{ color: 'var(--terra)' }}>
+            {isOwner ? 'Min ønskeliste' : `${ownerName} ønsker å låne`}
+            {visibleRequests.length > 0 && (
+              <span className="ml-1.5 font-normal" style={{ color: 'var(--terra-mid)' }}>
+                ({visibleRequests.length})
+              </span>
             )}
-
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold mb-0.5" style={{ color: 'var(--terra)' }}>
-                {isOwner ? 'Min ønskeliste' : `${ownerName} ønsker å låne`}
-              </p>
-              {request ? (
-                <>
-                  <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>
-                    {request.name}
-                  </p>
-                  {/* Datoer vises kompakt i kortet */}
-                  <DateChip from={request.loan_from} to={request.loan_to} />
-                </>
-              ) : (
-                <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>
-                  Legg til en gjenstand du ønsker å låne
-                </p>
-              )}
-            </div>
-
-            <div className="flex-shrink-0 text-lg">
-              {isOwner ? (request ? '✏️' : '+') : '→'}
-            </div>
-          </div>
-          {/* Sekundær "+ Legg til flere"-rad når request finnes og bruker er eier */}
-          {isOwner && request && (
+          </p>
+          {isOwner && (
             <button
-              onClick={e => { e.stopPropagation(); setShowCreator(true) }}
-              className="flex items-center justify-center gap-1.5 w-full py-2 text-xs font-medium"
-              style={{
-                color: 'var(--terra)',
-                borderTop: '1px solid rgba(196,103,58,0.15)',
-                background: 'rgba(196,103,58,0.03)',
-              }}
+              onClick={() => setShowNewCreator(true)}
+              className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full"
+              style={{ background: 'var(--terra)', color: '#fff' }}
             >
-              <span style={{ fontSize: 14 }}>+</span>
-              Legg til ny ønskeliste
+              + Legg til
             </button>
           )}
         </div>
-      </button>
 
-      {showViewer && request && (
+        {/* Liste over requests */}
+        {visibleRequests.length === 0 ? (
+          <button onClick={() => setShowNewCreator(true)}
+            className="w-full px-4 py-4 flex items-center gap-3 text-left"
+            style={{ background: 'rgba(196,103,58,0.03)' }}>
+            <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+              style={{ width: 44, height: 44, background: 'rgba(196,103,58,0.10)' }}>
+              ✨
+            </div>
+            <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>
+              Legg til en gjenstand du ønsker å låne
+            </p>
+          </button>
+        ) : (
+          <div>
+            {visibleRequests.map((req, idx) => (
+              <button
+                key={req.id}
+                onClick={() => setViewingRequest(req)}
+                className="w-full px-4 py-3 flex items-center gap-3 text-left"
+                style={{
+                  background: '#fff',
+                  borderTop: idx === 0 ? '1px solid rgba(196,103,58,0.1)' : '1px solid #F0EAE4',
+                }}
+              >
+                {req.image_url ? (
+                  <img src={req.image_url} alt={req.name}
+                    className="rounded-xl object-cover flex-shrink-0" style={{ width: 44, height: 44 }} />
+                ) : (
+                  <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                    style={{ width: 44, height: 44, background: '#E8DDD0' }}>
+                    {CAT_EMOJI[req.category ?? ''] ?? '🔍'}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>
+                    {req.name}
+                  </p>
+                  <DateChip from={req.loan_from} to={req.loan_to} />
+                </div>
+                <span className="text-lg flex-shrink-0">{isOwner ? '✏️' : '→'}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Viewer */}
+      {viewingRequest && (
         <RequestViewer
-          request={request} isOwner={isOwner} viewerId={viewerId}
-          ownerName={ownerName} onClose={() => setShowViewer(false)}
-          onEdit={() => { setShowViewer(false); setShowCreator(true) }}
+          request={viewingRequest}
+          isOwner={isOwner}
+          ownerName={ownerName}
+          onClose={() => setViewingRequest(null)}
+          onEdit={() => { setEditingRequest(viewingRequest); setViewingRequest(null) }}
         />
       )}
 
-      {showCreator && (
+      {/* Rediger eksisterende */}
+      {editingRequest && (
         <RequestCreator
-          existing={request} userId={profileUserId}
-          onClose={() => setShowCreator(false)}
-          onSaved={(req) => { setRequest(req); setShowCreator(false) }}
+          existing={editingRequest}
+          userId={profileUserId}
+          onClose={() => setEditingRequest(null)}
+          onSaved={(updated) => {
+            setRequests(prev => prev.map(r => r.id === updated.id ? updated : r))
+            setEditingRequest(null)
+          }}
+          onDeleted={() => {
+            setRequests(prev => prev.filter(r => r.id !== editingRequest.id))
+            setEditingRequest(null)
+          }}
+        />
+      )}
+
+      {/* Opprett ny */}
+      {showNewCreator && (
+        <RequestCreator
+          existing={null}
+          userId={profileUserId}
+          onClose={() => setShowNewCreator(false)}
+          onSaved={(newReq) => {
+            setRequests(prev => [newReq, ...prev])
+            setShowNewCreator(false)
+          }}
         />
       )}
     </>

@@ -73,17 +73,6 @@ const ITEM_CATALOGUE: Record<string, { label: string; items: string[] }[]> = {
 const ALL_CATEGORIES = Object.keys(ITEM_CATALOGUE)
 const TOTAL_STEPS = 7 // 1 Welcome · 2 Profile · 3 Friends · 4 Categories · 5 Share · 6 Wishlist · 7 Finn
 
-// ─── App tour items ───────────────────────────────────────────────────────────
-const TOUR_ITEMS = [
-  { area: 'bottom', icon: '🏠', label: 'Feed', desc: 'Se hva venner og kretser deler – og ting fra andre på Village.' },
-  { area: 'bottom', icon: '🔍', label: 'Utforsk', desc: 'Søk etter spesifikke ting og bla i kategorier.' },
-  { area: 'bottom', icon: '➕', label: 'Legg ut', desc: 'Del en gjenstand med vennene eller kretsene dine. Du bestemmer hvem som ser den.' },
-  { area: 'bottom', icon: '🏘️', label: 'Kretser', desc: 'Nabolag, barnehage, idrettslag – del og lån innen grupper du stoler på.' },
-  { area: 'bottom', icon: '👤', label: 'Profil', desc: 'Dine gjenstander, ønskeliste og venner samlet på ett sted.' },
-  { area: 'top', icon: '🔔', label: 'Varsler', desc: 'Låneforespørsler, venneforespørsler og oppdateringer.' },
-  { area: 'top', icon: '💬', label: 'Meldinger', desc: 'Snakk direkte med den du låner av eller til.' },
-]
-
 // ─── Wish confirmation modal ──────────────────────────────────────────────────
 function WishConfirmModal({ count, onConfirm }: { count: number; onConfirm: () => void }) {
   return (
@@ -480,42 +469,6 @@ function OnboardingContent() {
   const activeCatalogue = selectedCategories.flatMap(cat => ITEM_CATALOGUE[cat] ?? [])
   const wishGroups = activeCatalogue.map(g => ({ ...g, items: g.items.filter(i => !ownedItems.has(i)) })).filter(g => g.items.length > 0)
 
-  // ── Tour step ───────────────────────────────────────────────────────────────
-  const currentTour = TOUR_ITEMS[tourIndex]
-  const isLastTour = tourIndex === TOUR_ITEMS.length - 1
-
-  const StepTour = (
-    <div className="flex flex-col gap-6 flex-1">
-      <div>
-        <h1 className="font-display text-2xl font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>Bli kjent med appen</h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>Her er en rask oversikt over hva du finner hvor</p>
-      </div>
-      <div className="glass-heavy flex flex-col items-center gap-4 p-8 text-center" style={{ borderRadius: 20 }}>
-        <span className="text-5xl">{currentTour.icon}</span>
-        <div>
-          <p className="font-display text-xl font-bold mb-2" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.02em' }}>{currentTour.label}</p>
-          <p className="text-sm leading-relaxed" style={{ color: 'var(--terra-mid)' }}>{currentTour.desc}</p>
-        </div>
-        <span className="text-xs px-3 py-1 rounded-full" style={{ background: 'rgba(196,103,58,0.1)', color: 'var(--terra-mid)' }}>
-          {currentTour.area === 'bottom' ? '↓ Nedre meny' : '↑ Øvre meny'}
-        </span>
-      </div>
-      <div className="flex justify-center gap-2">
-        {TOUR_ITEMS.map((_, i) => (
-          <button key={i} onClick={() => setTourIndex(i)} className="rounded-full transition-all"
-            style={{ width: i === tourIndex ? 20 : 8, height: 8, background: i === tourIndex ? 'var(--terra)' : 'rgba(196,103,58,0.2)' }} />
-        ))}
-      </div>
-      <NavButtons
-        onNext={isLastTour ? saveAndFinish : () => setTourIndex(i => i + 1)}
-        onBack={tourIndex > 0 ? () => setTourIndex(i => i - 1) : goBack}
-        nextLabel={isLastTour ? 'Kom i gang 🏡' : 'Neste →'}
-        hideSkip={isLastTour}
-        onSkip={saveAndFinish}
-        skipLabel="Hopp over introduksjonen"
-      />
-    </div>
-  )
 
   // ── Step map ────────────────────────────────────────────────────────────────
   const steps: Record<number, React.ReactNode> = {

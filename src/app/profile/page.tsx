@@ -8,6 +8,7 @@ import StoryRing from '@/components/StoryRing'
 import StoryCreator from '@/components/StoryCreator'
 import ItemRequestCard from '@/components/ItemRequestCard'
 import FirstTimeShareModal from '@/components/FirstTimeShareModal'
+import InviteComposer from '@/components/InviteComposer'
 
 function IconBtn({
   onClick, href, label, children,
@@ -62,6 +63,7 @@ export default function ProfilePage() {
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [starred, setStarred] = useState<Set<string>>(new Set())
   const [showShareModal, setShowShareModal] = useState(false)
+  const [showInviteComposer, setShowInviteComposer] = useState(false)
   const [onboardingOwnedItems, setOnboardingOwnedItems] = useState<string[]>([])
   const router = useRouter()
 
@@ -421,11 +423,12 @@ export default function ProfilePage() {
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
             </IconBtn>
-            <Link href="/invite"
+            <button
+              onClick={() => setShowInviteComposer(true)}
               className="flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-full"
               style={{ background: 'var(--terra)', color: '#fff' }}>
               + Inviter
-            </Link>
+            </button>
           </div>
 
           {friendSearchOpen && (
@@ -644,12 +647,13 @@ export default function ProfilePage() {
           )}
         </div>
 
-        <Link href="/invite"
+        <button
+          onClick={() => setShowInviteComposer(true)}
           className="flex items-center justify-center gap-1.5 text-sm w-full py-2.5 rounded-xl mb-4"
           style={{ color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.25)', background: 'rgba(196,103,58,0.04)' }}>
           <span>👥</span>
           <span>Inviter venner til Village</span>
-        </Link>
+        </button>
 
       </div>
 
@@ -660,6 +664,13 @@ export default function ProfilePage() {
             setShowStoryCreator(false)
             setStoryRefreshKey(k => k + 1)
           }}
+        />
+      )}
+
+      {showInviteComposer && (
+        <InviteComposer
+          senderName={displayName}
+          onClose={() => setShowInviteComposer(false)}
         />
       )}
 

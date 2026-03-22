@@ -381,8 +381,10 @@ function OnboardingContent() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setCurrentUserId(user.id)
-      const { data: profile } = await supabase.from('profiles').select('name').eq('id', user.id).single()
-      if (profile?.name) { router.push('/'); return }
+      // Guard: only redirect if user has explicitly finished onboarding before.
+      // Checking profile.name is unreliable — Supabase may auto-populate it from auth metadata.
+      const doneKey = 'village_onboarding_done_' + user.id
+      if (localStorage.getItem(doneKey)) { router.push('/'); return }
     })()
   }, [router])
 
@@ -404,7 +406,15 @@ function OnboardingContent() {
 
   const goNext = () => { track('onboarding_step_completed', { step }); setStep(s => s + 1) }
   const goBack = () => setStep(s => Math.max(1, s - 1))
-  const goSkip = () => { track('onboarding_step_skipped', { step }); step >= TOTAL_STEPS ? router.push('/') : setStep(s => s + 1) }
+  const goSkip = () => {
+    track('onboarding_step_skipped', { step })
+    if (step >= TOTAL_STEPS) {
+      if (currentUserId) localStorage.setItem('village_onboarding_done_' + currentUserId, '1')
+      router.push('/')
+    } else {
+      setStep(s => s + 1)
+    }
+  }
 
   const saveProfile = async () => {
     setSaving(true)
@@ -457,10 +467,11 @@ function OnboardingContent() {
 
   const saveAndFinish = async () => {
     track('onboarding_completed', { owned_count: ownedItems.size, wanted_count: wantedItems.size })
-    // Persist owned items so profile and add pages can surface them as suggestions
     if (ownedItems.size > 0) {
       localStorage.setItem('village_owned_items', JSON.stringify([...ownedItems]))
     }
+    // Mark onboarding as done so guard doesn't re-show it
+    if (currentUserId) localStorage.setItem('village_onboarding_done_' + currentUserId, '1')
     router.push('/')
   }
 

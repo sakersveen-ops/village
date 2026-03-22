@@ -166,11 +166,11 @@ export default function CommunitiesPage() {
               {/* Warm terracotta gradient — no heavy dark overlay */}
               <div className="absolute inset-0 flex items-center justify-center"
                 style={{ background: 'linear-gradient(135deg, rgba(255,240,230,1) 0%, rgba(232,221,208,1) 60%, rgba(196,103,58,0.15) 100%)' }}>
-                <span style={{ fontSize: '48px', opacity: 0.25 }}>{community.avatar_emoji}</span>
+                <span style={{ fontSize: '56px', opacity: 0.4 }}>{community.avatar_emoji}</span>
               </div>
-              {/* Lighter bottom gradient so white text is still readable */}
+              {/* Subtle bottom gradient — just enough for white text to be readable */}
               <div className="absolute inset-0"
-                style={{ background: 'linear-gradient(to top, rgba(44,26,14,0.55) 0%, rgba(44,26,14,0.0) 50%, transparent 100%)' }} />
+                style={{ background: 'linear-gradient(to top, rgba(44,26,14,0.65) 0%, rgba(44,26,14,0.0) 45%, transparent 100%)' }} />
             </>
           )}
 
@@ -222,19 +222,20 @@ export default function CommunitiesPage() {
 
   const CommunityRow = ({ community }: { community: any }) => (
     <Link href={`/community/${community.id}`}>
-      <div className="glass rounded-2xl px-4 py-3 flex items-center gap-3">
+      <div className="glass rounded-2xl px-4 py-3 flex items-center gap-3"
+        style={{ borderRadius: '16px' }}>
         <div className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 overflow-hidden"
-          style={{ background: 'rgba(255,240,230,0.7)' }}>
+          style={{ background: 'rgba(196,103,58,0.1)', border: '1px solid rgba(196,103,58,0.12)' }}>
           {community.cover_image_url
             ? <img src={community.cover_image_url} alt={community.name} className="w-full h-full object-cover" />
             : community.avatar_emoji}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-[#2C1A0E] truncate text-sm" style={{ letterSpacing: '-0.01em' }}>
+          <p className="font-semibold truncate text-sm" style={{ letterSpacing: '-0.01em', color: 'var(--terra-dark)' }}>
             {community.name}
           </p>
           {community.description && (
-            <p className="text-xs text-[#9C7B65] mt-0.5 truncate">{community.description}</p>
+            <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--terra-mid)' }}>{community.description}</p>
           )}
         </div>
         {!community.is_public && (
@@ -251,7 +252,7 @@ export default function CommunitiesPage() {
       {/* Search + filter subbar — sits below NavBar's header */}
       <div
         className="glass"
-        style={{ position: 'sticky', top: 60, zIndex: 30, borderRadius: '0 0 16px 16px', borderTop: 'none' }}
+        style={{ position: 'sticky', top: 64, zIndex: 30, borderRadius: '16px', margin: '8px 16px 0' }}
       >
         <div className="px-4 py-3 flex items-center gap-2">
           <div className="flex items-center overflow-hidden transition-all duration-300 rounded-full"
@@ -291,6 +292,7 @@ export default function CommunitiesPage() {
                 backdropFilter: 'blur(10px)',
                 color: filterAdminOnly ? 'white' : 'var(--terra)',
                 letterSpacing: '-0.01em',
+                outline: 'none',
               }}>
               {filterAdminOnly ? '🔑 Jeg administrerer' : 'Alle kretser'}
             </button>

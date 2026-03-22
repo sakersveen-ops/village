@@ -18,6 +18,8 @@ const CAT_EMOJI: Record<string, string> = {
   barn: '🧸', kjole: '👗', 'verktøy': '🔧', bok: '📚', annet: '📦',
 }
 
+const DEFAULT_VISIBLE = 5
+
 export default function FeedPage() {
   const [user, setUser]               = useState<any>(null)
   const [profile, setProfile]         = useState<any>(null)
@@ -28,6 +30,7 @@ export default function FeedPage() {
   const [activeStory, setActiveStory] = useState<any | null>(null)
   const [loading, setLoading]         = useState(true)
   const [activeCategory, setActiveCategory] = useState('all')
+  const [showAllItems, setShowAllItems] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -74,7 +77,6 @@ export default function FeedPage() {
       setFeedItems(sorted)
       track(Events.FEED_VIEWED, { item_count: sorted.length })
 
-      // Hent item_requests fra venner — graceful fallback hvis tabell mangler
       try {
         const { data: reqs } = await supabase
           .from('item_requests')
@@ -87,7 +89,6 @@ export default function FeedPage() {
 
         if (reqs) setRequests(reqs)
 
-        // Hent hvilke requests brukeren allerede har sett
         const { data: views } = await supabase
           .from('item_request_views')
           .select('request_id')
@@ -102,7 +103,6 @@ export default function FeedPage() {
     load()
   }, [])
 
-  // Merk story som sett og åpne drawer
   const openStory = async (req: any) => {
     setActiveStory(req)
     if (seenIds.has(req.id)) return
@@ -144,8 +144,6 @@ export default function FeedPage() {
     router.push(`/add?${params.toString()}`)
   }
 
-  // --- Derived values ---
-
   const countByCategory = (catId: string) => {
     if (catId === 'all') return feedItems.filter(i => i.available).length
     return feedItems.filter(i => i.category === catId && i.available).length
@@ -163,10 +161,15 @@ export default function FeedPage() {
     return countB - countA
   })
 
-  const filteredItems = feedItems
+  const allFilteredItems = feedItems
     .filter(i => activeCategory === 'all' || i.category === activeCategory)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .slice(0, 12)
+
+  const visibleItems = showAllItems
+    ? allFilteredItems
+    : allFilteredItems.slice(0, DEFAULT_VISIBLE)
+
+  const hasMore = allFilteredItems.length > DEFAULT_VISIBLE
 
   const catEmoji = (cat: string) =>
     CATEGORIES.find(c => c.id === cat)?.emoji ?? '📦'
@@ -222,14 +225,11 @@ export default function FeedPage() {
                     onClick={() => openStory(req)}
                     className="flex flex-col items-center gap-1.5 flex-shrink-0 w-16"
                   >
-                    {/* Story-ring */}
                     <div
                       className="w-14 h-14 rounded-full flex items-center justify-center"
                       style={{
                         padding: '2px',
-                        background: isSeen
-                          ? 'rgba(156,123,101,0.3)'
-                          : 'var(--terra)',
+                        background: isSeen ? 'rgba(156,123,101,0.3)' : 'var(--terra)',
                         opacity: isSeen ? 0.5 : 1,
                         transition: 'opacity 300ms ease',
                       }}
@@ -245,7 +245,6 @@ export default function FeedPage() {
                         )}
                       </div>
                     </div>
-                    {/* Kategori-emoji + kortet navn */}
                     <span className="text-[10px] text-[#2C1A0E] text-center leading-tight w-full truncate">
                       {CAT_EMOJI[req.category] ?? '📦'} {req.item_name}
                     </span>
@@ -323,6 +322,7 @@ export default function FeedPage() {
                     onClick={() => {
                       if (isCatEmpty) return
                       setActiveCategory(cat.id)
+                      setShowAllItems(false)
                       track(Events.CATEGORY_FILTERED, { category: cat.id })
                     }}
                     disabled={isCatEmpty}
@@ -354,13 +354,15 @@ export default function FeedPage() {
                 <h2 className="font-display text-[#2C1A0E] text-base font-semibold">
                   Nylig lagt ut
                 </h2>
-                {filteredItems.length > 0 && (
-                  <span className="text-[#9C7B65] text-xs">{filteredItems.length} gjenstander</span>
+                {allFilteredItems.length > 0 && (
+                  <span className="text-[#9C7B65] text-xs">
+                    {showAllItems ? allFilteredItems.length : Math.min(DEFAULT_VISIBLE, allFilteredItems.length)} av {allFilteredItems.length}
+                  </span>
                 )}
               </div>
 
               <div className="flex flex-col gap-2">
-                {filteredItems.map(item => (
+                {visibleItems.map(item => (
                   <Link key={item.id} href={`/items/${item.id}`}>
                     <div
                       className="item-card glass-hover flex items-center gap-3 px-3 py-3"
@@ -393,6 +395,18 @@ export default function FeedPage() {
                   </Link>
                 ))}
               </div>
+
+              {/* Se alle / Vis færre */}
+              {hasMore && (
+                <button
+                  onClick={() => setShowAllItems(v => !v)}
+                  className="btn-glass w-full mt-3 py-2.5 text-sm"
+                >
+                  {showAllItems
+                    ? 'Vis færre'
+                    : `Se alle ${allFilteredItems.length} gjenstander`}
+                </button>
+              )}
             </div>
 
             <Link href="/invite">
@@ -415,14 +429,10 @@ export default function FeedPage() {
       {/* ── Story-drawer ── */}
       {activeStory && (
         <>
-          <div
-            className="modal-backdrop"
-            onClick={closeStory}
-          />
+          <div className="modal-backdrop" onClick={closeStory} />
           <div className="drawer-sheet glass-heavy" style={{ borderRadius: '24px 24px 0 0' }}>
             <div className="drawer-handle" />
 
-            {/* Header: avatar + navn + tidspunkt */}
             <div className="flex items-center gap-3 px-5 pt-2 pb-4">
               <Link href={`/profile/${activeStory.user_id}`} onClick={closeStory}>
                 <div className="w-10 h-10 rounded-full overflow-hidden bg-[#E8DDD0] flex items-center justify-center flex-shrink-0">
@@ -444,14 +454,12 @@ export default function FeedPage() {
               <button onClick={closeStory} className="text-[#9C7B65] text-lg px-1">✕</button>
             </div>
 
-            {/* Bilde hvis finnes */}
             {activeStory.image_url && (
               <div className="mx-5 mb-4 rounded-[16px] overflow-hidden" style={{ aspectRatio: '4/3' }}>
                 <img src={activeStory.image_url} className="w-full h-full object-cover" />
               </div>
             )}
 
-            {/* Innhold */}
             <div className="px-5 pb-2">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xl">{CAT_EMOJI[activeStory.category] ?? '📦'}</span>
@@ -464,18 +472,12 @@ export default function FeedPage() {
               )}
             </div>
 
-            {/* Handlinger */}
             <div className="px-5 pt-4 pb-6 flex flex-col gap-3">
-              <button
-                onClick={handleHarDette}
-                className="btn-primary w-full py-3"
-              >
+              <button onClick={handleHarDette} className="btn-primary w-full py-3">
                 Jeg har dette! →
               </button>
               <Link href={`/profile/${activeStory.user_id}`} onClick={closeStory}>
-                <button className="btn-glass w-full py-3">
-                  Se profil
-                </button>
+                <button className="btn-glass w-full py-3">Se profil</button>
               </Link>
             </div>
           </div>

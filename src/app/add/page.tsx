@@ -1,8 +1,9 @@
 'use client'
 import dynamic from 'next/dynamic'
-import { useEffect, useRef, useState, Suspense } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
+import FirstTimeAddItemModal from '@/components/FirstTimeAddItemModal'
 
 const CATEGORIES = [
   { id: 'barn', label: 'Barn', emoji: '🧸', subcategories: ['Spise', 'Leke', 'Tur', 'Stelle', 'Sove', 'Bade', 'Klær'] },
@@ -74,6 +75,10 @@ function AddPageContent() {
   const [books, setBooks] = useState<BookResult[]>([])
   const [shelfStep, setShelfStep] = useState<'upload' | 'results' | 'saving'>('upload')
   const [saveProgress, setSaveProgress] = useState(0)
+  // First-time add modal
+  const [showAddIntro, setShowAddIntro] = useState(false)
+  const [onboardingOwnedItems, setOnboardingOwnedItems] = useState<string[]>([])
+  const [currentUserId, setCurrentUserId] = useState('')
   const shelfRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -83,6 +88,8 @@ function AddPageContent() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+      setCurrentUserId(user.id)
+
       const { data: prof } = await supabase.from('profiles').select('location').eq('id', user.id).single()
       if (prof?.location) setLocation(prof.location)
 
@@ -97,9 +104,32 @@ function AddPageContent() {
         setSuggestedImageUrl(paramImageUrl)
         setSelectedImage('suggested')
       }
+
+      // Show first-time add modal if not yet dismissed and no pre-filled name
+      if (!paramName) {
+        const addKey = `village_add_intro_${user.id}`
+        if (!localStorage.getItem(addKey)) {
+          try {
+            const raw = localStorage.getItem('village_owned_items')
+            if (raw) setOnboardingOwnedItems(JSON.parse(raw))
+          } catch { /* ignore */ }
+          setShowAddIntro(true)
+        }
+      }
     }
     load()
   }, [])
+
+  const dismissAddIntro = () => {
+    if (currentUserId) localStorage.setItem(`village_add_intro_${currentUserId}`, '1')
+    setShowAddIntro(false)
+  }
+
+  const handleSelectSuggestedItem = (itemName: string) => {
+    if (currentUserId) localStorage.setItem(`village_add_intro_${currentUserId}`, '1')
+    setShowAddIntro(false)
+    setName(itemName)
+  }
 
   const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -182,9 +212,7 @@ Returner KUN JSON, ingen annen tekst.` }
                 setSelectedImage('suggested')
               }
             }
-          } catch {
-            // Produktbilde feilet – ikke kritisk
-          }
+          } catch { /* Produktbilde feilet – ikke kritisk */ }
         }
 
         setImageAnalyzed(true)
@@ -668,6 +696,15 @@ Returner KUN JSON, ingen annen tekst.` }
           </>
         )}
       </div>
+
+      {/* First-time add item modal */}
+      {showAddIntro && (
+        <FirstTimeAddItemModal
+          suggestedItems={onboardingOwnedItems}
+          onDismiss={dismissAddIntro}
+          onSelectItem={handleSelectSuggestedItem}
+        />
+      )}
     </div>
   )
 }

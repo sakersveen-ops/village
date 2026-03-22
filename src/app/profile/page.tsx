@@ -7,6 +7,7 @@ import { track } from '@/lib/track'
 import StoryRing from '@/components/StoryRing'
 import StoryCreator from '@/components/StoryCreator'
 import ItemRequestCard from '@/components/ItemRequestCard'
+import FirstTimeShareModal from '@/components/FirstTimeShareModal'
 
 function IconBtn({
   onClick, href, label, children,
@@ -59,8 +60,10 @@ export default function ProfilePage() {
   const [storyRefreshKey, setStoryRefreshKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
-  const router = useRouter()
   const [starred, setStarred] = useState<Set<string>>(new Set())
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [onboardingOwnedItems, setOnboardingOwnedItems] = useState<string[]>([])
+  const router = useRouter()
 
   useEffect(() => {
     const load = async () => {
@@ -73,10 +76,37 @@ export default function ProfilePage() {
         .from('profiles').select('*').eq('id', user.id).single()
       setProfile(profile)
 
-      const { data: items } = await supabase
-        .from('items').select('*').eq('owner_id', user.id)
+      const { data: ownItems } = await supabase
+        .from('items')
+        .select('*, profiles!items_owner_id_fkey(id, name, avatar_url)')
+        .eq('owner_id', user.id)
         .order('created_at', { ascending: false })
-      setMyItems(items || [])
+
+      const { data: coItems } = await supabase
+        .from('items')
+        .select('*, profiles!items_owner_id_fkey(id, name, avatar_url)')
+        .eq('connected_profile_id', user.id)
+        .order('created_at', { ascending: false })
+
+      const seen = new Set<string>()
+      const merged = [...(ownItems || []), ...(coItems || [])].filter(i => {
+        if (seen.has(i.id)) return false
+        seen.add(i.id)
+        return true
+      })
+      setMyItems(merged)
+      const items = merged // keep reference for share modal logic below
+
+      // Show first-time share modal if user has no items and hasn't dismissed
+      const shareKey = `village_share_intro_${user.id}`
+      if ((items || []).length === 0 && !localStorage.getItem(shareKey)) {
+        // Load onboarding owned items from localStorage
+        try {
+          const raw = localStorage.getItem('village_owned_items')
+          if (raw) setOnboardingOwnedItems(JSON.parse(raw))
+        } catch { /* ignore */ }
+        setShowShareModal(true)
+      }
 
       const { data: friendships } = await supabase
         .from('friendships')
@@ -112,6 +142,12 @@ export default function ProfilePage() {
     }
     load()
   }, [])
+
+  const dismissShareModal = () => {
+    if (user) localStorage.setItem(`village_share_intro_${user.id}`, '1')
+    setShowShareModal(false)
+    track('share_first_time_dismissed')
+  }
 
   const uploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -246,7 +282,6 @@ export default function ProfilePage() {
               {displayName}
             </h2>
             <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>{user?.email}</p>
-            {/* By — vises kun hvis profile.city er satt */}
             {profile?.city && (
               <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>📍 {profile.city}</p>
             )}
@@ -257,7 +292,9 @@ export default function ProfilePage() {
         <div className="flex gap-2 mt-5">
           <Link href="/items/manage" className="flex-1">
             <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16, cursor: 'pointer' }}>
-              <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{myItems.length}</p>
+              <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>
+                {myItems.filter(i => i.owner_id === user?.id).length}
+              </p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
                 {lentOut > 0 ? `${lentOut} utlånt` : 'gjenstander'}
               </p>
@@ -290,7 +327,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ItemRequest — alltid før stories */}
+      {/* ItemRequest */}
       {user && (
         <ItemRequestCard
           profileUserId={user.id}
@@ -391,7 +428,6 @@ export default function ProfilePage() {
             </Link>
           </div>
 
-          {/* Søkefelt */}
           {friendSearchOpen && (
             <div className="mb-3">
               <div className="relative">
@@ -459,7 +495,6 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Avatar-rad — hvert avatar lenker til vennens profil */}
           {friends.length === 0 ? (
             <div className="rounded-2xl p-5 text-center text-sm" style={{ background: '#fff', color: 'var(--terra-mid)' }}>
               Du har ingen venner i Village ennå.{' '}
@@ -566,7 +601,6 @@ export default function ProfilePage() {
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {/* Maks 5 items, resten skjules bak "Vis alle"-knapp */}
               {filteredItems.slice(0, 5).map(item => (
                 <Link key={item.id} href={`/items/${item.id}`}>
                   <div className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
@@ -579,8 +613,16 @@ export default function ProfilePage() {
                         </div>
                     }
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
-                      <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--terra-mid)' }}>{item.category}</p>
+                      <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>
+                        {item.connected_profile_id === user?.id && <span className="mr-1">🔗</span>}
+                        {item.name}
+                      </p>
+                      <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--terra-mid)' }}>
+                        {item.category}
+                        {item.connected_profile_id === user?.id && item.profiles?.name && (
+                          <span> · {item.profiles.name}</span>
+                        )}
+                      </p>
                     </div>
                     <span className="px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
                       style={{ fontSize: 10, ...(item.available
@@ -602,7 +644,6 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* Sekundær inviter-lenke */}
         <Link href="/invite"
           className="flex items-center justify-center gap-1.5 text-sm w-full py-2.5 rounded-xl mb-4"
           style={{ color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.25)', background: 'rgba(196,103,58,0.04)' }}>
@@ -618,6 +659,19 @@ export default function ProfilePage() {
           onCreated={() => {
             setShowStoryCreator(false)
             setStoryRefreshKey(k => k + 1)
+          }}
+        />
+      )}
+
+      {/* First-time share modal */}
+      {showShareModal && user && (
+        <FirstTimeShareModal
+          userId={user.id}
+          ownedItems={onboardingOwnedItems}
+          onDismiss={dismissShareModal}
+          onAddItem={() => {
+            dismissShareModal()
+            router.push('/add')
           }}
         />
       )}

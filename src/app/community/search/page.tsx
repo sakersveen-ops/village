@@ -5,6 +5,48 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { track } from '@/lib/track'
 
+// ─── First-time modal ─────────────────────────────────────────────────────────
+function FirstTimeKretserModal({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div className="fixed inset-0 z-60 flex items-end justify-center px-4 pb-6">
+      <div className="modal-backdrop absolute inset-0" onClick={onDismiss} />
+      <div className="glass-heavy relative w-full max-w-sm flex flex-col gap-5 p-6" style={{ borderRadius: 24, zIndex: 61 }}>
+        <div className="text-center">
+          <span className="text-4xl">🏘️</span>
+          <h2 className="font-display text-xl font-bold mt-3" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+            Hva er kretser?
+          </h2>
+        </div>
+        <div className="flex flex-col gap-3">
+          {[
+            { emoji: '👨‍👩‍👧', title: 'Grupper du stoler på', desc: 'Nabolag, barnehage, idrettslag, vennegjengen – du bestemmer hvem som er med.' },
+            { emoji: '🔒', title: 'Del på dine premisser', desc: 'Du velger hvilke gjenstander som er synlige i hvilken krets. Ingenting deles uten at du legger det ut.' },
+            { emoji: '🔔', title: 'Få relevante varsler', desc: 'Kun ting fra kretser du er med i dukker opp i feeden din.' },
+          ].map(({ emoji, title, desc }) => (
+            <div key={title} className="flex gap-3 items-start">
+              <span className="text-xl shrink-0">{emoji}</span>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: 'var(--terra-dark)' }}>{title}</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>{desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col gap-2">
+          <Link href="/community/new" onClick={onDismiss}>
+            <button className="btn-primary w-full" style={{ borderRadius: 14, padding: '13px 0', fontSize: 15, fontWeight: 600 }}>
+              + Opprett din første krets
+            </button>
+          </Link>
+          <button onClick={onDismiss} className="text-sm py-2 text-center" style={{ color: 'var(--terra-mid)' }}>
+            Utforsk først
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function CommunitiesPage() {
   const [user, setUser] = useState<any>(null)
   const [adminCommunities, setAdminCommunities] = useState<any[]>([])
@@ -18,6 +60,7 @@ export default function CommunitiesPage() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [filterAdminOnly, setFilterAdminOnly] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [showFirstTime, setShowFirstTime] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
@@ -39,6 +82,12 @@ export default function CommunitiesPage() {
       setAdminCommunities(admins)
       setMemberCommunities(members)
 
+      // Show first-time modal if user has no communities and hasn't dismissed before
+      const hasSeenKey = `village_kretser_intro_${user.id}`
+      if ((mine || []).length === 0 && !localStorage.getItem(hasSeenKey)) {
+        setShowFirstTime(true)
+      }
+
       const { data: favs } = await supabase
         .from('community_favorites')
         .select('community_id')
@@ -52,12 +101,7 @@ export default function CommunitiesPage() {
       const friendIds = (friendships || []).map((f: any) => f.user_b)
       setHasFriends(friendIds.length > 0)
 
-      // Build set of community IDs the user is already a member of — used to exclude from friend/popular lists
-      const myIds = new Set(
-        (mine || [])
-          .map((m: any) => m.communities?.id)
-          .filter(Boolean)
-      )
+      const myIds = new Set((mine || []).map((m: any) => m.communities?.id).filter(Boolean))
 
       if (friendIds.length > 0) {
         const { data: friendMembers } = await supabase
@@ -65,18 +109,15 @@ export default function CommunitiesPage() {
           .select('communities(*)')
           .in('user_id', friendIds)
           .eq('status', 'active')
-
         const seen = new Set<string>()
         const unique = (friendMembers || []).filter((m: any) => {
           const cid = m.communities?.id
-          // Exclude communities the user is already a member of
           if (!cid || myIds.has(cid) || seen.has(cid) || !m.communities?.is_public) return false
           seen.add(cid)
           return true
         })
         setFriendCommunities(unique)
       } else {
-        // No friends — show popular public communities as fallback
         const { data: popular } = await supabase
           .from('communities')
           .select('*')
@@ -91,6 +132,12 @@ export default function CommunitiesPage() {
     }
     load()
   }, [])
+
+  const dismissFirstTime = () => {
+    if (user) localStorage.setItem(`village_kretser_intro_${user.id}`, '1')
+    setShowFirstTime(false)
+    track('kretser_first_time_dismissed')
+  }
 
   const toggleFavorite = async (communityId: string) => {
     const supabase = createClient()
@@ -147,7 +194,6 @@ export default function CommunitiesPage() {
     const community = entry.communities || entry
     const isAdmin = entry.derivedRole === 'admin'
 
-    // Cards WITH a cover photo — keep the image-dominant overlay style
     if (community.cover_image_url) {
       return (
         <Link href={`/community/${community.id}`}>
@@ -157,7 +203,6 @@ export default function CommunitiesPage() {
               className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
             <div className="absolute inset-0"
               style={{ background: 'linear-gradient(to top, rgba(44,26,14,0.82) 0%, rgba(44,26,14,0.2) 55%, transparent 100%)' }} />
-            {/* Top row */}
             <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
               <div />
               <div className="flex items-center gap-1.5">
@@ -176,7 +221,6 @@ export default function CommunitiesPage() {
                 )}
               </div>
             </div>
-            {/* Bottom text */}
             <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 pt-6">
               <p className="font-display text-white font-semibold truncate"
                 style={{ fontSize: '15px', letterSpacing: '-0.02em', textShadow: '0 1px 6px rgba(0,0,0,0.4)' }}>
@@ -199,16 +243,13 @@ export default function CommunitiesPage() {
       )
     }
 
-    // Cards WITHOUT cover photo — glass-card pattern matching design system item cards
     return (
       <Link href={`/community/${community.id}`}>
         <div className="item-card glass-hover rounded-[20px] overflow-hidden cursor-pointer"
           style={{ border: '1px solid rgba(196,103,58,0.18)', boxShadow: '0 2px 16px rgba(44,26,14,0.06)' }}>
-          {/* Emoji placeholder area */}
           <div className="relative flex items-center justify-center"
             style={{ height: '100px', background: 'linear-gradient(135deg, rgba(255,240,230,0.9) 0%, rgba(232,221,208,0.7) 100%)' }}>
             <span style={{ fontSize: '44px' }}>{community.avatar_emoji}</span>
-            {/* Top-right badges */}
             <div className="absolute top-2 right-2 flex items-center gap-1">
               {!community.is_public && (
                 <span className="text-xs px-1.5 py-0.5 rounded-full font-medium"
@@ -225,16 +266,13 @@ export default function CommunitiesPage() {
               )}
             </div>
           </div>
-          {/* Text body — glass-card */}
           <div className="glass-card px-3 py-2.5">
             <p className="font-display font-semibold truncate"
               style={{ fontSize: '14px', letterSpacing: '-0.02em', color: 'var(--terra-dark)' }}>
               {community.name}
             </p>
             {community.description && (
-              <p className="text-xs truncate mt-0.5" style={{ color: 'var(--terra-mid)' }}>
-                {community.description}
-              </p>
+              <p className="text-xs truncate mt-0.5" style={{ color: 'var(--terra-mid)' }}>{community.description}</p>
             )}
             {isAdmin && (
               <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium mt-1.5"
@@ -250,8 +288,7 @@ export default function CommunitiesPage() {
 
   const CommunityRow = ({ community }: { community: any }) => (
     <Link href={`/community/${community.id}`}>
-      <div className="glass rounded-2xl px-4 py-3 flex items-center gap-3"
-        style={{ borderRadius: '16px' }}>
+      <div className="glass rounded-2xl px-4 py-3 flex items-center gap-3" style={{ borderRadius: '16px' }}>
         <div className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 overflow-hidden"
           style={{ background: 'rgba(196,103,58,0.1)', border: '1px solid rgba(196,103,58,0.12)' }}>
           {community.cover_image_url
@@ -276,12 +313,8 @@ export default function CommunitiesPage() {
 
   return (
     <div className="max-w-lg mx-auto">
-
-      {/* Search + filter subbar — sits below NavBar's header */}
-      <div
-        className="glass"
-        style={{ position: 'sticky', top: 64, zIndex: 30, borderRadius: '16px', margin: '8px 16px 0' }}
-      >
+      {/* Search + filter subbar */}
+      <div className="glass" style={{ position: 'sticky', top: 64, zIndex: 30, borderRadius: '16px', margin: '8px 16px 0' }}>
         <div className="px-4 py-3 flex items-center gap-2">
           <div className="flex items-center overflow-hidden transition-all duration-300 rounded-full"
             style={{
@@ -303,10 +336,11 @@ export default function CommunitiesPage() {
                 <input ref={searchInputRef} type="text" value={query}
                   onChange={e => search(e.target.value)}
                   placeholder="Søk etter kretser…"
-                  className="flex-1 bg-transparent text-sm text-[#2C1A0E] outline-none placeholder:text-[#C4A882] pr-2"
-                  style={{ minWidth: 0 }} />
+                  className="flex-1 bg-transparent text-sm outline-none pr-2"
+                  style={{ color: 'var(--terra-dark)', minWidth: 0 }} />
                 <button onClick={closeSearch}
-                  className="w-9 h-9 flex items-center justify-center flex-shrink-0 text-[#9C7B65] text-xl pr-1">×</button>
+                  className="w-9 h-9 flex items-center justify-center flex-shrink-0 text-xl pr-1"
+                  style={{ color: 'var(--terra-mid)' }}>×</button>
               </>
             )}
           </div>
@@ -338,12 +372,11 @@ export default function CommunitiesPage() {
       </div>
 
       <div className="px-4 pt-5 pb-28 flex flex-col gap-8">
-
         {query.length >= 2 && (
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--terra-mid)' }}>Søkeresultater</p>
             {searchResults.length === 0 ? (
-              <div className="glass rounded-2xl p-5 text-center text-sm text-[#9C7B65]">Ingen treff for «{query}»</div>
+              <div className="glass rounded-2xl p-5 text-center text-sm" style={{ color: 'var(--terra-mid)' }}>Ingen treff for «{query}»</div>
             ) : (
               <div className="flex flex-col gap-2">
                 {searchResults.map(c => {
@@ -385,8 +418,8 @@ export default function CommunitiesPage() {
             {allMyCommunities.length === 0 && !loading && (
               <div className="glass rounded-2xl p-8 text-center">
                 <div className="text-5xl mb-3">🏘️</div>
-                <p className="font-semibold text-[#2C1A0E] mb-1" style={{ letterSpacing: '-0.01em' }}>Ingen kretser ennå</p>
-                <p className="text-sm text-[#9C7B65] mb-5">Opprett en krets eller bli invitert av en venn</p>
+                <p className="font-semibold mb-1" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.01em' }}>Ingen kretser ennå</p>
+                <p className="text-sm mb-5" style={{ color: 'var(--terra-mid)' }}>Opprett en krets eller bli invitert av en venn</p>
                 <Link href="/community/new">
                   <button className="btn-primary w-full">+ Opprett din første krets</button>
                 </Link>
@@ -434,6 +467,8 @@ export default function CommunitiesPage() {
           </>
         )}
       </div>
+
+      {showFirstTime && <FirstTimeKretserModal onDismiss={dismissFirstTime} />}
     </div>
   )
 }

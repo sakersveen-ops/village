@@ -62,11 +62,10 @@ export default function StoryRing({ ownerId, isOwner, canView = false, onCreateS
             <span style={{ fontSize: 24, color: 'var(--terra)' }}>+</span>
           </div>
           <span className="text-xs" style={{ color: 'var(--terra-mid)', maxWidth: 64, textAlign: 'center', lineHeight: 1.2 }}>
-            Ny story
+            Nytt høydepunkt
           </span>
         </button>
 
-        {/* Edit modal if triggered from end screen with no stories left */}
         {editingStory && (
           <StoryCreator
             existingStory={editingStory}
@@ -89,7 +88,6 @@ export default function StoryRing({ ownerId, isOwner, canView = false, onCreateS
   }
 
   const handleEdit = (story: Story) => {
-    // Map Story → ExistingStory for StoryCreator
     const existing: ExistingStory = {
       id: story.id,
       title: story.title,
@@ -115,7 +113,6 @@ export default function StoryRing({ ownerId, isOwner, canView = false, onCreateS
       <div ref={scrollRef} className="flex gap-3 overflow-x-auto px-4 py-3"
         style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' }}>
 
-        {/* Owner: + bubble */}
         {isOwner && (
           <button onClick={onCreateStory} className="flex flex-col items-center gap-1.5 flex-shrink-0">
             <div className="flex items-center justify-center rounded-full"
@@ -123,7 +120,7 @@ export default function StoryRing({ ownerId, isOwner, canView = false, onCreateS
               <span style={{ fontSize: 24, color: 'var(--terra)' }}>+</span>
             </div>
             <span className="text-xs" style={{ color: 'var(--terra-mid)', maxWidth: 64, textAlign: 'center', lineHeight: 1.2 }}>
-              Ny story
+              Nytt høydepunkt
             </span>
           </button>
         )}
@@ -160,7 +157,6 @@ export default function StoryRing({ ownerId, isOwner, canView = false, onCreateS
         })}
       </div>
 
-      {/* Story viewer */}
       {activeIndex !== null && (
         <StoryViewer
           story={stories[activeIndex]}
@@ -174,7 +170,6 @@ export default function StoryRing({ ownerId, isOwner, canView = false, onCreateS
         />
       )}
 
-      {/* Story editor */}
       {editingStory && (
         <StoryCreator
           existingStory={editingStory}

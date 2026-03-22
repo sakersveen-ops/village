@@ -437,6 +437,21 @@ export default function ItemRequestCard({
               {isOwner ? (request ? '✏️' : '+') : '→'}
             </div>
           </div>
+          {/* Sekundær "+ Legg til flere"-rad når request finnes og bruker er eier */}
+          {isOwner && request && (
+            <button
+              onClick={e => { e.stopPropagation(); setShowCreator(true) }}
+              className="flex items-center justify-center gap-1.5 w-full py-2 text-xs font-medium"
+              style={{
+                color: 'var(--terra)',
+                borderTop: '1px solid rgba(196,103,58,0.15)',
+                background: 'rgba(196,103,58,0.03)',
+              }}
+            >
+              <span style={{ fontSize: 14 }}>+</span>
+              Legg til ny ønskeliste
+            </button>
+          )}
         </div>
       </button>
 

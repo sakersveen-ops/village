@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import ItemRequestCard from '@/components/ItemRequestCard'
+import StoryRing from '@/components/StoryRing'
 
 const CATEGORIES = [
   { id: 'barn', label: 'Barn', emoji: '🧸' },
@@ -266,7 +267,7 @@ export default function UserProfilePage() {
 
           <div className="flex items-center gap-2 flex-shrink-0 mt-1">
             {/* Direktemelding */}
-            <Link href={`/messages/${profile.id}`} aria-label="Send melding"
+            <Link href={`/messages/${userId}`} aria-label="Send melding"
               className="w-9 h-9 flex items-center justify-center rounded-full"
               style={{ background: 'rgba(196,103,58,0.10)', border: '1px solid rgba(196,103,58,0.15)', color: 'var(--terra-dark)' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -340,6 +341,15 @@ export default function UserProfilePage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Høydepunkter — venner kan se, men ikke opprette */}
+      <div style={{ borderBottom: '1px solid #E8DDD0', background: '#FAF7F2' }}>
+        <StoryRing
+          ownerId={userId as string}
+          isOwner={false}
+          canView={true}
+        />
       </div>
 
       {/* ItemRequest-kort — kun for venner */}

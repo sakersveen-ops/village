@@ -147,70 +147,98 @@ export default function CommunitiesPage() {
     const community = entry.communities || entry
     const isAdmin = entry.derivedRole === 'admin'
 
+    // Cards WITH a cover photo — keep the image-dominant overlay style
+    if (community.cover_image_url) {
+      return (
+        <Link href={`/community/${community.id}`}>
+          <div className="relative overflow-hidden rounded-[20px] aspect-[4/3] cursor-pointer group"
+            style={{ border: '1px solid rgba(196,103,58,0.18)', boxShadow: '0 2px 20px rgba(44,26,14,0.08)' }}>
+            <img src={community.cover_image_url} alt={community.name}
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+            <div className="absolute inset-0"
+              style={{ background: 'linear-gradient(to top, rgba(44,26,14,0.82) 0%, rgba(44,26,14,0.2) 55%, transparent 100%)' }} />
+            {/* Top row */}
+            <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
+              <div />
+              <div className="flex items-center gap-1.5">
+                {!community.is_public && (
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{ background: 'rgba(255,248,243,0.65)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', color: 'var(--terra-dark)' }}>
+                    🔒
+                  </span>
+                )}
+                {showFavorite && (
+                  <button onClick={e => { e.preventDefault(); toggleFavorite(community.id) }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
+                    style={{ background: 'rgba(255,248,243,0.65)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.4)' }}>
+                    <span style={{ opacity: favorites.has(community.id) ? 1 : 0.4 }}>⭐</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* Bottom text */}
+            <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 pt-6">
+              <p className="font-display text-white font-semibold truncate"
+                style={{ fontSize: '15px', letterSpacing: '-0.02em', textShadow: '0 1px 6px rgba(0,0,0,0.4)' }}>
+                {community.name}
+              </p>
+              {community.description && (
+                <p className="text-white/70 text-xs truncate mt-0.5" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>
+                  {community.description}
+                </p>
+              )}
+              {isAdmin && (
+                <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium mt-1.5"
+                  style={{ background: 'rgba(196,103,58,0.85)', color: 'white' }}>
+                  🔑 Admin
+                </span>
+              )}
+            </div>
+          </div>
+        </Link>
+      )
+    }
+
+    // Cards WITHOUT cover photo — glass-card pattern matching design system item cards
     return (
       <Link href={`/community/${community.id}`}>
-        <div
-          className="relative overflow-hidden rounded-[20px] aspect-[4/3] cursor-pointer group"
-          style={{ border: '1px solid rgba(196,103,58,0.15)', boxShadow: '0 2px 20px rgba(44,26,14,0.08)' }}
-        >
-          {community.cover_image_url ? (
-            <>
-              <img src={community.cover_image_url} alt={community.name}
-                className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-              {/* Dark gradient only when there's a photo */}
-              <div className="absolute inset-0"
-                style={{ background: 'linear-gradient(to top, rgba(44,26,14,0.82) 0%, rgba(44,26,14,0.2) 55%, transparent 100%)' }} />
-            </>
-          ) : (
-            <>
-              {/* Warm terracotta gradient — no heavy dark overlay */}
-              <div className="absolute inset-0 flex items-center justify-center"
-                style={{ background: 'linear-gradient(135deg, rgba(255,240,230,1) 0%, rgba(232,221,208,1) 60%, rgba(196,103,58,0.15) 100%)' }}>
-                <span style={{ fontSize: '56px', opacity: 0.4 }}>{community.avatar_emoji}</span>
-              </div>
-              {/* Subtle bottom gradient — just enough for white text to be readable */}
-              <div className="absolute inset-0"
-                style={{ background: 'linear-gradient(to top, rgba(44,26,14,0.65) 0%, rgba(44,26,14,0.0) 45%, transparent 100%)' }} />
-            </>
-          )}
-
-          <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
-            {!community.cover_image_url
-              ? <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl"
-                  style={{ background: 'rgba(255,248,243,0.65)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.5)' }}>
-                  {community.avatar_emoji}
-                </div>
-              : <div />}
-            <div className="flex items-center gap-1.5">
+        <div className="item-card glass-hover rounded-[20px] overflow-hidden cursor-pointer"
+          style={{ border: '1px solid rgba(196,103,58,0.18)', boxShadow: '0 2px 16px rgba(44,26,14,0.06)' }}>
+          {/* Emoji placeholder area */}
+          <div className="relative flex items-center justify-center"
+            style={{ height: '100px', background: 'linear-gradient(135deg, rgba(255,240,230,0.9) 0%, rgba(232,221,208,0.7) 100%)' }}>
+            <span style={{ fontSize: '44px' }}>{community.avatar_emoji}</span>
+            {/* Top-right badges */}
+            <div className="absolute top-2 right-2 flex items-center gap-1">
               {!community.is_public && (
-                <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                  style={{ background: 'rgba(255,248,243,0.65)', backdropFilter: 'blur(10px)', color: 'var(--terra-dark)' }}>
+                <span className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+                  style={{ background: 'rgba(255,248,243,0.8)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', color: 'var(--terra-dark)', fontSize: '11px' }}>
                   🔒
                 </span>
               )}
               {showFavorite && (
                 <button onClick={e => { e.preventDefault(); toggleFavorite(community.id) }}
-                  className="w-8 h-8 rounded-full flex items-center justify-center transition-transform active:scale-90"
-                  style={{ background: 'rgba(255,248,243,0.65)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.4)' }}>
-                  <span style={{ opacity: favorites.has(community.id) ? 1 : 0.35 }}>⭐</span>
+                  className="w-7 h-7 rounded-full flex items-center justify-center transition-transform active:scale-90"
+                  style={{ background: 'rgba(255,248,243,0.8)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+                  <span style={{ fontSize: '13px', opacity: favorites.has(community.id) ? 1 : 0.35 }}>⭐</span>
                 </button>
               )}
             </div>
           </div>
-
-          <div className="absolute bottom-0 left-0 right-0 px-3 pb-3 pt-5">
-            <p className="font-display text-white font-semibold truncate"
-              style={{ fontSize: '15px', letterSpacing: '-0.02em', textShadow: '0 1px 6px rgba(0,0,0,0.4)' }}>
+          {/* Text body — glass-card */}
+          <div className="glass-card px-3 py-2.5">
+            <p className="font-display font-semibold truncate"
+              style={{ fontSize: '14px', letterSpacing: '-0.02em', color: 'var(--terra-dark)' }}>
               {community.name}
             </p>
             {community.description && (
-              <p className="text-white/65 text-xs truncate mt-0.5" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>
+              <p className="text-xs truncate mt-0.5" style={{ color: 'var(--terra-mid)' }}>
                 {community.description}
               </p>
             )}
             {isAdmin && (
               <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium mt-1.5"
-                style={{ background: 'rgba(196,103,58,0.85)', color: 'white' }}>
+                style={{ background: 'rgba(196,103,58,0.12)', color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.2)' }}>
                 🔑 Admin
               </span>
             )}

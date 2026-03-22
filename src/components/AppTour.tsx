@@ -67,16 +67,24 @@ export default function AppTour() {
 
   // Check if tour should show
   useEffect(() => {
+    // Check synchronously first — no async needed for localStorage
+    const tourKeys = Object.keys(localStorage).filter(k => k.startsWith('village_tour_done_'))
+    const onboardingKeys = Object.keys(localStorage).filter(k => k.startsWith('village_onboarding_done_'))
+
+    // Show if onboarding has been done but tour hasn't run for any user on this device
+    if (onboardingKeys.length > 0 && tourKeys.length === 0) {
+      setTimeout(() => setActive(true), 1200)
+      return
+    }
+
+    // Fallback: also check via auth for accuracy
     ;(async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       const tourKey = `village_tour_done_${user.id}`
-      const onboardingKey = `village_onboarding_done_${user.id}`
-      // Only show tour if onboarding was just completed and tour hasn't run yet
       if (!localStorage.getItem(tourKey)) {
-        // Delay so navbar has time to render fully
-        setTimeout(() => setActive(true), 1500)
+        setTimeout(() => setActive(true), 1200)
       }
     })()
   }, [])

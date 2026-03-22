@@ -74,9 +74,9 @@ export default function AppTour() {
       const tourKey = `village_tour_done_${user.id}`
       const onboardingKey = `village_onboarding_done_${user.id}`
       // Only show tour if onboarding was just completed and tour hasn't run yet
-      if (localStorage.getItem(onboardingKey) && !localStorage.getItem(tourKey)) {
-        // Small delay so feed has time to render
-        setTimeout(() => setActive(true), 600)
+      if (!localStorage.getItem(tourKey)) {
+        // Delay so navbar has time to render fully
+        setTimeout(() => setActive(true), 1500)
       }
     })()
   }, [])

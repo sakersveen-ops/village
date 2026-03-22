@@ -398,8 +398,9 @@ function OnboardingContent() {
   const goBack = () => setStep(s => Math.max(1, s - 1))
   const goSkip = () => {
     track('onboarding_step_skipped', { step })
+    // Always mark onboarding done when skipping — user may skip at any point
+    if (currentUserId) localStorage.setItem('village_onboarding_done_' + currentUserId, '1')
     if (step >= TOTAL_STEPS) {
-      if (currentUserId) localStorage.setItem('village_onboarding_done_' + currentUserId, '1')
       router.push('/')
     } else {
       setStep(s => s + 1)
@@ -610,21 +611,31 @@ function OnboardingContent() {
             Leier du ut noe på Finn?
           </h1>
           <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--terra-mid)' }}>
-            Vi ELSKER Finn! Men ikke til utleie. Leier du ut noe på Finn allerede, kan du ta screenshots av det her og få hjelp til å sette opp annonser automatisk.
+            Vi ELSKER Finn! Men ikke til utleie. Leier du allerede ut noe på Finn, kan du ta screenshots her og få hjelp til å sette opp annonser automatisk.
           </p>
         </div>
+
+        {/* Optional callout */}
+        <div className="glass px-4 py-3 flex items-start gap-3" style={{ borderRadius: 14 }}>
+          <span className="text-lg shrink-0">💡</span>
+          <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>
+            Dette er helt valgfritt — du kan også legge ut gjenstander manuelt når du er inne i appen.
+          </p>
+        </div>
+
         <FinnImporter
           communityId={undefined}
           onImported={(count) => {
             track('onboarding_finn_imported', { count })
           }}
         />
+
         <NavButtons
           onNext={saveAndFinish}
           onBack={goBack}
           nextLabel="Kom i gang 🏡"
           onSkip={saveAndFinish}
-          skipLabel="Hopp over"
+          skipLabel="Hopp over, kom i gang →"
         />
       </div>
     ),

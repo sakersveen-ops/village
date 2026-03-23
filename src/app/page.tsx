@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { track, Events } from '@/lib/track'
-import { CATEGORIES, getSubcategoryIds } from '@/lib/categories'
+import { CATEGORIES } from '@/lib/categories'
 
 const CAT_EMOJI: Record<string, string> = {
   'hjem-og-hage': '🏠',
@@ -15,6 +15,19 @@ const CAT_EMOJI: Record<string, string> = {
   'boker': '📚',
 }
 
+// Legacy DB values → new top-level IDs
+const LEGACY_CAT_MAP: Record<string, string> = {
+  'barn':     'baby-og-barn',
+  'kjole':    'klar-og-mote',
+  'verktøy':  'hjem-og-hage',
+  'bok':      'boker',
+  'annet':    'hjem-og-hage',
+}
+
+function normalizeCategory(cat: string): string {
+  return LEGACY_CAT_MAP[cat] ?? cat
+}
+
 const DEFAULT_VISIBLE = 5
 
 interface RequestGroup {
@@ -23,6 +36,106 @@ interface RequestGroup {
   avatar_url: string | null
   requests: any[]
   hasSeen: boolean
+}
+
+// ── "Jeg har dette" confirmation modal ──
+function HarDetteModal({
+  req,
+  senderName,
+  onClose,
+  onSent,
+}: {
+  req: any
+  senderName: string
+  onClose: () => void
+  onSent: () => void
+}) {
+  const router = useRouter()
+  const [sending, setSending] = useState(false)
+  const [done, setDone] = useState(false)
+
+  const sendNotification = async () => {
+    setSending(true)
+    try {
+      const supabase = createClient()
+      await supabase.from('notifications').insert({
+        user_id: req.user_id,
+        type: 'item_request_response',
+        title: 'Noen har dette!',
+        body: `${senderName} svarte på forespørselen din om ${req.name}`,
+      })
+    } catch (e) { console.error(e) }
+    track(Events.ITEM_REQUEST_RESPONSE, { request_id: req.id })
+    setSending(false)
+    setDone(true)
+  }
+
+  const goAddItem = async () => {
+    await sendNotification()
+    const params = new URLSearchParams()
+    if (req.name)      params.set('name', req.name)
+    if (req.category)  params.set('category', normalizeCategory(req.category))
+    if (req.image_url) params.set('image_url', req.image_url)
+    router.push(`/add?${params.toString()}`)
+  }
+
+  const emoji = CAT_EMOJI[normalizeCategory(req.category)] ?? '🔍'
+
+  return (
+    <>
+      <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 65 }} />
+      <div className="fixed inset-x-0 bottom-0 z-[70] glass-heavy flex flex-col"
+        style={{ borderRadius: '24px 24px 0 0', maxWidth: 480, margin: '0 auto' }}>
+        <div className="drawer-handle" />
+        <div className="px-5 pt-2 pb-8 flex flex-col gap-4">
+
+          {/* Item preview */}
+          <div className="flex items-center gap-3 py-2">
+            {req.image_url
+              ? <img src={req.image_url} className="w-14 h-14 rounded-[14px] object-cover flex-shrink-0" alt={req.name} />
+              : <div className="w-14 h-14 rounded-[14px] bg-[#E8DDD0] flex items-center justify-center text-2xl flex-shrink-0">{emoji}</div>
+            }
+            <div className="min-w-0">
+              <p className="font-display text-[var(--terra-dark)] font-semibold truncate">{req.name}</p>
+              <p className="text-xs text-[var(--terra-mid)] mt-0.5">
+                Forespørsel fra {req.profiles?.name ?? 'ukjent'}
+              </p>
+            </div>
+          </div>
+
+          {done ? (
+            <div className="rounded-2xl py-3 text-center text-sm font-semibold"
+              style={{ background: 'rgba(74,124,89,0.12)', color: 'var(--terra-green)', border: '1px solid rgba(74,124,89,0.3)' }}>
+              ✓ Melding sendt!
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-[var(--terra-mid)] -mt-1">
+                Vil du legge ut denne gjenstanden slik at {req.profiles?.name ?? 'vedkommende'} kan sende en låneforespørsel?
+              </p>
+
+              <button
+                onClick={goAddItem}
+                disabled={sending}
+                className="btn-primary w-full py-3.5 text-sm font-semibold"
+              >
+                {sending ? '…' : `📦 Legg ut "${req.name}"`}
+              </button>
+
+              <button
+                onClick={async () => { await sendNotification(); onSent() }}
+                disabled={sending}
+                className="btn-glass w-full py-3 text-sm"
+              >
+                Bare send melding (uten å legge ut)
+              </button>
+            </>
+          )}
+
+        </div>
+      </div>
+    </>
+  )
 }
 
 // ── Fullskjerm story viewer for én venns requests ──
@@ -38,7 +151,7 @@ function RequestStoryViewer({
   const [idx, setIdx] = useState(0)
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)
-  const [sent, setSent] = useState<Set<string>>(new Set())
+  const [activeReq, setActiveReq] = useState<any | null>(null)
 
   const total = group.requests.length
   const req = group.requests[idx]
@@ -51,7 +164,7 @@ function RequestStoryViewer({
   }, [total, onClose])
 
   useEffect(() => {
-    if (paused) return
+    if (paused || activeReq) return
     const interval = setInterval(() => {
       setProgress(prev => {
         if (prev >= 100) { advance(); return 0 }
@@ -59,32 +172,24 @@ function RequestStoryViewer({
       })
     }, 50)
     return () => clearInterval(interval)
-  }, [paused, advance])
+  }, [paused, activeReq, advance])
 
   const goTo = (i: number) => { setIdx(i); setProgress(0) }
 
   const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (activeReq) return
     const x = e.clientX
     const w = (e.currentTarget as HTMLElement).offsetWidth
     if (x < w * 0.35) { if (idx > 0) goTo(idx - 1) }
     else advance()
   }
 
-  const handleHarDette = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setSent(prev => new Set([...prev, req.id]))
-    onHarDette(req)
-  }
-
   if (!req) return null
 
-  const emoji = CAT_EMOJI[req.category] ?? '🔍'
+  const emoji = CAT_EMOJI[normalizeCategory(req.category)] ?? '🔍'
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex flex-col"
-      style={{ background: '#1a0f08', maxWidth: 480, margin: '0 auto' }}
-    >
+    <div className="fixed inset-0 z-[60] flex flex-col" style={{ background: '#1a0f08', maxWidth: 480, margin: '0 auto' }}>
       {/* Progress bars */}
       <div className="flex gap-1 px-3" style={{ paddingTop: 'max(env(safe-area-inset-top), 12px)' }}>
         {Array.from({ length: total }).map((_, i) => (
@@ -133,7 +238,6 @@ function RequestStoryViewer({
               <span style={{ fontSize: 120, opacity: 0.2 }}>{emoji}</span>
             </div>
         }
-
         <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 55%)' }} />
 
         <div className="absolute bottom-0 left-0 right-0 px-5 pb-8">
@@ -164,21 +268,23 @@ function RequestStoryViewer({
             </div>
           )}
 
-          {sent.has(req.id) ? (
-            <div className="w-full py-3 rounded-2xl text-center text-sm font-semibold mt-3"
-              style={{ background: 'rgba(74,124,89,0.35)', color: '#6FCF97', border: '1px solid rgba(74,124,89,0.5)' }}>
-              ✓ Melding sendt til {group.name}!
-            </div>
-          ) : (
-            <button
-              onClick={handleHarDette}
-              className="w-full py-3.5 rounded-2xl text-sm font-semibold mt-3"
-              style={{ background: 'var(--terra)', color: '#fff' }}>
-              🤝 Jeg har dette!
-            </button>
-          )}
+          <button
+            onClick={e => { e.stopPropagation(); setPaused(true); setActiveReq(req) }}
+            className="w-full py-3.5 rounded-2xl text-sm font-semibold mt-3"
+            style={{ background: 'var(--terra)', color: '#fff' }}>
+            🤝 Jeg har dette!
+          </button>
         </div>
       </div>
+
+      {activeReq && (
+        <HarDetteModal
+          req={activeReq}
+          senderName={profile?.name || user?.email?.split('@')[0] || 'Noen'}
+          onClose={() => { setActiveReq(null); setPaused(false) }}
+          onSent={() => { setActiveReq(null); setPaused(false); onClose() }}
+        />
+      )}
     </div>
   )
 }
@@ -255,7 +361,6 @@ export default function FeedPage() {
           const seen = new Set((views || []).map((v: any) => v.request_id))
           setSeenIds(seen)
 
-          // Grupper per venn
           const groupMap = new Map<string, RequestGroup>()
           for (const req of reqs || []) {
             if (!groupMap.has(req.user_id)) {
@@ -298,25 +403,10 @@ export default function FeedPage() {
     } catch { /* tabell mangler */ }
   }
 
-  const handleHarDette = async (req: any) => {
-    const senderName = profile?.name || user?.email?.split('@')[0] || 'Noen'
-    try {
-      const supabase = createClient()
-      await supabase.from('notifications').insert({
-        user_id: req.user_id,
-        type: 'item_request_response',
-        title: 'Noen har dette!',
-        body: `${senderName} svarte på forespørselen din om ${req.name}`,
-      })
-    } catch (e) { console.error(e) }
-    track(Events.ITEM_REQUEST_RESPONSE, { request_id: req.id })
-  }
-
   const countByCategory = (catId: string) => {
     if (catId === 'all') return feedItems.filter(i => i.available).length
-    const subIds = getSubcategoryIds(catId)
     return feedItems.filter(i =>
-      i.available && (i.category === catId || subIds.includes(i.category))
+      i.available && normalizeCategory(i.category) === catId
     ).length
   }
 
@@ -332,11 +422,7 @@ export default function FeedPage() {
   )
 
   const allFilteredItems = feedItems
-    .filter(i => {
-      if (activeCategory === 'all') return true
-      const subIds = getSubcategoryIds(activeCategory)
-      return i.category === activeCategory || subIds.includes(i.category)
-    })
+    .filter(i => activeCategory === 'all' || normalizeCategory(i.category) === activeCategory)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
   const visibleItems = showAllItems ? allFilteredItems : allFilteredItems.slice(0, DEFAULT_VISIBLE)
@@ -371,20 +457,15 @@ export default function FeedPage() {
         {requestGroups.length > 0 && (
           <div>
             <div className="flex justify-between items-baseline mb-3">
-              <h2 className="font-display text-[var(--terra-dark)] text-base font-semibold">
-                Kretsen trenger
-              </h2>
+              <h2 className="font-display text-[var(--terra-dark)] text-base font-semibold">Kretsen trenger</h2>
               {hasNewRequests && (
                 <span className="text-[10px] font-semibold text-[var(--terra)] uppercase tracking-wide">Nytt</span>
               )}
             </div>
             <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
               {requestGroups.map(group => (
-                <button
-                  key={group.userId}
-                  onClick={() => openGroup(group)}
-                  className="flex flex-col items-center gap-1 flex-shrink-0 w-16"
-                >
+                <button key={group.userId} onClick={() => openGroup(group)}
+                  className="flex flex-col items-center gap-1 flex-shrink-0 w-16">
                   <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{
                     padding: '2px',
                     background: group.hasSeen ? 'rgba(156,123,101,0.3)' : 'var(--terra)',
@@ -452,15 +533,13 @@ export default function FeedPage() {
 
             <div className="pill-row -mx-4 px-4">
               {visibleCategories.map(cat => (
-                <button
-                  key={cat.id}
+                <button key={cat.id}
                   onClick={() => {
                     setActiveCategory(cat.id)
                     setShowAllItems(false)
                     if (cat.id !== 'all') track(Events.CATEGORY_FILTERED, { category: cat.id })
                   }}
-                  className={`pill ${activeCategory === cat.id ? 'active' : ''}`}
-                >
+                  className={`pill ${activeCategory === cat.id ? 'active' : ''}`}>
                   {cat.emoji} {cat.label}
                   {cat.id !== 'all' && <span className="ml-1 opacity-60">({countByCategory(cat.id)})</span>}
                 </button>
@@ -484,7 +563,9 @@ export default function FeedPage() {
                       <div className="relative flex-shrink-0">
                         {item.image_url
                           ? <img src={item.image_url} className="w-14 h-14 rounded-[12px] object-cover" alt={item.name} />
-                          : <div className="w-14 h-14 rounded-[12px] bg-[#E8DDD0] flex items-center justify-center text-2xl">{CAT_EMOJI[item.category] ?? '📦'}</div>
+                          : <div className="w-14 h-14 rounded-[12px] bg-[#E8DDD0] flex items-center justify-center text-2xl">
+                              {CAT_EMOJI[normalizeCategory(item.category)] ?? '📦'}
+                            </div>
                         }
                         <span className="absolute bottom-0.5 right-0.5 w-3 h-3 rounded-full border-2 border-white shadow-sm"
                           style={{ backgroundColor: item.available ? 'var(--terra-green)' : 'var(--terra)' }} />
@@ -519,17 +600,15 @@ export default function FeedPage() {
             </Link>
           </>
         )}
-
       </div>
 
-      {/* ── Story viewer ── */}
       {activeGroup && (
         <RequestStoryViewer
           group={activeGroup}
           user={user}
           profile={profile}
           onClose={() => setActiveGroup(null)}
-          onHarDette={handleHarDette}
+          onHarDette={() => {}}
         />
       )}
 

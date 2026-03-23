@@ -335,6 +335,80 @@ function FriendsStep({ inviter, friendSuggestions, currentUserId, sentFriendRequ
   )
 }
 
+// ─── Finn onboarding step ─────────────────────────────────────────────────────
+function FinnOnboardingStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
+  const [answer, setAnswer] = useState<'yes' | 'no' | null>(null)
+
+  return (
+    <div className="flex flex-col gap-5 flex-1">
+      <div>
+        <h1 className="font-display text-2xl font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+          Leier du ut noe på Finn?
+        </h1>
+        <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--terra-mid)' }}>
+          Vi ELSKER Finn! Men ikke til utleie. Har du ting på Finn som du også kunne tenkt deg å dele med venner og naboer?
+        </p>
+      </div>
+
+      {/* Yes / No choice */}
+      {answer === null && (
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={() => setAnswer('yes')}
+            className="glass flex items-center gap-4 px-5 py-4 text-left"
+            style={{ borderRadius: 16 }}
+          >
+            <span className="text-2xl">👍</span>
+            <div>
+              <p className="font-semibold text-sm" style={{ color: 'var(--terra-dark)' }}>Ja, jeg har ting på Finn</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Importer annonsene dine automatisk</p>
+            </div>
+          </button>
+          <button
+            onClick={() => { setAnswer('no'); onNext() }}
+            className="glass flex items-center gap-4 px-5 py-4 text-left"
+            style={{ borderRadius: 16 }}
+          >
+            <span className="text-2xl">👎</span>
+            <div>
+              <p className="font-semibold text-sm" style={{ color: 'var(--terra-dark)' }}>Nei, ikke akkurat nå</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Hopp videre – du kan legge ut ting manuelt senere</p>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Show importer only if they said yes */}
+      {answer === 'yes' && (
+        <>
+          <FinnImporter
+            communityId={undefined}
+            onImported={(count) => {
+              track('onboarding_finn_imported', { count })
+            }}
+          />
+          <NavButtons
+            onNext={onNext}
+            onBack={() => setAnswer(null)}
+            nextLabel="Kom i gang 🏡"
+            onSkip={onNext}
+            skipLabel="Hopp over, kom i gang →"
+          />
+        </>
+      )}
+
+      {answer === null && (
+        <NavButtons
+          onNext={onNext}
+          onBack={onBack}
+          nextLabel="Kom i gang 🏡"
+          hideSkip
+        />
+      )}
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 function OnboardingContent() {
   const [step, setStep] = useState(1)
@@ -605,39 +679,10 @@ function OnboardingContent() {
       </div>
     ),
     7: (
-      <div className="flex flex-col gap-5 flex-1">
-        <div>
-          <h1 className="font-display text-2xl font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-            Leier du ut noe på Finn?
-          </h1>
-          <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--terra-mid)' }}>
-            Vi ELSKER Finn! Men ikke til utleie. Leier du allerede ut noe på Finn, kan du ta screenshots her og få hjelp til å sette opp annonser automatisk.
-          </p>
-        </div>
-
-        {/* Optional callout */}
-        <div className="glass px-4 py-3 flex items-start gap-3" style={{ borderRadius: 14 }}>
-          <span className="text-lg shrink-0">💡</span>
-          <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>
-            Dette er helt valgfritt — du kan også legge ut gjenstander manuelt når du er inne i appen.
-          </p>
-        </div>
-
-        <FinnImporter
-          communityId={undefined}
-          onImported={(count) => {
-            track('onboarding_finn_imported', { count })
-          }}
-        />
-
-        <NavButtons
-          onNext={saveAndFinish}
-          onBack={goBack}
-          nextLabel="Kom i gang 🏡"
-          onSkip={saveAndFinish}
-          skipLabel="Hopp over, kom i gang →"
-        />
-      </div>
+      <FinnOnboardingStep
+        onNext={saveAndFinish}
+        onBack={goBack}
+      />
     ),
   }
 

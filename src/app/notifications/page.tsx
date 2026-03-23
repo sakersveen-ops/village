@@ -212,7 +212,7 @@ export default function NotificationsPage() {
       const { data } = await supabase
         .from('friend_requests').select('id, from_id, status')
         .eq('to_id', user.id).eq('from_id', fromId)
-        .order('created_at', { ascending: false }).limit(1).single()
+        .order('created_at', { ascending: false }).limit(1).maybeSingle()
       req = data
     }
 
@@ -221,7 +221,7 @@ export default function NotificationsPage() {
       const { data } = await supabase
         .from('friend_requests').select('id, from_id, status')
         .eq('to_id', user.id).eq('status', 'pending')
-        .order('created_at', { ascending: false }).limit(1).single()
+        .order('created_at', { ascending: false }).limit(1).maybeSingle()
       req = data
     }
 

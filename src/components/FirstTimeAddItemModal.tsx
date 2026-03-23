@@ -1,68 +1,74 @@
 'use client'
 import { useState } from 'react'
 
-// Legg til i src/components/FirstTimeAddItemModal.tsx
-// Bruk slik i add/page.tsx (AddPageContent):
-//
-//   import FirstTimeAddItemModal from '@/components/FirstTimeAddItemModal'
-//
-//   const [showAddIntro, setShowAddIntro] = useState(false)
-//
-//   useEffect(() => {
-//     (async () => {
-//       const supabase = createClient()
-//       const { data: { user } } = await supabase.auth.getUser()
-//       if (!user) return
-//       const key = `village_add_intro_${user.id}`
-//       if (!localStorage.getItem(key)) setShowAddIntro(true)
-//     })()
-//   }, [])
-//
-//   // I JSX:
-//   {showAddIntro && (
-//     <FirstTimeAddItemModal
-//       suggestedItems={onboardingOwnedItems}
-//       onDismiss={() => {
-//         localStorage.setItem(`village_add_intro_${userId}`, '1')
-//         setShowAddIntro(false)
-//       }}
-//       onSelectItem={(itemName) => {
-//         setName(itemName)
-//         localStorage.setItem(`village_add_intro_${userId}`, '1')
-//         setShowAddIntro(false)
-//       }}
-//     />
-//   )}
-
-interface Props {
-  suggestedItems: string[]   // fra onboarding (ownedItems lagret i localStorage)
-  onDismiss: () => void
-  onSelectItem: (name: string) => void
+// Top suggestions per category shown in onboarding — intentionally short.
+// Full list available when browsing add/page.tsx.
+const TOP_SUGGESTIONS: Record<string, string[]> = {
+  Barn:      ['Babynest', 'Babybilstol', 'Babygym', 'Balansesykkel', 'Sykkel med pedaler', 'Skiutstyr'],
+  Verktøy:   ['Drill', 'Høytrykkspyler', 'Gressklipper', 'Stige', 'Sirkelsag', 'Sliper'],
+  Sport:     ['Ski (voksen)', 'Sykkel', 'Telt', 'Kajakk', 'Sovepose', 'Ryggsekk'],
+  Bøker:     ['Brettspill', 'Puslespill', 'Fagbøker', 'Barnebøker', 'Kokebøker', 'Romaner'],
+  Matlaging: ['Kjøkkenmaskin', 'Vaffelsjern', 'Is-maskin', 'Espressomaskin', 'Sous vide', 'Iskremmaskin'],
+  Musikk:    ['Gitar', 'Piano/keyboard', 'Mikrofon', 'Høyttaler', 'Ukulele', 'Forsterker'],
+  Hage:      ['Hagesett', 'Paraply/paviljong', 'Hengekøye', 'Gressklipper', 'Kompostbeholder', 'Trillebår'],
 }
 
-export default function FirstTimeAddItemModal({ suggestedItems, onDismiss, onSelectItem }: Props) {
+interface Props {
+  // Items from onboarding the user said they own
+  ownedItems: string[]
+  // Items already listed (to exclude from suggestions)
+  listedItems?: string[]
+  onDismiss: () => void
+  onSelectItem: (name: string) => void
+  // If true, shows "legg ut flere" framing instead of first-time framing
+  isFollowUp?: boolean
+}
+
+export default function FirstTimeAddItemModal({
+  ownedItems,
+  listedItems = [],
+  onDismiss,
+  onSelectItem,
+  isFollowUp = false,
+}: Props) {
   const [selected, setSelected] = useState<string | null>(null)
+
+  // Build suggestion list: onboarding items first, then top suggestions,
+  // deduped and excluding already-listed items
+  const remaining = ownedItems.filter(i => !listedItems.includes(i))
+  const allSuggestions = Object.values(TOP_SUGGESTIONS).flat()
+  const extraSuggestions = allSuggestions
+    .filter(i => !remaining.includes(i) && !listedItems.includes(i))
+  const combined = [...remaining, ...extraSuggestions]
+  // Show max 8 items
+  const suggestions = combined.slice(0, 8)
 
   return (
     <div className="fixed inset-0 z-60 flex items-end justify-center px-4 pb-6">
       <div className="modal-backdrop absolute inset-0" onClick={onDismiss} />
-      <div className="glass-heavy relative w-full max-w-sm flex flex-col gap-5 p-6" style={{ borderRadius: 24, zIndex: 61 }}>
+      <div className="glass-heavy relative w-full max-w-sm flex flex-col gap-5 p-6"
+        style={{ borderRadius: 24, zIndex: 61, maxHeight: '85vh', overflowY: 'auto' }}>
+
         <div className="text-center">
-          <span className="text-4xl">🏷️</span>
-          <h2 className="font-display text-xl font-bold mt-3" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-            Legg ut en gjenstand
+          <span className="text-4xl">{isFollowUp ? '➕' : '🏷️'}</span>
+          <h2 className="font-display text-xl font-bold mt-3"
+            style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+            {isFollowUp ? 'Vil du legge ut noe mer?' : 'Legg ut din første gjenstand'}
           </h2>
           <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--terra-mid)' }}>
-            Velg en av tingene du merket i onboarding, eller legg til noe nytt.
+            {isFollowUp
+              ? 'Her er noen av tingene du merket i onboarding.'
+              : 'Velg en av tingene du merket, eller legg til noe nytt.'}
           </p>
         </div>
 
-        {suggestedItems.length > 0 && (
-          <div className="flex flex-col gap-2" style={{ maxHeight: 220, overflowY: 'auto' }}>
-            <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
-              Dine merkede ting
+        {suggestions.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide"
+              style={{ color: 'var(--terra-mid)' }}>
+              Eksempler — du kan legge til mer etterhvert
             </p>
-            {suggestedItems.map(item => (
+            {suggestions.map(item => (
               <button
                 key={item}
                 onClick={() => setSelected(selected === item ? null : item)}
@@ -81,7 +87,8 @@ export default function FirstTimeAddItemModal({ suggestedItems, onDismiss, onSel
                   }}>
                   {selected === item && (
                     <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                      <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8"
+                        strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   )}
                 </div>
@@ -108,8 +115,9 @@ export default function FirstTimeAddItemModal({ suggestedItems, onDismiss, onSel
               Legg til noe nytt →
             </button>
           )}
-          <button onClick={onDismiss} className="text-sm py-2 text-center" style={{ color: 'var(--terra-mid)' }}>
-            Avbryt
+          <button onClick={onDismiss} className="text-sm py-2 text-center"
+            style={{ color: 'var(--terra-mid)' }}>
+            {isFollowUp ? 'Nei takk, jeg er ferdig' : 'Avbryt'}
           </button>
         </div>
       </div>

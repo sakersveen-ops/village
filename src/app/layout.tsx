@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import NavBar from '@/components/NavBar'
-import AppTour from '@/components/AppTour'
+import AppTourWrapper from '@/components/AppTourWrapper'
+import FeedbackButton from '@/components/FeedbackButton'
 import { Fraunces } from 'next/font/google'
 
 const fraunces = Fraunces({
@@ -22,7 +23,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${fraunces.variable} bg-[#FAF7F2] min-h-screen`}>
         <NavBar />
         {children}
-        <AppTour />
+        <AppTourWrapper />
+        <FeedbackButton />
       </body>
     </html>
   )

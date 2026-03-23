@@ -4,13 +4,14 @@ import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 import { track } from '@/lib/track'
+import FirstTimeAddItemModal from '@/components/FirstTimeAddItemModal'
 
 const ACCESS_LEVELS = [
-  { id: 'close_friends',      label: 'Nære venner',     emoji: '❤️',  description: 'Kun de du har merket som nære venner' },
-  { id: 'friends',            label: 'Venner',           emoji: '👥',  description: 'Alle du er venner med' },
-  { id: 'friends_of_friends', label: 'Venners venner',   emoji: '🌐',  description: 'Venner og deres venner' },
+  { id: 'close_friends',      label: 'Nære venner',       emoji: '❤️',  description: 'Kun de du har merket som nære venner' },
+  { id: 'friends',            label: 'Venner',             emoji: '👥',  description: 'Alle du er venner med' },
+  { id: 'friends_of_friends', label: 'Venners venner',     emoji: '🌐',  description: 'Venner og deres venner' },
   { id: 'community',          label: 'Spesifikke kretser', emoji: '🏘️', description: 'Velg hvilke kretser som kan låne' },
-  { id: 'public',             label: 'Alle',             emoji: '🌍',  description: 'Synlig for alle på Village' },
+  { id: 'public',             label: 'Alle',               emoji: '🌍',  description: 'Synlig for alle på Village' },
 ]
 
 const PRICE_TYPES = [
@@ -19,10 +20,8 @@ const PRICE_TYPES = [
   { id: 'fixed',    label: 'engangsbeløp' },
 ]
 
-// Hierarchy: selecting a level auto-selects all levels above it (closer circles)
 const LEVEL_ORDER = ['close_friends', 'friends', 'friends_of_friends', 'community', 'public']
 
-// FIX 3: Map each level to which higher level implicitly includes it
 const INCLUDED_BY: Record<string, string> = {
   close_friends: 'Venner',
   friends: 'Venners venner',
@@ -66,7 +65,6 @@ function PriceRow({ price, priceType, onPriceChange, onTypeChange, placeholder }
           ))}
         </select>
       </div>
-      {/* FIX 4: Helper text */}
       <p className="text-xs mt-1.5" style={{ color: 'var(--terra-mid)', opacity: 0.7 }}>
         La stå tom for gratis
       </p>
@@ -84,10 +82,15 @@ function AccessPageInner() {
   const [saving, setSaving]                 = useState(false)
   const [saveError, setSaveError]           = useState<string | null>(null)
   const [loading, setLoading]               = useState(true)
-  const router      = useRouter()
+  // Follow-up modal state
+  const [showFollowUp, setShowFollowUp]     = useState(false)
+  const [ownedItems, setOwnedItems]         = useState<string[]>([])
+  const [listedItems, setListedItems]       = useState<string[]>([])
+
+  const router       = useRouter()
   const searchParams = useSearchParams()
-  const itemId      = searchParams.get('item')
-  const itemName    = searchParams.get('name') ? decodeURIComponent(searchParams.get('name')!) : null
+  const itemId       = searchParams.get('item')
+  const itemName     = searchParams.get('name') ? decodeURIComponent(searchParams.get('name')!) : null
 
   useEffect(() => {
     if (!itemId || itemId === 'undefined' || itemId === 'null') return
@@ -122,6 +125,17 @@ function AccessPageInner() {
         track('access_page_viewed', { item_id: itemId, mode: 'new' })
       }
 
+      // Load onboarding items for follow-up modal
+      try {
+        const raw = localStorage.getItem('village_owned_items')
+        if (raw) setOwnedItems(JSON.parse(raw))
+      } catch { /* ignore */ }
+
+      // Load already-listed items to exclude from suggestions
+      const { data: myItems } = await supabase
+        .from('items').select('name').eq('owner_id', user.id)
+      setListedItems((myItems || []).map((i: any) => i.name))
+
       setLoading(false)
     }
     load()
@@ -138,26 +152,18 @@ function AccessPageInner() {
   const toggleNamedLevel = (levelId: string) => {
     const idx = LEVEL_ORDER.indexOf(levelId)
     if (idx === -1) return
-
     const isSelected = selectedLevels.some(l => l.access_type === levelId && !l.community_id)
-
     if (isSelected) {
       const toRemove = LEVEL_ORDER.slice(0, idx + 1)
-      setSelectedLevels(prev => prev.filter(l =>
-        l.community_id || !toRemove.includes(l.access_type)
-      ))
+      setSelectedLevels(prev => prev.filter(l => l.community_id || !toRemove.includes(l.access_type)))
     } else {
       const toAdd = LEVEL_ORDER.slice(0, idx + 1)
       setSelectedLevels(prev => {
-        const existing     = prev.filter(l => l.community_id)
+        const existing      = prev.filter(l => l.community_id)
         const namedExisting = prev.filter(l => !l.community_id)
-        const newEntries   = toAdd
+        const newEntries    = toAdd
           .filter(id => !namedExisting.some(l => l.access_type === id))
-          .map(id => ({
-            access_type: id,
-            price_type: 'per_day' as const,
-            price: suggestedPrice?.price,
-          }))
+          .map(id => ({ access_type: id, price_type: 'per_day' as const, price: suggestedPrice?.price }))
         return [...namedExisting, ...newEntries, ...existing]
       })
     }
@@ -179,56 +185,41 @@ function AccessPageInner() {
 
   const updatePrice = (levelId: string, communityId: string | undefined, val: string) => {
     setSelectedLevels(prev => prev.map(l => {
-      const match = communityId
-        ? l.community_id === communityId
-        : l.access_type === levelId && !l.community_id
+      const match = communityId ? l.community_id === communityId : l.access_type === levelId && !l.community_id
       return match ? { ...l, price: val ? parseInt(val) : undefined } : l
     }))
   }
 
   const updatePriceType = (levelId: string, communityId: string | undefined, val: string) => {
     setSelectedLevels(prev => prev.map(l => {
-      const match = communityId
-        ? l.community_id === communityId
-        : l.access_type === levelId && !l.community_id
+      const match = communityId ? l.community_id === communityId : l.access_type === levelId && !l.community_id
       return match ? { ...l, price_type: val } : l
     }))
   }
 
-  const updateAllCommunitiesPrice = (val: string) => {
-    setSelectedLevels(prev => prev.map(l =>
-      l.community_id ? { ...l, price: val ? parseInt(val) : undefined } : l
-    ))
-  }
-
-  const updateAllCommunitiesPriceType = (val: string) => {
-    setSelectedLevels(prev => prev.map(l =>
-      l.community_id ? { ...l, price_type: val } : l
-    ))
-  }
+  const updateAllCommunitiesPrice     = (val: string) =>
+    setSelectedLevels(prev => prev.map(l => l.community_id ? { ...l, price: val ? parseInt(val) : undefined } : l))
+  const updateAllCommunitiesPriceType = (val: string) =>
+    setSelectedLevels(prev => prev.map(l => l.community_id ? { ...l, price_type: val } : l))
 
   const save = async () => {
     if (!itemId) return
     setSaving(true)
     setSaveError(null)
     const supabase = createClient()
-
     try {
-      const { error: deleteError } = await supabase
-        .from('item_access').delete().eq('item_id', itemId)
+      const { error: deleteError } = await supabase.from('item_access').delete().eq('item_id', itemId)
       if (deleteError) throw deleteError
 
-      const rows: any[] = []
-      for (const l of selectedLevels) {
-        if (l.access_type === 'community' && !l.community_id && allCommunities) continue
-        rows.push({
+      const rows: any[] = selectedLevels
+        .filter(l => !(l.access_type === 'community' && !l.community_id && allCommunities))
+        .map(l => ({
           item_id: itemId,
           access_type: l.access_type,
           community_id: l.community_id || null,
           price: l.price || null,
           price_type: l.price_type,
-        })
-      }
+        }))
 
       if (rows.length > 0) {
         const { error: insertError } = await supabase.from('item_access').insert(rows)
@@ -242,7 +233,14 @@ function AccessPageInner() {
         num_rules: selectedLevels.length,
       })
 
-      router.push(`/items/${itemId}`)
+      // Show follow-up modal if user has onboarding items remaining
+      const remaining = ownedItems.filter(i => !listedItems.includes(i))
+      if (remaining.length > 0 || ownedItems.length > 0) {
+        setSaving(false)
+        setShowFollowUp(true)
+      } else {
+        router.push(`/items/${itemId}`)
+      }
     } catch (err: any) {
       console.error('Save access error:', err)
       setSaveError('Noe gikk galt. Prøv igjen.')
@@ -259,22 +257,15 @@ function AccessPageInner() {
     <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
   )
 
-  const communitySelected    = selectedLevels.some(l => l.access_type === 'community' && !l.community_id)
-  const allCommunitiesEntry  = { price_type: 'per_day', price: suggestedPrice?.price, ...selectedLevels.find(l => l.community_id) }
-
-  // FIX 3: Determine which level is the "highest" selected, so we can show implicit hints
-  const highestSelectedIdx = LEVEL_ORDER.reduce((max, id, i) => {
-    if (selectedLevels.some(l => l.access_type === id && !l.community_id)) return i
-    return max
-  }, -1)
-
-  // FIX 2: Ordered list — community and public rendered separately below, so filter them out here
+  const communitySelected   = selectedLevels.some(l => l.access_type === 'community' && !l.community_id)
+  const allCommunitiesEntry = { price_type: 'per_day', price: suggestedPrice?.price, ...selectedLevels.find(l => l.community_id) }
+  const highestSelectedIdx  = LEVEL_ORDER.reduce((max, id, i) =>
+    selectedLevels.some(l => l.access_type === id && !l.community_id) ? i : max, -1)
   const namedLevels = ACCESS_LEVELS.filter(l => l.id !== 'community' && l.id !== 'public')
 
   return (
     <div className="max-w-lg mx-auto pb-48">
 
-      {/* ── FIX 5: Vertical stacked header ─────────────────────────────────── */}
       <div className="page-header glass sticky top-0 z-40 px-4 pb-4"
         style={{ borderRadius: '0 0 20px 20px', paddingTop: 0 }}>
         <button onClick={() => router.back()}
@@ -296,30 +287,18 @@ function AccessPageInner() {
 
       <div className="px-4 pt-5 flex flex-col gap-3">
 
-        {/* ── FIX 1 & 2: Named levels in correct order, no duplicate public ── */}
-        {namedLevels.map((level, levelIdx) => {
-          const entry    = selectedLevels.find(l => l.access_type === level.id && !l.community_id)
-          const selected = !!entry
-          const levelOrderIdx = LEVEL_ORDER.indexOf(level.id)
-
-          // FIX 3: Is this level implicitly selected because a higher level is selected?
+        {namedLevels.map((level) => {
+          const entry           = selectedLevels.find(l => l.access_type === level.id && !l.community_id)
+          const selected        = !!entry
+          const levelOrderIdx   = LEVEL_ORDER.indexOf(level.id)
           const implicitlySelected = !selected && highestSelectedIdx > levelOrderIdx
 
           return (
-            <div key={level.id} className="glass"
-              style={{
-                borderRadius: 16,
-                padding: 16,
-                opacity: implicitlySelected ? 0.6 : 1,
-              }}>
-              <button
-                onClick={() => toggleNamedLevel(level.id)}
-                className="w-full flex items-center gap-3 text-left"
-              >
+            <div key={level.id} className="glass" style={{ borderRadius: 16, padding: 16, opacity: implicitlySelected ? 0.6 : 1 }}>
+              <button onClick={() => toggleNamedLevel(level.id)} className="w-full flex items-center gap-3 text-left">
                 <span style={{ fontSize: 22 }}>{level.emoji}</span>
                 <div className="flex-1">
                   <p className="font-semibold text-sm" style={{ color: 'var(--terra-dark)' }}>{level.label}</p>
-                  {/* FIX 3: Implicit inclusion hint */}
                   {implicitlySelected && INCLUDED_BY[level.id] ? (
                     <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
                       Inkludert fordi du valgte {INCLUDED_BY[level.id]}
@@ -337,7 +316,6 @@ function AccessPageInner() {
                   {(selected || implicitlySelected) && <span className="text-white text-xs">✓</span>}
                 </div>
               </button>
-
               {selected && (
                 <PriceRow
                   price={entry?.price}
@@ -351,46 +329,27 @@ function AccessPageInner() {
           )
         })}
 
-        {/* ── FIX 2: Spesifikke kretser (4th) ────────────────────────────── */}
+        {/* Spesifikke kretser */}
         <div className="glass" style={{ borderRadius: 16, padding: 16 }}>
-          <button
-            onClick={() => toggleNamedLevel('community')}
-            className="w-full flex items-center gap-3 text-left"
-          >
+          <button onClick={() => toggleNamedLevel('community')} className="w-full flex items-center gap-3 text-left">
             <span style={{ fontSize: 22 }}>🏘️</span>
             <div className="flex-1">
               <p className="font-semibold text-sm" style={{ color: 'var(--terra-dark)' }}>Spesifikke kretser</p>
               <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Velg hvilke kretser som kan låne</p>
             </div>
             <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
-              style={{
-                background: communitySelected ? 'var(--terra)' : 'transparent',
-                border: communitySelected ? 'none' : '2px solid rgba(196,103,58,0.25)',
-              }}>
+              style={{ background: communitySelected ? 'var(--terra)' : 'transparent', border: communitySelected ? 'none' : '2px solid rgba(196,103,58,0.25)' }}>
               {communitySelected && <span className="text-white text-xs">✓</span>}
             </div>
           </button>
 
           {communitySelected && communities.length > 0 && (
             <div className="mt-4 flex flex-col gap-3">
-              <button
-                onClick={() => setAllCommunities(prev => !prev)}
-                className="flex items-center gap-3 w-full"
-              >
+              <button onClick={() => setAllCommunities(prev => !prev)} className="flex items-center gap-3 w-full">
                 <div className="w-10 rounded-full flex-shrink-0 transition-colors"
-                  style={{
-                    height: 24,
-                    background: allCommunities ? 'var(--terra)' : 'rgba(196,103,58,0.15)',
-                    padding: 2,
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}>
+                  style={{ height: 24, background: allCommunities ? 'var(--terra)' : 'rgba(196,103,58,0.15)', padding: 2, display: 'flex', alignItems: 'center' }}>
                   <div className="rounded-full bg-white transition-transform"
-                    style={{
-                      width: 20, height: 20,
-                      transform: allCommunities ? 'translateX(16px)' : 'translateX(0)',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
-                    }} />
+                    style={{ width: 20, height: 20, transform: allCommunities ? 'translateX(16px)' : 'translateX(0)', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }} />
                 </div>
                 <span className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Alle kretser</span>
               </button>
@@ -407,28 +366,19 @@ function AccessPageInner() {
 
               {!allCommunities && (
                 <div className="flex flex-col gap-2">
-                  {communities.length === 0 ? (
-                    <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>Du er ikke med i noen kretser ennå</p>
-                  ) : communities.map((c: any) => {
-                    const cEntry   = selectedLevels.find(l => l.community_id === c.id)
+                  {communities.map((c: any) => {
+                    const cEntry    = selectedLevels.find(l => l.community_id === c.id)
                     const cSelected = !!cEntry
                     return (
                       <div key={c.id} className="glass" style={{ borderRadius: 12, padding: 12 }}>
-                        <button
-                          onClick={() => toggleCommunity(c.id)}
-                          className="w-full flex items-center gap-3 text-left"
-                        >
+                        <button onClick={() => toggleCommunity(c.id)} className="w-full flex items-center gap-3 text-left">
                           <span style={{ fontSize: 18 }}>{c.avatar_emoji}</span>
                           <p className="flex-1 font-medium text-sm" style={{ color: 'var(--terra-dark)' }}>{c.name}</p>
                           <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-                            style={{
-                              background: cSelected ? 'var(--terra)' : 'transparent',
-                              border: cSelected ? 'none' : '2px solid rgba(196,103,58,0.25)',
-                            }}>
+                            style={{ background: cSelected ? 'var(--terra)' : 'transparent', border: cSelected ? 'none' : '2px solid rgba(196,103,58,0.25)' }}>
                             {cSelected && <span className="text-white text-xs">✓</span>}
                           </div>
                         </button>
-
                         {cSelected && (
                           <PriceRow
                             price={cEntry?.price}
@@ -447,33 +397,25 @@ function AccessPageInner() {
           )}
 
           {communitySelected && communities.length === 0 && (
-            <p className="text-xs mt-3" style={{ color: 'var(--terra-mid)' }}>
-              Du er ikke med i noen kretser ennå
-            </p>
+            <p className="text-xs mt-3" style={{ color: 'var(--terra-mid)' }}>Du er ikke med i noen kretser ennå</p>
           )}
         </div>
 
-        {/* ── FIX 1 & 2: Public — sist, én gang ──────────────────────────── */}
+        {/* Public */}
         {(() => {
-          const level  = ACCESS_LEVELS.find(l => l.id === 'public')!
-          const entry  = selectedLevels.find(l => l.access_type === 'public' && !l.community_id)
+          const level    = ACCESS_LEVELS.find(l => l.id === 'public')!
+          const entry    = selectedLevels.find(l => l.access_type === 'public' && !l.community_id)
           const selected = !!entry
           return (
             <div className="glass" style={{ borderRadius: 16, padding: 16 }}>
-              <button
-                onClick={() => toggleNamedLevel('public')}
-                className="w-full flex items-center gap-3 text-left"
-              >
+              <button onClick={() => toggleNamedLevel('public')} className="w-full flex items-center gap-3 text-left">
                 <span style={{ fontSize: 22 }}>{level.emoji}</span>
                 <div className="flex-1">
                   <p className="font-semibold text-sm" style={{ color: 'var(--terra-dark)' }}>{level.label}</p>
                   <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>{level.description}</p>
                 </div>
                 <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
-                  style={{
-                    background: selected ? 'var(--terra)' : 'transparent',
-                    border: selected ? 'none' : '2px solid rgba(196,103,58,0.25)',
-                  }}>
+                  style={{ background: selected ? 'var(--terra)' : 'transparent', border: selected ? 'none' : '2px solid rgba(196,103,58,0.25)' }}>
                   {selected && <span className="text-white text-xs">✓</span>}
                 </div>
               </button>
@@ -495,10 +437,9 @@ function AccessPageInner() {
             <p className="text-sm" style={{ color: 'var(--terra)' }}>{saveError}</p>
           </div>
         )}
-
       </div>
 
-      {/* ── Bottom CTA ─────────────────────────────────────────────────────── */}
+      {/* Bottom CTA */}
       <div className="fixed bottom-16 left-0 right-0 px-4 py-4 flex gap-3"
         style={{
           background: 'rgba(250,247,242,0.85)',
@@ -506,13 +447,28 @@ function AccessPageInner() {
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
         }}>
-        <button onClick={skip} className="btn-glass flex-1">
-          Hopp over
-        </button>
+        <button onClick={skip} className="btn-glass flex-1">Hopp over</button>
         <button onClick={save} disabled={saving} className="btn-primary flex-grow disabled:opacity-50">
           {saving ? 'Lagrer…' : 'Lagre tilgang'}
         </button>
       </div>
+
+      {/* Follow-up modal: "Vil du legge ut noe mer?" */}
+      {showFollowUp && (
+        <FirstTimeAddItemModal
+          ownedItems={ownedItems}
+          listedItems={listedItems}
+          isFollowUp
+          onDismiss={() => {
+            setShowFollowUp(false)
+            router.push(`/items/${itemId}`)
+          }}
+          onSelectItem={(name) => {
+            setShowFollowUp(false)
+            router.push(`/add?name=${encodeURIComponent(name)}`)
+          }}
+        />
+      )}
     </div>
   )
 }

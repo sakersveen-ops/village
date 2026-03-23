@@ -558,3 +558,56 @@ const normalize = (rows, role) => rows.map(r => ({ ...r, role, counterpart: r.pr
 - Filtrerer begge lister samtidig
 
 **Routing:** `/schedule` — lenkes fra stats-boksen "avtaler" i `profile/page.tsx`
+
+## Kategoritaksonomi
+
+Kategoriene er definert i `src/lib/categories.ts` — **aldri hardkod kategori-strenger andre steder**. Importer alltid `CATEGORIES`, `getCategoryLabel()` o.l. derfra.
+
+Kategorier brukes på følgende steder og må holdes i sync:
+- `src/app/page.tsx`
+- `src/app/items/[id]/page.tsx` — kategori settes ved opprettelse av item
+- `src/app/search/page.tsx` — kategorifilter på gjenstander
+- `src/app/profile/[userId]/page.tsx` — kategorifilter på items
+- `src/app/schedule/page.tsx` — `catFilter` state
+- Onboarding-flyt — kategorivalg ved første item-listing
+- VillageStore — kategorinavigasjon
+
+---
+
+### Toppnivå
+
+| id | Label |
+|---|---|
+| `hjem-og-hage` | Hjem & hage |
+| `baby-og-barn` | Baby & barn |
+| `fest-og-arrangement` | Fest & arrangement |
+| `friluft-og-sport` | Friluft & sport |
+| `klar-og-mote` | Klær & mote |
+| `boker` | Bøker |
+
+---
+
+### Underkategorier
+
+**Hjem & hage**
+`verktoy-og-maskiner` / `hage-og-uteomrader` / `hjem-generelt` / `annet-hjem`
+
+**Baby & barn**
+`spise` / `leke` / `stelle` / `sove` / `bade` / `ha-pa` / `reise` / `gravid`
+→ Filter: **Alder** (0–3 mnd, 3–6 mnd, 6–12 mnd, 1–2 år, 2–3 år, 3–5 år, 5–8 år, 8–12 år)
+
+**Fest & arrangement**
+`dekketoy-og-duker` / `bord-stol-og-bar` / `telt` / `grill` / `lyd-lys-scene-og-varme`
+
+**Friluft & sport**
+`skisport` / `jakt-fiske-og-friluftsliv` / `sykkelsport` / `vannsport` / `musikkinstrumenter` / `golf` / `annen-sport`
+
+**Klær & mote**
+Underkategorier (anledning): `bryllup` / `fest-og-ball` / `konfirmasjon` / `begravelse-og-seremoni` / `hverdag-og-casual` / `annet-klar`
+Filtre (størrelse, sidestilte):
+- Dame: XS / S / M / L / XL / XXL
+- Herre: XS / S / M / L / XL / XXL
+- Barn: 86–92 / 98–104 / 110–116 / 122–128 / 134–140 / 146–152 / 158–164
+
+**Bøker**
+Ingen underkategorier foreløpig.

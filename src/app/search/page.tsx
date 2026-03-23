@@ -1,416 +1,354 @@
 'use client'
-import { useEffect, useState, useRef, useCallback } from 'react'
-import { createClient } from '@/lib/supabase'
+
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-
-type SearchTab = 'gjenstander' | 'kretser' | 'personer'
-
-const CATEGORY_EMOJI: Record<string, string> = {
-  barn: '🧸', kjole: '👗', verktøy: '🔧', bok: '📚', annet: '📦',
-}
+import { createClient } from '@/lib/supabase'
+import { getCategoryLabel } from '@/lib/categories'
+import { sortProfilesWithConnectionFirst } from '@/lib/sortProfiles'
+import { track, Events } from '@/lib/track'
 
 export default function SearchPage() {
-  const [user, setUser]       = useState<any>(null)
-  const [tab, setTab]         = useState<SearchTab>('gjenstander')
-  const [query, setQuery]     = useState('')
-  const [items, setItems]     = useState<any[]>([])
-  const [communities, setCommunities] = useState<any[]>([])
-  const [people, setPeople]   = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
-  const [ready, setReady]     = useState(false)
+  const router = useRouter()
+  const supabase = createClient()
   const inputRef = useRef<HTMLInputElement>(null)
-  const router   = useRouter()
 
+  const [tab, setTab] = useState<'gjenstander' | 'kretser' | 'personer'>('gjenstander')
+  const [query, setQuery] = useState('')
+  const [dateFilter, setDateFilter] = useState<string>('') // YYYY-MM-DD
+  const [items, setItems] = useState<any[]>([])
+  const [communities, setCommunities] = useState<any[]>([])
+  const [people, setPeople] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [connectedProfileId, setConnectedProfileId] = useState<string | null>(null)
+
+  // Autofocus input on mount
   useEffect(() => {
-    const init = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-      setUser(user)
-      setReady(true)
-      setTimeout(() => inputRef.current?.focus(), 100)
-    }
-    init()
+    inputRef.current?.focus()
   }, [])
 
-  const search = useCallback(async (q: string, t: SearchTab) => {
-    if (!user) return
-    const supabase = createClient()
-    const trimmed = q.trim()
-    setLoading(true)
-
-    if (t === 'gjenstander') {
-      let query = supabase
-        .from('items')
-        .select('id, name, category, image_url, available, owner_id, profiles!items_owner_id_fkey(id, name, avatar_url)')
-        .eq('available', true)
-        .order('created_at', { ascending: false })
-        .limit(40)
-
-      if (trimmed.length >= 2) {
-        query = query.ilike('name', `%${trimmed}%`)
-      }
-
-      const { data } = await query
-      setItems(data || [])
-    }
-
-    if (t === 'kretser') {
-      let query = supabase
-        .from('communities')
-        .select('id, name, avatar_emoji, is_public')
-        .eq('is_public', true)
-        .order('name')
-        .limit(40)
-
-      if (trimmed.length >= 2) {
-        query = query.ilike('name', `%${trimmed}%`)
-      }
-
-      const { data } = await query
-      setCommunities(data || [])
-    }
-
-    if (t === 'personer') {
-      if (trimmed.length < 2) {
-        setPeople([])
-        setLoading(false)
-        return
-      }
+  // Load connected profile for sortProfilesWithConnectionFirst
+  useEffect(() => {
+    const loadConnection = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
       const { data } = await supabase
-        .from('profiles')
-        .select('id, name, username, avatar_url')
-        .or(`name.ilike.%${trimmed}%,username.ilike.%${trimmed}%`)
-        .neq('id', user.id)
-        .limit(30)
+        .from('profile_connections')
+        .select('user_a, user_b')
+        .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
+        .eq('status', 'active')
+        .limit(1)
+        .single()
+      if (data) {
+        setConnectedProfileId(data.user_a === user.id ? data.user_b : data.user_a)
+      }
+    }
+    loadConnection()
+  }, [])
 
-      setPeople(data || [])
+  // Get item IDs that are unavailable on a given date (active loans + blocked dates)
+  const getUnavailableItemIds = useCallback(async (date: string): Promise<Set<string>> => {
+    const [{ data: loans }, { data: blocked }] = await Promise.all([
+      supabase
+        .from('loans')
+        .select('item_id')
+        .in('status', ['pending', 'active', 'change_proposed'])
+        .lte('start_date', date)
+        .gte('due_date', date),
+      supabase
+        .from('item_blocked_dates')
+        .select('item_id')
+        .eq('date', date),
+    ])
+    const ids = new Set<string>()
+    loans?.forEach((l) => ids.add(l.item_id))
+    blocked?.forEach((b) => ids.add(b.item_id))
+    return ids
+  }, [])
+
+  const searchItems = useCallback(async (q: string, date: string) => {
+    let query = supabase
+      .from('items')
+      .select('*, profiles(id, name, avatar_url)')
+      .eq('available', true)
+      .limit(40)
+
+    if (q.length >= 2) {
+      query = query.ilike('name', `%${q}%`)
     }
 
-    setLoading(false)
-  }, [user])
+    const { data } = await query.order('created_at', { ascending: false })
+    let results = data ?? []
 
+    // Deduplicate: connected_profile items shown once under owner_id
+    const seen = new Set<string>()
+    results = results.filter((item) => {
+      const key = item.connected_profile_id
+        ? [item.owner_id, item.connected_profile_id].sort().join('-')
+        : item.id
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+    // Date filter: remove items unavailable on that date
+    if (date) {
+      const unavailable = await getUnavailableItemIds(date)
+      results = results.filter((item) => !unavailable.has(item.id))
+    }
+
+    setItems(results)
+  }, [getUnavailableItemIds])
+
+  const searchCommunities = useCallback(async (q: string) => {
+    let query = supabase
+      .from('communities')
+      .select('*')
+      .eq('is_public', true)
+      .limit(40)
+    if (q.length >= 2) {
+      query = query.ilike('name', `%${q}%`)
+    }
+    const { data } = await query
+    setCommunities(data ?? [])
+  }, [])
+
+  const searchPeople = useCallback(async (q: string) => {
+    if (q.length < 2) {
+      setPeople([])
+      return
+    }
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, name, username, avatar_url')
+      .or(`name.ilike.%${q}%,username.ilike.%${q}%`)
+      .neq('id', user?.id ?? '')
+      .limit(30)
+    setPeople(sortProfilesWithConnectionFirst(data ?? [], connectedProfileId))
+  }, [connectedProfileId])
+
+  // Debounced search
   useEffect(() => {
-    if (!ready) return
-    const timer = setTimeout(() => search(query, tab), 280)
+    const timer = setTimeout(async () => {
+      setLoading(true)
+      try {
+        if (tab === 'gjenstander') await searchItems(query, dateFilter)
+        else if (tab === 'kretser') await searchCommunities(query)
+        else await searchPeople(query)
+      } finally {
+        setLoading(false)
+      }
+    }, 280)
     return () => clearTimeout(timer)
-  }, [query, tab, ready, search])
+  }, [query, tab, dateFilter])
 
+  // Pre-load on mount
   useEffect(() => {
-    if (ready) search('', 'gjenstander')
-  }, [ready])
+    searchItems('', '')
+    searchCommunities('')
+  }, [])
 
-  const tabs: { id: SearchTab; label: string }[] = [
-    { id: 'gjenstander', label: 'Gjenstander' },
-    { id: 'kretser',     label: 'Kretser' },
-    { id: 'personer',    label: 'Personer' },
-  ]
-
-  const switchTab = (t: SearchTab) => {
-    setTab(t)
-    search(query, t)
-    inputRef.current?.focus()
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setDateFilter(val)
+    if (val) {
+      track(Events.SEARCH_DATE_FILTER_APPLIED, { date: val })
+    }
   }
 
-  // Spør kretsen CTA — vises når søk på gjenstander gir 0 treff eller alltid under resultater
-  const showAskCta = tab === 'gjenstander' && query.trim().length >= 2
-
-  if (!ready) return null
+  const clearDate = () => setDateFilter('')
 
   return (
-    <>
-      {/* ── Header ── */}
+    <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
+      {/* Header */}
       <header className="page-header glass">
         <button
           onClick={() => router.back()}
-          style={{ width: 36, height: 36, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(196,103,58,0.10)', border: '1px solid rgba(196,103,58,0.15)', flexShrink: 0, cursor: 'pointer' }}
+          style={{ color: 'var(--terra)', fontSize: '15px', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,#2C1A0E)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
+          ← Tilbake
         </button>
-
-        <div style={{ flex: 1, margin: '0 10px', position: 'relative' }}>
-          <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.4, flexShrink: 0 }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,#2C1A0E)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
+        <div style={{ flex: 1, margin: '0 10px' }}>
           <input
             ref={inputRef}
-            type="search"
             value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder={
-              tab === 'gjenstander' ? 'Søk etter gjenstander…' :
-              tab === 'kretser'     ? 'Søk etter kretser…' :
-                                     'Søk etter personer…'
-            }
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Søk i Village..."
             style={{
               width: '100%',
-              height: 36,
-              borderRadius: 12,
+              background: 'rgba(196,103,58,0.08)',
               border: '1px solid rgba(196,103,58,0.18)',
-              background: 'rgba(255,248,243,0.7)',
-              padding: '0 12px 0 32px',
-              fontSize: 14,
-              color: 'var(--terra-dark, #2C1A0E)',
+              borderRadius: '10px',
+              padding: '8px 12px',
+              fontSize: '15px',
+              color: 'var(--terra-dark)',
               outline: 'none',
-              letterSpacing: '-0.01em',
             }}
           />
-          {query.length > 0 && (
-            <button
-              onClick={() => setQuery('')}
-              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--terra-mid)', fontSize: 16, lineHeight: 1, padding: 2 }}
-            >×</button>
-          )}
         </div>
       </header>
 
-      <div style={{ maxWidth: 480, margin: '0 auto', padding: '12px 16px 120px' }}>
+      {/* Tabs */}
+      <div className="pill-row" style={{ padding: '12px 16px 0' }}>
+        {(['gjenstander', 'kretser', 'personer'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`pill ${tab === t ? 'active' : ''}`}
+          >
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
+      </div>
 
-        {/* ── Tab switcher ── */}
-        <div className="glass" style={{ display: 'flex', borderRadius: 16, padding: 4, gap: 4, marginBottom: 16 }}>
-          {tabs.map(t => (
-            <button
-              key={t.id}
-              onClick={() => switchTab(t.id)}
-              style={{
-                flex: 1,
-                padding: '8px 0',
-                borderRadius: 12,
-                border: 'none',
-                fontSize: 13,
-                fontWeight: tab === t.id ? 600 : 400,
-                cursor: 'pointer',
-                transition: 'all 200ms ease',
-                background: tab === t.id ? 'white' : 'transparent',
-                color: tab === t.id ? 'var(--terra-dark, #2C1A0E)' : 'var(--terra-mid, #9C7B65)',
-                boxShadow: tab === t.id ? '0 1px 8px rgba(44,26,14,0.08), inset 0 1px 0 rgba(255,255,255,0.9)' : 'none',
-                letterSpacing: '-0.01em',
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* ── Loading ── */}
-        {loading && (
-          <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--terra-mid)', fontSize: 14 }}>
-            Søker…
+      {/* Date filter — only on gjenstander tab */}
+      {tab === 'gjenstander' && (
+        <div style={{ padding: '10px 16px 2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
+              Tilgjengelig dato
+            </label>
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={handleDateChange}
+              min={new Date().toISOString().split('T')[0]}
+              className="glass text-sm outline-none"
+              style={{ borderRadius: 12, padding: '10px 12px', color: dateFilter ? 'var(--terra-dark)' : 'var(--terra-mid)' }}
+            />
           </div>
+          {dateFilter && (
+            <button
+              onClick={clearDate}
+              className="btn-glass btn-sm"
+              style={{ marginTop: 18, whiteSpace: 'nowrap' }}
+            >
+              Nullstill
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Active date filter chip */}
+      {tab === 'gjenstander' && dateFilter && (
+        <div style={{ padding: '6px 16px 0' }}>
+          <span
+            className="status-pill active"
+            style={{ fontSize: '12px' }}
+          >
+            ● Tilgjengelig {new Date(dateFilter).toLocaleDateString('nb-NO', { day: 'numeric', month: 'long' })}
+          </span>
+        </div>
+      )}
+
+      {/* Results */}
+      <div style={{ padding: '12px 16px' }}>
+        {loading && (
+          <p style={{ color: 'var(--terra-mid)', fontSize: '14px', textAlign: 'center', padding: '24px 0' }}>
+            Søker…
+          </p>
         )}
 
-        {/* ── GJENSTANDER ── */}
         {!loading && tab === 'gjenstander' && (
           <>
-            {query.length > 0 && query.length < 2 && (
-              <p style={{ color: 'var(--terra-mid)', fontSize: 13, textAlign: 'center', padding: '32px 0' }}>Skriv minst 2 tegn for å søke</p>
-            )}
-
-            {/* Ingen treff */}
-            {items.length === 0 && query.length >= 2 && (
-              <div style={{ textAlign: 'center', padding: '40px 0 24px' }}>
-                <p style={{ fontSize: 32, marginBottom: 8 }}>🔍</p>
-                <p style={{ color: 'var(--terra-dark)', fontWeight: 600, fontSize: 15 }}>Ingen treff på «{query}»</p>
-                <p style={{ color: 'var(--terra-mid)', fontSize: 13, marginTop: 4 }}>Prøv et annet søkeord</p>
-              </div>
-            )}
-
-            {items.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {query.length < 2 && (
-                  <p style={{ color: 'var(--terra-mid)', fontSize: 12, marginBottom: 4, letterSpacing: '-0.01em' }}>
-                    Nylig lagt ut · {items.length} tilgjengelige
-                  </p>
-                )}
-                {items.map(item => (
-                  <Link key={item.id} href={`/items/${item.id}`} style={{ textDecoration: 'none' }}>
-                    <div style={{
-                      borderRadius: 16,
-                      border: '1px solid rgba(196,103,58,0.18)',
-                      background: 'white',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '10px 12px',
-                      transition: 'box-shadow 150ms ease',
-                    }}
-                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(44,26,14,0.10)'}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}
+            {items.length === 0 ? (
+              <p style={{ color: 'var(--terra-mid)', fontSize: '14px', textAlign: 'center', padding: '24px 0' }}>
+                {dateFilter ? 'Ingen gjenstander tilgjengelig på denne datoen' : 'Ingen gjenstander funnet'}
+              </p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                {items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="item-card glass-hover"
+                    style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(196,103,58,0.18)', cursor: 'pointer' }}
+                    onClick={() => router.push(`/items/${item.id}`)}
+                  >
+                    <div
+                      className="card-image-area"
+                      style={{ aspectRatio: '4/3', background: 'rgba(196,103,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
-                      <div style={{ position: 'relative', flexShrink: 0 }}>
-                        {item.image_url ? (
-                          <img src={item.image_url} style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', display: 'block' }} alt={item.name} />
-                        ) : (
-                          <div style={{ width: 52, height: 52, borderRadius: 10, background: '#E8DDD0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
-                            {CATEGORY_EMOJI[item.category] ?? '📦'}
-                          </div>
-                        )}
-                        <span style={{ position: 'absolute', bottom: 2, right: 2, width: 9, height: 9, borderRadius: '50%', border: '2px solid white', background: item.available ? '#4A7C59' : '#C4673A' }} />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p className="font-display" style={{ color: 'var(--terra-dark)', fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>
-                          {item.name}
-                        </p>
-                        <p style={{ color: 'var(--terra-mid)', fontSize: 11, marginTop: 2, margin: 0 }}>
-                          {item.profiles?.name ?? 'Ukjent'}
-                        </p>
-                      </div>
-                      <span style={{ color: 'var(--terra-mid)', fontSize: 16, flexShrink: 0 }}>›</span>
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <span style={{ fontSize: '32px' }}>📦</span>
+                      )}
                     </div>
-                  </Link>
+                    <div className="item-card-body glass-card" style={{ padding: '10px' }}>
+                      <p className="item-name font-display" style={{ fontSize: '14px', marginBottom: '2px' }}>{item.name}</p>
+                      {item.profiles?.name && (
+                        <p style={{ fontSize: '11px', color: 'var(--terra-mid)', marginBottom: '4px' }}>
+                          {item.connected_profile_id ? '🔗 ' : ''}{item.profiles.name}
+                        </p>
+                      )}
+                      {item.category && (
+                        <p style={{ fontSize: '11px', color: 'var(--terra-mid)' }}>{getCategoryLabel(item.category)}</p>
+                      )}
+                    </div>
+                  </div>
                 ))}
               </div>
-            )}
-
-            {/* ── Spør kretsen CTA ── */}
-            {showAskCta && (
-              <Link
-                href={`/ask?name=${encodeURIComponent(query.trim())}`}
-                style={{ textDecoration: 'none', display: 'block', marginTop: items.length > 0 ? 16 : 0 }}
-              >
-                <div style={{
-                  borderRadius: 16,
-                  border: '1.5px dashed rgba(196,103,58,0.35)',
-                  background: 'rgba(196,103,58,0.04)',
-                  padding: '14px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                }}>
-                  <div style={{
-                    width: 40, height: 40, borderRadius: 12, flexShrink: 0,
-                    background: 'rgba(196,103,58,0.10)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 20,
-                  }}>🙋</div>
-                  <div style={{ flex: 1 }}>
-                    <p style={{ color: 'var(--terra-dark)', fontSize: 13, fontWeight: 600, margin: 0 }}>
-                      Finner du ikke det du leter etter?
-                    </p>
-                    <p style={{ color: 'var(--terra)', fontSize: 12, margin: '2px 0 0', fontWeight: 500 }}>
-                      Spør kretsen om «{query.trim()}» →
-                    </p>
-                  </div>
-                </div>
-              </Link>
             )}
           </>
         )}
 
-        {/* ── KRETSER ── */}
         {!loading && tab === 'kretser' && (
           <>
-            {communities.length === 0 && query.length >= 2 && (
-              <div style={{ textAlign: 'center', padding: '48px 0' }}>
-                <p style={{ fontSize: 32, marginBottom: 8 }}>🏘️</p>
-                <p style={{ color: 'var(--terra-dark)', fontWeight: 600, fontSize: 15 }}>Ingen kretser funnet</p>
-                <p style={{ color: 'var(--terra-mid)', fontSize: 13, marginTop: 4 }}>Prøv et annet søkeord, eller opprett en ny krets</p>
-              </div>
-            )}
-            {communities.length === 0 && query.length < 2 && (
-              <p style={{ color: 'var(--terra-mid)', fontSize: 13, textAlign: 'center', padding: '32px 0' }}>
-                Søk etter offentlige kretser
-              </p>
-            )}
-            {communities.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {communities.map(c => (
-                  // BUG FIX: var /community/${c.id}, skal være /communities/${c.id}
-                  <Link key={c.id} href={`/communities/${c.id}`} style={{ textDecoration: 'none' }}>
-                    <div style={{
-                      borderRadius: 16,
-                      border: '1px solid rgba(196,103,58,0.18)',
-                      background: 'white',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '12px 14px',
-                      transition: 'box-shadow 150ms ease',
-                    }}
-                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(44,26,14,0.10)'}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}
-                    >
-                      <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(196,103,58,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
-                        {c.avatar_emoji ?? '🏘️'}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p className="font-display" style={{ color: 'var(--terra-dark)', fontSize: 14, fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {c.name}
-                        </p>
-                        <p style={{ color: 'var(--terra-mid)', fontSize: 11, marginTop: 2, margin: '2px 0 0' }}>
-                          {c.is_public ? 'Offentlig krets' : 'Privat krets'}
-                        </p>
-                      </div>
-                      <span style={{ color: 'var(--terra-mid)', fontSize: 16, flexShrink: 0 }}>›</span>
-                    </div>
-                  </Link>
+            {communities.length === 0 ? (
+              <p style={{ color: 'var(--terra-mid)', fontSize: '14px', textAlign: 'center', padding: '24px 0' }}>Ingen kretser funnet</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {communities.map((c) => (
+                  <div
+                    key={c.id}
+                    className="glass-card"
+                    style={{ padding: '12px 14px', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}
+                    onClick={() => router.push(`/communities/${c.id}`)}
+                  >
+                    <span style={{ fontSize: '24px' }}>{c.avatar_emoji ?? '🏘️'}</span>
+                    <p className="font-display" style={{ fontSize: '15px', color: 'var(--terra-dark)' }}>{c.name}</p>
+                  </div>
                 ))}
               </div>
             )}
           </>
         )}
 
-        {/* ── PERSONER ── */}
         {!loading && tab === 'personer' && (
           <>
-            {query.length < 2 && (
-              <p style={{ color: 'var(--terra-mid)', fontSize: 13, textAlign: 'center', padding: '32px 0' }}>
-                Søk på navn eller brukernavn
-              </p>
-            )}
-            {query.length >= 2 && people.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '48px 0' }}>
-                <p style={{ fontSize: 32, marginBottom: 8 }}>👤</p>
-                <p style={{ color: 'var(--terra-dark)', fontWeight: 600, fontSize: 15 }}>Ingen personer funnet</p>
-                <p style={{ color: 'var(--terra-mid)', fontSize: 13, marginTop: 4 }}>Sjekk stavemåten og prøv igjen</p>
-              </div>
-            )}
-            {people.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {people.map(p => (
-                  <Link key={p.id} href={`/profile/${p.id}`} style={{ textDecoration: 'none' }}>
-                    <div style={{
-                      borderRadius: 16,
-                      border: '1px solid rgba(196,103,58,0.18)',
-                      background: 'white',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '12px 14px',
-                      transition: 'box-shadow 150ms ease',
-                    }}
-                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(44,26,14,0.10)'}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}
-                    >
-                      {p.avatar_url ? (
-                        <img src={p.avatar_url} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt={p.name} />
-                      ) : (
-                        <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(196,103,58,0.12)', border: '1px solid rgba(196,103,58,0.20)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: 'var(--terra)', flexShrink: 0 }}>
-                          {(p.name ?? '?')[0].toUpperCase()}
-                        </div>
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p className="font-display" style={{ color: 'var(--terra-dark)', fontSize: 14, fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {p.name}
-                        </p>
-                        {p.username && (
-                          <p style={{ color: 'var(--terra-mid)', fontSize: 11, margin: '2px 0 0' }}>
-                            @{p.username}
-                          </p>
-                        )}
-                      </div>
-                      <span style={{ color: 'var(--terra-mid)', fontSize: 16, flexShrink: 0 }}>›</span>
+            {query.length < 2 ? (
+              <p style={{ color: 'var(--terra-mid)', fontSize: '14px', textAlign: 'center', padding: '24px 0' }}>Skriv minst 2 tegn for å søke</p>
+            ) : people.length === 0 ? (
+              <p style={{ color: 'var(--terra-mid)', fontSize: '14px', textAlign: 'center', padding: '24px 0' }}>Ingen personer funnet</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {people.map((p) => (
+                  <div
+                    key={p.id}
+                    className="glass-card"
+                    style={{ padding: '10px 14px', borderRadius: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}
+                    onClick={() => router.push(`/profile/${p.id}`)}
+                  >
+                    {p.avatar_url ? (
+                      <img src={p.avatar_url} alt={p.name} style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(196,103,58,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}>👤</div>
+                    )}
+                    <div>
+                      <p style={{ fontSize: '14px', color: 'var(--terra-dark)', fontWeight: 500 }}>
+                        {p.id === connectedProfileId ? '🔗 ' : ''}{p.name}
+                      </p>
+                      {p.username && <p style={{ fontSize: '12px', color: 'var(--terra-mid)' }}>@{p.username}</p>}
                     </div>
-                  </Link>
+                  </div>
                 ))}
               </div>
             )}
           </>
         )}
       </div>
-    </>
+
+      <div className="nav-spacer" />
+    </div>
   )
 }

@@ -138,6 +138,8 @@ export const Events = {
   ITEM_REQUEST_RESPONSE: 'item_request_response',
   ITEM_REQUEST_POSTED: 'item_request_posted',
 
+  FEEDBACK_SUBMITTED: 'feedback_submitted'
+
 } as const
 
 export type EventName = typeof Events[keyof typeof Events]

@@ -417,9 +417,11 @@ export default function FeedPage() {
     ...CATEGORIES.map((c: any) => ({ id: c.id, label: c.label, emoji: CAT_EMOJI[c.id] ?? '📦' })),
   ]
 
-  const visibleCategories = feedCategories.filter(
-    cat => cat.id === 'all' || countByCategory(cat.id) > 0
-  )
+  const sortedCategories = [...feedCategories].sort((a, b) => {
+    if (a.id === 'all') return -1
+    if (b.id === 'all') return 1
+    return countByCategory(b.id) - countByCategory(a.id)
+  })
 
   const allFilteredItems = feedItems
     .filter(i => activeCategory === 'all' || normalizeCategory(i.category) === activeCategory)
@@ -531,19 +533,42 @@ export default function FeedPage() {
               </p>
             </div>
 
-            <div className="pill-row -mx-4 px-4">
-              {visibleCategories.map(cat => (
-                <button key={cat.id}
-                  onClick={() => {
-                    setActiveCategory(cat.id)
-                    setShowAllItems(false)
-                    if (cat.id !== 'all') track(Events.CATEGORY_FILTERED, { category: cat.id })
-                  }}
-                  className={`pill ${activeCategory === cat.id ? 'active' : ''}`}>
-                  {cat.emoji} {cat.label}
-                  {cat.id !== 'all' && <span className="ml-1 opacity-60">({countByCategory(cat.id)})</span>}
-                </button>
-              ))}
+            <div className="grid grid-cols-3 gap-2.5">
+              {sortedCategories.map(cat => {
+                const count = countByCategory(cat.id)
+                const isCatEmpty = cat.id !== 'all' && count === 0
+                const isActive = activeCategory === cat.id
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => {
+                      if (isCatEmpty) return
+                      setActiveCategory(cat.id)
+                      setShowAllItems(false)
+                      if (cat.id !== 'all') track(Events.CATEGORY_FILTERED, { category: cat.id })
+                    }}
+                    disabled={isCatEmpty}
+                    style={{ opacity: isCatEmpty ? 0.45 : 1 }}
+                    className={[
+                      'rounded-[16px] p-3 flex flex-col items-center gap-1.5 border transition-all duration-200',
+                      isActive
+                        ? 'bg-[var(--terra)] border-[var(--terra)] shadow-sm'
+                        : 'glass border-[rgba(196,103,58,0.18)]',
+                      isCatEmpty ? 'cursor-default' : 'active:scale-95',
+                    ].join(' ')}
+                  >
+                    <span className="text-2xl">{cat.emoji}</span>
+                    <span className={`text-xs font-medium leading-tight ${isActive ? 'text-white' : 'text-[var(--terra-dark)]'}`}>
+                      {cat.label}
+                    </span>
+                    <span className={`text-[10px] font-semibold tabular-nums ${isActive ? 'text-white/80' : 'text-[var(--terra-mid)]'}`}>
+                      {cat.id === 'all'
+                        ? `${totalAvailable} tilgjengelig`
+                        : count === 0 ? '—' : `${count} ledig${count !== 1 ? 'e' : ''}`}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
 
             <div>

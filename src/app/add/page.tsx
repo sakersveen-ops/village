@@ -700,7 +700,7 @@ Returner KUN JSON, ingen annen tekst.` }
       {/* First-time add item modal */}
       {showAddIntro && (
         <FirstTimeAddItemModal
-          suggestedItems={onboardingOwnedItems}
+          ownedItems={onboardingOwnedItems}
           onDismiss={dismissAddIntro}
           onSelectItem={handleSelectSuggestedItem}
         />

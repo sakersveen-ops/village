@@ -138,7 +138,7 @@ export const Events = {
   ITEM_REQUEST_RESPONSE: 'item_request_response',
   ITEM_REQUEST_POSTED: 'item_request_posted',
 
-  FEEDBACK_SUBMITTED: 'feedback_submitted'
+  FEEDBACK_SUBMITTED: 'feedback_submitted',
   SEARCH_DATE_FILTER_APPLIED: 'search_date_filter_applied',
 
 } as const

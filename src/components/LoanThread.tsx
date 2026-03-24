@@ -352,7 +352,9 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
 
           // ── Change proposal card ─────────────────────────────────────────
           if (msg.type === 'change_proposal') {
-            const status = meta?.status || 'pending'
+            // status field in metadata — treat missing/null as 'pending'
+            const status = (meta?.status && meta.status !== '') ? meta.status : 'pending'
+            // Can respond if: not the sender of this specific proposal AND it's still pending
             const canRespond = !mine && status === 'pending'
             return (
               <div key={msg.id} className={`flex flex-col my-3 ${mine ? 'items-end' : 'items-start'}`}>

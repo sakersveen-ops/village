@@ -13,12 +13,14 @@ type Thread = {
   loan_id: string
   item_id: string
   item_name: string
+  item_image: string | null
   owner_id: string
   owner_name: string | null
   loan_status: string
   start_date: string | null
   due_date: string | null
   role: 'lender' | 'borrower'
+  counterpart_id: string | null
   counterpart_name: string | null
   counterpart_avatar: string | null
   last_message_body: string | null
@@ -36,9 +38,9 @@ function possessive(name: string | null): string {
   return name.endsWith('s') ? `${name}'` : `${name}s`
 }
 
-function threadTitle(role: 'lender' | 'borrower', ownerName: string | null, itemName: string): string {
+function itemTitle(role: 'lender' | 'borrower', ownerName: string | null, itemName: string): string {
   if (!itemName) return role === 'lender' ? 'Din gjenstand' : `${possessive(ownerName)} gjenstand`
-  if (role === 'lender') return `Din ${itemName.toLowerCase()}`
+  if (role === 'lender') return itemName
   return `${possessive(ownerName)} ${itemName.toLowerCase()}`
 }
 
@@ -56,13 +58,45 @@ function relativeTime(iso: string | null): string {
   return new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })
 }
 
-// Only show a status badge when it's truly actionable/notable
-function statusBadge(status: string, role: 'lender'|'borrower'): { label: string; color: string; bg: string } | null {
+// Status pill — only shown when notable. Fades when read.
+type PillVariant = 'green' | 'amber' | 'red' | 'neutral'
+
+function statusPill(status: string, role: 'lender'|'borrower', unread: boolean, lastBody: string | null): {
+  label: string; variant: PillVariant
+} | null {
+  // Active loan — only show if unread or requires attention
+  if (status === 'active') {
+    // Show last message body instead of a pill for active/read threads
+    return null
+  }
   if (status === 'pending' && role === 'lender')
-    return { label: 'Venter på deg', color: 'var(--terra)', bg: 'rgba(196,103,58,0.1)' }
+    return { label: 'Venter på din godkjenning', variant: unread ? 'amber' : 'neutral' }
+  if (status === 'pending' && role === 'borrower')
+    return { label: 'Venter på godkjenning', variant: unread ? 'amber' : 'neutral' }
   if (status === 'change_proposed')
-    return { label: 'Endringsforslag', color: 'var(--terra)', bg: 'rgba(196,103,58,0.1)' }
+    return { label: 'Endringsforslag', variant: unread ? 'amber' : 'neutral' }
+  if (status === 'returned')
+    return { label: 'Returnert', variant: 'neutral' }
+  if (status === 'declined')
+    return { label: 'Avslått', variant: 'red' }
   return null
+}
+
+// Parse last message body into a human-readable pill label if it's a system message
+function systemLabel(body: string | null): { label: string; variant: PillVariant } | null {
+  if (!body) return null
+  if (body.startsWith('✅') || body.includes('godtatt') || body.includes('aktivt'))
+    return { label: body.replace('✅ ', ''), variant: 'green' }
+  if (body.startsWith('❌') || body.includes('avslått'))
+    return { label: body.replace('❌ ', ''), variant: 'red' }
+  return null
+}
+
+const PILL_STYLES: Record<PillVariant, { bg: string; color: string; border: string }> = {
+  green:   { bg: 'rgba(74,124,89,0.12)',   color: 'var(--terra-green)', border: 'rgba(74,124,89,0.2)'   },
+  amber:   { bg: 'rgba(196,103,58,0.1)',   color: 'var(--terra)',       border: 'rgba(196,103,58,0.2)'  },
+  red:     { bg: 'rgba(180,60,40,0.08)',   color: '#B43C28',            border: 'rgba(180,60,40,0.15)'  },
+  neutral: { bg: 'rgba(156,123,101,0.07)', color: 'var(--terra-mid)',   border: 'rgba(156,123,101,0.15)'},
 }
 
 // ---------------------------------------------------------------------------
@@ -91,13 +125,12 @@ export default function MessagesPage() {
   async function loadAll(userId: string) {
     setLoading(true)
 
-    // Fetch loans — use item_id column directly, not via join id
     const { data: loans } = await supabase
       .from('loans')
       .select(`
         id, status, start_date, due_date,
         item_id, owner_id, borrower_id,
-        items ( name ),
+        items ( name, image_url ),
         owner:profiles!loans_owner_id_fkey ( id, name, avatar_url ),
         borrower:profiles!loans_borrower_id_fkey ( id, name, avatar_url )
       `)
@@ -105,16 +138,13 @@ export default function MessagesPage() {
       .not('status', 'in', '("declined")')
       .order('created_at', { ascending: false })
 
-    // Filter out any null/malformed rows defensively
     const validLoans = (loans ?? []).filter((l: any) => l && l.id && l.owner_id)
-
-    // Fetch last messages + read receipts in parallel
     const loanIds = validLoans.map((l: any) => l.id)
-    const lastMsgs: Record<string, { body: string; created_at: string; sender_id: string }> = {}
+    const lastMsgs: Record<string, { body: string; created_at: string; sender_id: string; type: string }> = {}
 
     const [msgsResult, readsResult] = await Promise.all([
       loanIds.length > 0
-        ? supabase.from('loan_messages').select('loan_id, body, created_at, sender_id').in('loan_id', loanIds).order('created_at', { ascending: false })
+        ? supabase.from('loan_messages').select('loan_id, body, created_at, sender_id, type').in('loan_id', loanIds).order('created_at', { ascending: false })
         : Promise.resolve({ data: [] as any[] }),
       supabase.from('loan_message_reads').select('loan_id, read_at').eq('user_id', userId),
     ])
@@ -132,6 +162,7 @@ export default function MessagesPage() {
       const counterpart = role === 'lender' ? loan.borrower : loan.owner
       const last = lastMsgs[loan.id] ?? null
       const lastReadAt = readMap.get(loan.id)
+      // System messages (godtatt/avslått) count as unread if not read
       const unread = last
         ? last.sender_id !== userId && (!lastReadAt || lastReadAt < last.created_at)
         : false
@@ -140,12 +171,14 @@ export default function MessagesPage() {
         loan_id:          loan.id,
         item_id:          loan.item_id,
         item_name:        loan.items?.name ?? '',
+        item_image:       loan.items?.image_url ?? null,
         owner_id:         loan.owner_id,
         owner_name:       loan.owner?.name ?? null,
         loan_status:      loan.status,
         start_date:       loan.start_date,
         due_date:         loan.due_date,
         role,
+        counterpart_id:     counterpart?.id ?? null,
         counterpart_name:   counterpart?.name ?? null,
         counterpart_avatar: counterpart?.avatar_url ?? null,
         last_message_body:  last?.body ?? null,
@@ -159,7 +192,26 @@ export default function MessagesPage() {
       new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
     )
 
-    setThreads(normalised)
+    // Group by (item_id, counterpart_id) — one thread per item+person pair
+    const grouped = new Map<string, Thread>()
+    for (const t of normalised) {
+      const key = `${t.item_id}::${t.counterpart_id}`
+      const existing = grouped.get(key)
+      if (!existing) {
+        grouped.set(key, t)
+      } else if (t.requires_action && !existing.requires_action) {
+        grouped.set(key, t)
+      }
+    }
+
+    const deduplicated = Array.from(grouped.values())
+    deduplicated.sort((a, b) => {
+      if (a.requires_action && !b.requires_action) return -1
+      if (!a.requires_action && b.requires_action) return 1
+      return new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
+    })
+
+    setThreads(deduplicated)
     setLoading(false)
     track('messages_page_viewed')
   }
@@ -180,84 +232,124 @@ export default function MessagesPage() {
   const totalUnread = threads.filter(t => t.unread).length
 
   // -------------------------------------------------------------------------
-  // Sub-components
+  // ThreadCard
   // -------------------------------------------------------------------------
 
-  function Avatar({ name, avatar }: { name: string | null; avatar: string | null }) {
-    const initials = (name ?? '?').split(' ').map((p: string) => p[0]).slice(0, 2).join('').toUpperCase()
-    return avatar
-      ? <img src={avatar} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="" />
-      : <div style={{ width: 44, height: 44, borderRadius: '50%', flexShrink: 0, background: 'var(--terra)', color: 'white', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          {initials}
-        </div>
-  }
-
   function ThreadCard({ t }: { t: Thread }) {
-    const badge   = statusBadge(t.loan_status, t.role)
-    const isRead  = !t.unread
-    const isDone  = t.loan_status === 'returned'
+    const isRead = !t.unread
+    const isDone = t.loan_status === 'returned'
+
+    // Determine what to show in row 3
+    // Priority: system message label > status pill > last message body
+    const sysLbl = systemLabel(t.last_message_body)
+    const stPill = statusPill(t.loan_status, t.role, t.unread, t.last_message_body)
+
+    // Row 3 pill (shown when not just plain message preview)
+    const pill: { label: string; variant: PillVariant } | null = sysLbl ?? stPill
+
+    // Plain message preview when active+read — no pill
+    const showMessagePreview = !pill && t.last_message_body
+
+    // Card background — only highlight when unread or action needed
+    const cardBg = t.requires_action && t.unread
+      ? 'rgba(196,103,58,0.06)'
+      : 'rgba(255,248,243,0.55)'
+    const cardBorder = t.requires_action && t.unread
+      ? '1.5px solid rgba(196,103,58,0.22)'
+      : '1px solid rgba(196,103,58,0.1)'
+
+    // Counterpart initials for avatar bubble
+    const cpName = t.counterpart_name ?? '?'
+    const cpInitials = cpName.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
 
     return (
       <div
-        onClick={() => {
-          if (!t.loan_id) return
-          track('messages_thread_opened', { loan_id: t.loan_id })
-          router.push(`/loans/${t.loan_id}`)
-        }}
+        onClick={() => { if (!t.loan_id) return; track('messages_thread_opened', { loan_id: t.loan_id }); router.push(`/loans/${t.loan_id}`) }}
         style={{
           display: 'flex', alignItems: 'center', gap: 12,
-          padding: '12px 14px',
-          borderRadius: 16,
-          background: t.requires_action
-            ? 'rgba(196,103,58,0.06)'
-            : 'rgba(255,248,243,0.7)',
-          border: t.requires_action
-            ? '1.5px solid rgba(196,103,58,0.25)'
-            : '1px solid rgba(196,103,58,0.12)',
-          cursor: t.loan_id ? 'pointer' : 'default',
-          opacity: isDone ? 0.6 : 1,
+          padding: '11px 13px', borderRadius: 16,
+          background: cardBg, border: cardBorder,
+          cursor: 'pointer', opacity: isDone ? 0.55 : 1,
         }}
       >
-        {/* Avatar */}
-        <Avatar name={t.counterpart_name} avatar={t.counterpart_avatar} />
+        {/* ── Composite thumbnail ─────────────────────────────────── */}
+        <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0 }}>
+          {/* Main: item image or placeholder */}
+          {t.item_image
+            ? <img src={t.item_image} alt="" style={{ width: 52, height: 52, borderRadius: 12, objectFit: 'cover', display: 'block' }} />
+            : <div style={{
+                width: 52, height: 52, borderRadius: 12,
+                background: 'rgba(196,103,58,0.12)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 22,
+              }}>📦</div>
+          }
+          {/* Bubble: counterpart avatar bottom-right */}
+          <div style={{
+            position: 'absolute', bottom: -3, right: -3,
+            width: 20, height: 20, borderRadius: '50%',
+            border: '2px solid rgba(255,248,243,0.9)',
+            overflow: 'hidden', flexShrink: 0,
+            background: 'var(--terra)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {t.counterpart_avatar
+              ? <img src={t.counterpart_avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <span style={{ fontSize: 8, fontWeight: 700, color: 'white', lineHeight: 1 }}>{cpInitials}</span>
+            }
+          </div>
+        </div>
 
-        {/* Content */}
+        {/* ── Text content ────────────────────────────────────────── */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Row 1: name + time */}
+          {/* Row 1: item name (title) + timestamp */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 1 }}>
-            <span style={{ fontSize: 14, fontWeight: isRead ? 500 : 700, color: 'var(--terra-dark)' }}>
-              {t.counterpart_name ?? 'Ukjent'}
+            <span className="font-display" style={{
+              fontSize: 13.5, fontWeight: 700, color: 'var(--terra-dark)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              flex: 1, minWidth: 0, marginRight: 8,
+            }}>
+              {itemTitle(t.role, t.owner_name, t.item_name)}
             </span>
-            <span style={{ fontSize: 11, color: 'var(--terra-mid)', flexShrink: 0, marginLeft: 8 }}>
+            <span style={{ fontSize: 11, color: isRead ? 'rgba(156,123,101,0.5)' : 'var(--terra-mid)', flexShrink: 0 }}>
               {relativeTime(t.last_message_at)}
             </span>
           </div>
 
-          {/* Row 2: item title */}
-          <p style={{ fontSize: 12, color: 'var(--terra-mid)', margin: '0 0 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {threadTitle(t.role, t.owner_name, t.item_name)}
+          {/* Row 2: counterpart name */}
+          <p style={{ fontSize: 12, color: 'var(--terra-mid)', margin: '0 0 4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {t.counterpart_name ?? 'Ukjent'}
           </p>
 
-          {/* Row 3: last message preview OR status badge */}
-          {badge ? (
-            <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 99, background: badge.bg, color: badge.color }}>
-              {badge.label}
-            </span>
-          ) : (
+          {/* Row 3: pill or message preview */}
+          {pill ? (() => {
+            const ps = PILL_STYLES[isRead ? 'neutral' : pill.variant]
+            return (
+              <span style={{
+                display: 'inline-block', fontSize: 11, fontWeight: isRead ? 400 : 600,
+                padding: '2px 8px', borderRadius: 99,
+                background: isRead ? 'transparent' : ps.bg,
+                color: isRead ? 'var(--terra-mid)' : ps.color,
+                border: `1px solid ${isRead ? 'transparent' : ps.border}`,
+              }}>
+                {pill.label}
+              </span>
+            )
+          })() : showMessagePreview ? (
             <p style={{
               fontSize: 12, margin: 0,
               color: t.unread ? 'var(--terra-dark)' : 'var(--terra-mid)',
               fontWeight: t.unread ? 500 : 400,
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
-              {t.last_message_body ?? '—'}
+              {t.last_message_body}
             </p>
-          )}
+          ) : null}
         </div>
 
         {/* Unread dot */}
         {t.unread && (
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--terra)', flexShrink: 0 }} />
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--terra)', flexShrink: 0, marginLeft: 4 }} />
         )}
       </div>
     )
@@ -285,7 +377,7 @@ export default function MessagesPage() {
           </svg>
           <input
             type="text"
-            placeholder="Søk etter navn eller gjenstand…"
+            placeholder="Søk etter gjenstand eller navn…"
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{ flex: 1, background: 'transparent', outline: 'none', color: 'var(--terra-dark)', fontSize: 13, border: 'none' }}
@@ -299,7 +391,7 @@ export default function MessagesPage() {
       <div style={{ padding: '10px 14px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} style={{ height: 72, borderRadius: 16, background: 'rgba(196,103,58,0.06)', opacity: 0.5 }} />
+            <div key={i} style={{ height: 76, borderRadius: 16, background: 'rgba(196,103,58,0.05)' }} />
           ))
         ) : threads.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '72px 24px 0', color: 'var(--terra-mid)' }}>

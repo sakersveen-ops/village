@@ -14,6 +14,7 @@ type Thread = {
   item_id: string
   item_name: string
   item_image: string | null
+  item_category: string
   owner_id: string
   owner_name: string | null
   loan_status: string
@@ -38,9 +39,10 @@ function possessive(name: string | null): string {
   return name.endsWith('s') ? `${name}'` : `${name}s`
 }
 
-function itemTitle(role: 'lender' | 'borrower', ownerName: string | null, itemName: string): string {
+function itemTitle(role: 'lender' | 'borrower', ownerName: string | null, itemName: string, category?: string): string {
   if (!itemName) return role === 'lender' ? 'Din gjenstand' : `${possessive(ownerName)} gjenstand`
   if (role === 'lender') return itemName
+  if (category === 'boker') return `${possessive(ownerName)} bok "${itemName}"`
   return `${possessive(ownerName)} ${itemName.toLowerCase()}`
 }
 
@@ -83,11 +85,13 @@ function statusPill(status: string, role: 'lender'|'borrower', unread: boolean, 
 }
 
 // Parse last message body into a human-readable pill label if it's a system message
-function systemLabel(body: string | null): { label: string; variant: PillVariant } | null {
+// Only loan-level accept/decline get colour — proposal decline is neutral (amber stays from status)
+function systemLabel(body: string | null, loanStatus: string): { label: string; variant: PillVariant } | null {
   if (!body) return null
   if (body.startsWith('✅') || body.includes('godtatt') || body.includes('aktivt'))
     return { label: body.replace('✅ ', ''), variant: 'green' }
-  if (body.startsWith('❌') || body.includes('avslått'))
+  // Only show red for hard loan declines, not proposal declines (which are neutral)
+  if ((body.startsWith('❌') || body.includes('avslått')) && loanStatus !== 'change_proposed' && loanStatus !== 'active')
     return { label: body.replace('❌ ', ''), variant: 'red' }
   return null
 }
@@ -130,7 +134,7 @@ export default function MessagesPage() {
       .select(`
         id, status, start_date, due_date,
         item_id, owner_id, borrower_id,
-        items ( name, image_url ),
+        items ( name, image_url, category ),
         owner:profiles!loans_owner_id_fkey ( id, name, avatar_url ),
         borrower:profiles!loans_borrower_id_fkey ( id, name, avatar_url )
       `)
@@ -172,6 +176,7 @@ export default function MessagesPage() {
         item_id:          loan.item_id,
         item_name:        loan.items?.name ?? '',
         item_image:       loan.items?.image_url ?? null,
+        item_category:    loan.items?.category ?? '',
         owner_id:         loan.owner_id,
         owner_name:       loan.owner?.name ?? null,
         loan_status:      loan.status,
@@ -205,11 +210,10 @@ export default function MessagesPage() {
     }
 
     const deduplicated = Array.from(grouped.values())
-    deduplicated.sort((a, b) => {
-      if (a.requires_action && !b.requires_action) return -1
-      if (!a.requires_action && b.requires_action) return 1
-      return new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
-    })
+    // Pure recency sort — most recent message first
+    deduplicated.sort((a, b) =>
+      new Date(b.last_message_at ?? 0).getTime() - new Date(a.last_message_at ?? 0).getTime()
+    )
 
     setThreads(deduplicated)
     setLoading(false)
@@ -241,7 +245,7 @@ export default function MessagesPage() {
 
     // Determine what to show in row 3
     // Priority: system message label > status pill > last message body
-    const sysLbl = systemLabel(t.last_message_body)
+    const sysLbl = systemLabel(t.last_message_body, t.loan_status)
     const stPill = statusPill(t.loan_status, t.role, t.unread, t.last_message_body)
 
     // Row 3 pill (shown when not just plain message preview)
@@ -309,7 +313,7 @@ export default function MessagesPage() {
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               flex: 1, minWidth: 0, marginRight: 8,
             }}>
-              {itemTitle(t.role, t.owner_name, t.item_name)}
+              {itemTitle(t.role, t.owner_name, t.item_name, t.item_category)}
             </span>
             <span style={{ fontSize: 11, color: isRead ? 'rgba(156,123,101,0.5)' : 'var(--terra-mid)', flexShrink: 0 }}>
               {relativeTime(t.last_message_at)}

@@ -108,30 +108,37 @@ export default function MessagesPage() {
     // Filter out any null/malformed rows defensively
     const validLoans = (loans ?? []).filter((l: any) => l && l.id && l.owner_id)
 
-    // Fetch last message per loan
+    // Fetch last messages + read receipts in parallel
     const loanIds = validLoans.map((l: any) => l.id)
     const lastMsgs: Record<string, { body: string; created_at: string; sender_id: string }> = {}
 
-    if (loanIds.length > 0) {
-      const { data: msgs } = await supabase
-        .from('loan_messages')
-        .select('loan_id, body, created_at, sender_id')
-        .in('loan_id', loanIds)
-        .order('created_at', { ascending: false })
+    const [msgsResult, readsResult] = await Promise.all([
+      loanIds.length > 0
+        ? supabase.from('loan_messages').select('loan_id, body, created_at, sender_id').in('loan_id', loanIds).order('created_at', { ascending: false })
+        : Promise.resolve({ data: [] as any[] }),
+      supabase.from('loan_message_reads').select('loan_id, read_at').eq('user_id', userId),
+    ])
 
-      for (const m of (msgs ?? [])) {
-        if (!lastMsgs[m.loan_id]) lastMsgs[m.loan_id] = m
-      }
+    for (const m of (msgsResult.data ?? [])) {
+      if (!lastMsgs[m.loan_id]) lastMsgs[m.loan_id] = m
     }
+
+    const readMap = new Map<string, string>(
+      (readsResult.data ?? []).map((r: any) => [r.loan_id, r.read_at] as [string, string])
+    )
 
     const normalised: Thread[] = validLoans.map((loan: any) => {
       const role: 'lender' | 'borrower' = loan.owner_id === userId ? 'lender' : 'borrower'
       const counterpart = role === 'lender' ? loan.borrower : loan.owner
       const last = lastMsgs[loan.id] ?? null
+      const lastReadAt = readMap.get(loan.id)
+      const unread = last
+        ? last.sender_id !== userId && (!lastReadAt || lastReadAt < last.created_at)
+        : false
 
       return {
         loan_id:          loan.id,
-        item_id:          loan.item_id,                         // always from column, never from join
+        item_id:          loan.item_id,
         item_name:        loan.items?.name ?? '',
         owner_id:         loan.owner_id,
         owner_name:       loan.owner?.name ?? null,
@@ -143,7 +150,7 @@ export default function MessagesPage() {
         counterpart_avatar: counterpart?.avatar_url ?? null,
         last_message_body:  last?.body ?? null,
         last_message_at:    last?.created_at ?? loan.created_at,
-        unread:             last ? last.sender_id !== userId : false,
+        unread,
         requires_action:    (loan.status === 'pending' && role === 'lender') || loan.status === 'change_proposed',
       }
     })

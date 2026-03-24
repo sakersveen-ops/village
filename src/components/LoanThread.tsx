@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
-import { track, Events, startTimer } from '@/lib/track'
+import { track, Events } from '@/lib/track'
 
 interface LoanThreadProps {
   loan: any
@@ -65,57 +65,49 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
   const inputRef    = useRef<HTMLTextAreaElement>(null)
 
   const isActive  = loan?.status === 'active'
+  // If loan is already active, start date is locked — only end date can change
+  const startDateLocked = isActive && !!loan?.start_date
+
   const suggestions = (isOwner ? OWNER_SUGGESTIONS : BORROWER_SUGGESTIONS)
     .filter(s => s.minStatus === 'pending' || isActive)
 
   useEffect(() => {
-  if (!loan?.id) return
-  loadMessages()
-  loadBorrowerContext()
+    if (!loan?.id) return
+    loadMessages()
+    loadBorrowerContext()
 
-  const supabase = createClient()
-  const channel = supabase
-    .channel(`loan_messages_${loan.id}`)
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'loan_messages',
-        filter: `loan_id=eq.${loan.id}`,
-      },
-      (payload) => {
-        const newMsg = payload.new as any
-        setMessages(prev => {
-          const exists = prev.some(m => m.id === newMsg.id || (m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id))
-          if (exists) return prev.map(m =>
-            m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id
-              ? { ...newMsg, profiles: m.profiles }
-              : m
-          )
-          return [...prev, newMsg]
-        })
-
-        // Hent profiles for meldinger fra andre
-        if (newMsg.sender_id !== user.id) {
-          supabase
-            .from('profiles')
-            .select('id, name, email, avatar_url')
-            .eq('id', newMsg.sender_id)
-            .single()
-            .then(({ data: profile }) => {
-              setMessages(prev => prev.map(m =>
-                m.id === newMsg.id ? { ...m, profiles: profile } : m
-              ))
-            })
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`loan_messages_${loan.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'loan_messages', filter: `loan_id=eq.${loan.id}` },
+        (payload) => {
+          const newMsg = payload.new as any
+          setMessages(prev => {
+            const exists = prev.some(m => m.id === newMsg.id || (m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id))
+            if (exists) return prev.map(m =>
+              m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id
+                ? { ...newMsg, profiles: m.profiles }
+                : m
+            )
+            return [...prev, newMsg]
+          })
+          if (newMsg.sender_id !== user.id) {
+            supabase.from('profiles').select('id, name, email, avatar_url').eq('id', newMsg.sender_id).single()
+              .then(({ data: profile }) => {
+                setMessages(prev => prev.map(m => m.id === newMsg.id ? { ...m, profiles: profile } : m))
+              })
+          }
         }
-      }
-    )
-    .subscribe()
+      )
+      .subscribe()
 
-  return () => { supabase.removeChannel(channel) }
-}, [loan?.id])
+    return () => { supabase.removeChannel(channel) }
+  }, [loan?.id])
+
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
   useEffect(() => {
     if (openProposal && !showProposal) {
       setShowProposal(true)
@@ -125,16 +117,16 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
   }, [openProposal])
 
   const loadMessages = async () => {
-  setLoading(true)
-  const supabase = createClient()
-  const { data } = await supabase
-    .from('loan_messages')
-    .select('*, profiles(id, name, email, avatar_url)')
-    .eq('loan_id', loan.id)
-    .order('created_at', { ascending: true })
-  setMessages(data || [])
-  setLoading(false)
-}
+    setLoading(true)
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('loan_messages')
+      .select('*, profiles(id, name, email, avatar_url)')
+      .eq('loan_id', loan.id)
+      .order('created_at', { ascending: true })
+    setMessages(data || [])
+    setLoading(false)
+  }
 
   const loadBorrowerContext = async () => {
     if (!loan.borrower_id || !user?.id) return
@@ -175,7 +167,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
       .single()
 
     if (msgErr) {
-      console.error('sendChat error:', msgErr)
       setMessages(prev => prev.filter(m => m.id !== tmpId))
       setSending(false)
       return
@@ -186,7 +177,7 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     await supabase.from('notifications').insert({
       user_id: recipientId,
       type: 'loan_message',
-      title: `Ny melding om «${item.name}»`,
+      title: `Ny melding om «${item?.name ?? 'gjenstand'}»`,
       body: body.slice(0, 80),
       loan_id: loan.id,
     })
@@ -198,7 +189,13 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     setSubmitting(true)
     const supabase = createClient()
 
-    const meta = { proposed_start: propStart, proposed_end: propEnd, status: 'pending', original_start: loan.start_date, original_end: loan.due_date }
+    const meta = {
+      proposed_start: propStart,
+      proposed_end: propEnd,
+      status: 'pending',
+      original_start: loan.start_date,
+      original_end: loan.due_date,
+    }
     const tmpId = `tmp-${Date.now()}`
     addLocal({
       id: tmpId, loan_id: loan.id, sender_id: user.id, type: 'change_proposal', body: propNote,
@@ -214,7 +211,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
       .single()
 
     if (msgErr) {
-      console.error('sendProposal error:', msgErr)
       setMessages(prev => prev.filter(m => m.id !== tmpId))
       setSubmitting(false)
       return
@@ -227,16 +223,16 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     await supabase.from('notifications').insert({
       user_id: recipientId,
       type: 'loan_change_proposal',
-      title: isOwner ? `📅 Utleier foreslår ny dato for «${item.name}»` : `📅 Låntaker vil endre datoer for «${item.name}»`,
+      title: isOwner ? `📅 Utleier foreslår ny dato for «${item?.name ?? 'gjenstand'}»` : `📅 Låntaker vil endre datoer for «${item?.name ?? 'gjenstand'}»`,
       body: `${fmt(propStart)} → ${fmt(propEnd)} – svar i meldingstråden`,
       loan_id: loan.id,
-      action_url: `/items/${item.id}`,
+      action_url: `/loans/${loan.id}`,
     })
 
     setPropStart(''); setPropEnd(''); setPropNote('')
     setShowProposal(false)
     setSubmitting(false)
-    track(Events.PROPOSAL_SENT, { loan_id: loan.id, item_id: item.id })
+    track(Events.PROPOSAL_SENT, { loan_id: loan.id, item_id: item?.id })
   }
 
   const respondProposal = async (messageId: string, accept: boolean) => {
@@ -256,10 +252,9 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
 
     await supabase.from('loan_messages').update({ metadata: newMeta }).eq('id', messageId)
 
-    const newStatus = accept ? 'active' : (loan.status === 'active' ? 'active' : 'pending')
     if (accept) {
-      await supabase.from('loans').update({ status: newStatus, start_date: meta.proposed_start, due_date: meta.proposed_end }).eq('id', loan.id)
-      onLoanUpdated({ ...loan, status: newStatus, start_date: meta.proposed_start, due_date: meta.proposed_end })
+      await supabase.from('loans').update({ status: 'active', start_date: meta.proposed_start, due_date: meta.proposed_end }).eq('id', loan.id)
+      onLoanUpdated({ ...loan, status: 'active', start_date: meta.proposed_start, due_date: meta.proposed_end })
     } else {
       const baseStatus = loan.status === 'active' ? 'active' : 'pending'
       await supabase.from('loans').update({ status: baseStatus }).eq('id', loan.id)
@@ -288,10 +283,12 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
   }
 
   const applySuggestion = (s: typeof BORROWER_SUGGESTIONS[0]) => {
-    const note = s.note(item.name)
+    const itemName = item?.name ?? 'gjenstanden'
+    const note = s.note(itemName)
     if (s.type === 'chat') { setShowProposal(false); sendChat(note); return }
     setPropNote(note)
-    const start = loan.start_date || new Date().toISOString().split('T')[0]
+    // Lock start date to existing if loan is active
+    const start = startDateLocked ? loan.start_date : (loan.start_date || new Date().toISOString().split('T')[0])
     setPropStart(start)
     const base = loan.due_date || new Date().toISOString().split('T')[0]
     const d = new Date(base)
@@ -299,6 +296,8 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     const today = new Date()
     if (d <= today) d.setDate(today.getDate() + 1)
     setPropEnd(d.toISOString().split('T')[0])
+    setShowProposal(true)
+    setTimeout(() => proposalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
   }
 
   const senderName = (msg: any) => msg.profiles?.name || msg.profiles?.email?.split('@')[0] || '?'
@@ -308,15 +307,14 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     const pid = msg.profiles?.id
     const name = senderName(msg)
     const avatarUrl = msg.profiles?.avatar_url
-    const isOwnerProfile = pid === item.owner_id
     return (
       <Link href={`/profile/${pid}`} className="flex items-center gap-1.5 mb-0.5 group">
         <div className="rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-[10px]"
           style={{ width: 24, height: 24, background: 'rgba(196,103,58,0.15)', color: 'var(--terra)' }}>
-          {avatarUrl ? <img src={avatarUrl} className="w-full h-full object-cover" /> : name[0]?.toUpperCase()}
+          {avatarUrl ? <img src={avatarUrl} className="w-full h-full object-cover" alt="" /> : name[0]?.toUpperCase()}
         </div>
         <span className="text-[11px] group-hover:underline" style={{ color: 'var(--terra-mid)' }}>{name}</span>
-        {!isOwnerProfile && !isFriend && borrowerCommunity && (
+        {pid !== item?.owner_id && !isFriend && borrowerCommunity && (
           <span className="text-[10px]" style={{ color: 'var(--terra-mid)' }}>· {borrowerCommunity}</span>
         )}
       </Link>
@@ -392,10 +390,32 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
                       </p>
                     ) : null}
                   </div>
+
+                  {/* ── Godta / Avslå — always styled as real buttons ── */}
                   {canRespond && (
-                    <div className="proposal-actions">
-                      <button onClick={() => respondProposal(msg.id, true)} className="btn-sm btn-accept flex-1">✓ Godta</button>
-                      <button onClick={() => respondProposal(msg.id, false)} className="btn-sm btn-decline flex-1">Avslå</button>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12, padding: '0 2px' }}>
+                      <button
+                        onClick={() => respondProposal(msg.id, true)}
+                        style={{
+                          flex: 1, padding: '9px 0', borderRadius: 99,
+                          background: 'var(--terra-green)', color: 'white',
+                          border: 'none', fontWeight: 700, fontSize: 13,
+                          cursor: 'pointer', letterSpacing: '-0.01em',
+                        }}
+                      >
+                        ✓ Godta
+                      </button>
+                      <button
+                        onClick={() => respondProposal(msg.id, false)}
+                        style={{
+                          flex: 1, padding: '9px 0', borderRadius: 99,
+                          background: 'transparent', color: 'var(--terra-mid)',
+                          border: '1px solid rgba(156,123,101,0.35)',
+                          fontWeight: 500, fontSize: 13, cursor: 'pointer',
+                        }}
+                      >
+                        Avslå
+                      </button>
                     </div>
                   )}
                 </div>
@@ -419,7 +439,7 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
                     className="text-[11px] hover:underline" style={{ color: 'var(--terra-mid)' }}>
                     {senderName(msg)}
                   </Link>
-                  {!isMe(msg) && msg.profiles?.id !== item.owner_id && !isFriend && borrowerCommunity && (
+                  {!isMe(msg) && msg.profiles?.id !== item?.owner_id && !isFriend && borrowerCommunity && (
                     <span className="text-[10px]" style={{ color: 'var(--terra-mid)' }}>· {borrowerCommunity}</span>
                   )}
                 </div>
@@ -428,10 +448,10 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
                 <div className="w-7 flex-shrink-0">
                   {!prevSameSender ? (
                     <Link href={`/profile/${msg.profiles?.id}`}>
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs overflow-hidden`}
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs overflow-hidden"
                         style={{ background: mine ? 'var(--terra)' : 'rgba(196,103,58,0.15)', color: mine ? 'white' : 'var(--terra)' }}>
                         {msg.profiles?.avatar_url
-                          ? <img src={msg.profiles.avatar_url} className="w-full h-full object-cover" />
+                          ? <img src={msg.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
                           : senderName(msg)[0]?.toUpperCase()}
                       </div>
                     </Link>
@@ -457,9 +477,13 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
         <div ref={proposalRef} className="glass-heavy border-t px-4 py-4 flex flex-col gap-3"
           style={{ borderTopColor: 'rgba(196,103,58,0.15)' }}>
           <div className="flex items-center justify-between">
-            <span className="text-sm font-bold" style={{ color: 'var(--terra-dark)' }}>📅 Foreslå nye datoer</span>
-            <button onClick={() => { setShowProposal(false); setPropNote(''); setPropStart(''); setPropEnd('') }}
-              className="text-xs" style={{ color: 'var(--terra-mid)' }}>Avbryt</button>
+            <span className="text-sm font-bold" style={{ color: 'var(--terra-dark)' }}>📅 Foreslå endring</span>
+            <button
+              onClick={() => { setShowProposal(false); setPropNote(''); setPropStart(''); setPropEnd('') }}
+              className="text-xs" style={{ color: 'var(--terra-mid)' }}
+            >
+              Avbryt
+            </button>
           </div>
 
           <div className="flex gap-2 flex-wrap">
@@ -473,37 +497,65 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
 
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
-              <label className="text-xs uppercase tracking-wide font-medium" style={{ color: 'var(--terra-mid)' }}>Ny startdato</label>
-              <input type="date" value={propStart} onChange={e => setPropStart(e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
+              <label className="text-xs uppercase tracking-wide font-medium" style={{ color: 'var(--terra-mid)' }}>
+                {startDateLocked ? 'Startdato (låst)' : 'Ny startdato'}
+              </label>
+              <input
+                type="date"
+                value={propStart}
+                onChange={e => !startDateLocked && setPropStart(e.target.value)}
+                disabled={startDateLocked}
+                min={startDateLocked ? undefined : new Date().toISOString().split('T')[0]}
                 className="glass text-sm outline-none"
-                style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)' }} />
+                style={{
+                  borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)',
+                  opacity: startDateLocked ? 0.55 : 1,
+                  cursor: startDateLocked ? 'not-allowed' : 'pointer',
+                }}
+              />
+              {startDateLocked && (
+                <p className="text-[10px]" style={{ color: 'var(--terra-mid)' }}>Aktivt lån — startdato kan ikke endres</p>
+              )}
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs uppercase tracking-wide font-medium" style={{ color: 'var(--terra-mid)' }}>Ny sluttdato</label>
-              <input type="date" value={propEnd} onChange={e => setPropEnd(e.target.value)}
+              <input
+                type="date"
+                value={propEnd}
+                onChange={e => setPropEnd(e.target.value)}
                 min={propStart || new Date().toISOString().split('T')[0]}
                 className="glass text-sm outline-none"
-                style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)' }} />
+                style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)' }}
+              />
             </div>
           </div>
+
           {propStart && propEnd && (
             <div className="glass" style={{ borderRadius: 10, padding: '8px 12px' }}>
               <span className="status-pill active text-xs">✓ {fmt(propStart)} → {fmt(propEnd)}</span>
             </div>
           )}
-          <textarea value={propNote} onChange={e => setPropNote(e.target.value)} rows={2}
+
+          <textarea
+            value={propNote}
+            onChange={e => setPropNote(e.target.value)}
+            rows={2}
             placeholder="Legg til en melding (valgfritt)…"
             className="glass outline-none resize-none"
-            style={{ borderRadius: 12, padding: '10px 12px', fontSize: 14, color: 'var(--terra-dark)' }} />
-          <button onClick={sendProposal} disabled={!propStart || !propEnd || submitting}
-            className="btn-primary disabled:opacity-40">
+            style={{ borderRadius: 12, padding: '10px 12px', fontSize: 14, color: 'var(--terra-dark)' }}
+          />
+
+          <button
+            onClick={sendProposal}
+            disabled={!propStart || !propEnd || submitting}
+            className="btn-primary disabled:opacity-40"
+          >
             {submitting ? 'Sender…' : 'Send endringsforslag'}
           </button>
         </div>
       )}
 
-      {/* ── Input bar — flush iPhone-style ────────────────────────────────── */}
+      {/* ── Input bar ─────────────────────────────────────────────────────── */}
       {!showProposal && (
         <div className="px-3 py-2 flex flex-col gap-2"
           style={{ background: 'rgba(245,245,245,0.8)', borderTop: '1px solid rgba(196,103,58,0.1)' }}>
@@ -518,13 +570,19 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
               className="glass flex-1 outline-none resize-none text-[15px] leading-relaxed"
               style={{ borderRadius: 20, padding: '10px 16px', color: 'var(--terra-dark)', minHeight: 40, maxHeight: 120 }}
             />
-            <button onClick={() => setShowProposal(true)}
-              className="btn-glass btn-sm flex-shrink-0 whitespace-nowrap" style={{ height: 40, borderRadius: 20 }}>
+            <button
+              onClick={() => setShowProposal(true)}
+              className="btn-glass btn-sm flex-shrink-0 whitespace-nowrap"
+              style={{ height: 40, borderRadius: 20 }}
+            >
               📅 Foreslå endring
             </button>
-            <button onClick={() => sendChat(newMessage)} disabled={!newMessage.trim() || sending}
+            <button
+              onClick={() => sendChat(newMessage)}
+              disabled={!newMessage.trim() || sending}
               className="flex-shrink-0 flex items-center justify-center disabled:opacity-25 transition-opacity"
-              style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--terra)' }}>
+              style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--terra)' }}
+            >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
                 <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>

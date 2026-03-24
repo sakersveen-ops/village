@@ -75,6 +75,12 @@ export default function LoanPage() {
       setBorrower(loanData.borrower)
       setLoading(false)
       track('loan_thread_page_viewed', { loan_id: loanId })
+        await supabase
+            .from('loan_message_reads')
+            .upsert(
+                { loan_id: loanId, user_id: user.id, read_at: new Date().toISOString() },
+                { onConflict: 'loan_id,user_id' }
+            )
     }
     load()
   }, [loanId])

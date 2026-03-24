@@ -40,8 +40,10 @@ function possessive(name: string): string {
 }
 
 function itemLabel(ownerName: string | null, userId: string, ownerId: string, itemName: string): string {
-  if (ownerId === userId) return `Din ${itemName.toLowerCase()}`
-  return `${possessive(ownerName ?? 'Eiers')} ${itemName.toLowerCase()}`
+  const name = itemName.trim()
+  if (!name) return ownerId === userId ? 'Din gjenstand' : `${possessive(ownerName ?? 'Eiers')} gjenstand`
+  if (ownerId === userId) return `Din ${name.toLowerCase()}`
+  return `${possessive(ownerName ?? 'Eiers')} ${name.toLowerCase()}`
 }
 
 function requiresAction(loan_status: string, role: 'lender' | 'borrower'): boolean {
@@ -108,8 +110,9 @@ export default function MessagesPage() {
       .from('loans')
       .select(`
         id, status, start_date, due_date,
+        item_id,
         owner_id, borrower_id,
-        items ( id, name ),
+        items ( name ),
         owner:profiles!loans_owner_id_fkey ( id, name, avatar_url ),
         borrower:profiles!loans_borrower_id_fkey ( id, name, avatar_url )
       `)
@@ -151,7 +154,7 @@ export default function MessagesPage() {
         loan_status: loan.status,
         start_date: loan.start_date,
         due_date: loan.due_date,
-        item_id: loan.items?.id,
+        item_id: loan.item_id,
         item_name: loan.items?.name ?? '',
         owner_id: loan.owner_id,
         owner_name: loan.owner?.name ?? null,
@@ -243,7 +246,7 @@ export default function MessagesPage() {
         }}
         onClick={() => {
           track('messages_thread_opened', { loan_id: thread.loan_id, requires_action: thread.requires_action })
-          router.push(`/items/${thread.item_id}`)
+          router.push(`/loans/${thread.loan_id}`)
         }}
       >
         <div

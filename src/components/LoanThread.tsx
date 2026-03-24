@@ -31,21 +31,71 @@ const fmtTime = (d: string) => {
   return date.toLocaleDateString('no-NO', { day: 'numeric', month: 'short' }) + ' ' + timeStr
 }
 
-const BORROWER_SUGGESTIONS = [
-  { id: 'extend',       emoji: '📅', label: 'Forleng lånet',          type: 'proposal' as const, delta: +3, minStatus: 'active',  note: (n: string) => `Hei! Kan jeg beholde «${n}» litt lenger? 🙏` },
-  { id: 'shorten',      emoji: '⏩', label: 'Lever tilbake tidligere', type: 'proposal' as const, delta: -2, minStatus: 'active',  note: (n: string) => `Hei! Jeg kan levere «${n}» tilbake tidligere – passer det? 😊` },
-  { id: 'pickup',       emoji: '📍', label: 'Avtal henting',           type: 'chat'     as const, delta: 0,  minStatus: 'pending', note: (n: string) => `Hei! Når og hvor kan jeg hente «${n}»? 😊` },
-  { id: 'ready_return', emoji: '✅', label: 'Klar til å levere',       type: 'chat'     as const, delta: 0,  minStatus: 'active',  note: (n: string) => `Hei! Jeg er klar til å levere tilbake «${n}» – passer det snart?` },
-  { id: 'thanks',       emoji: '🙏', label: 'Takk for lånet',          type: 'chat'     as const, delta: 0,  minStatus: 'active',  note: (n: string) => `Tusen takk for lånet av «${n}»! 🙏` },
-]
+function todayYMD() { return new Date().toISOString().split('T')[0] }
 
-const OWNER_SUGGESTIONS = [
-  { id: 'need_back',      emoji: '🔔', label: 'Trenger den tilbake',  type: 'proposal' as const, delta: -3, minStatus: 'active',  note: (n: string) => `Hei! Jeg trenger «${n}» tilbake litt tidligere – kan du levere innen ny dato?` },
-  { id: 'no_rush',        emoji: '🤝', label: 'Ingen hastverk',        type: 'proposal' as const, delta: +5, minStatus: 'active',  note: (n: string) => `Hei! Ingen hastverk – du kan beholde «${n}» litt lenger 😊` },
-  { id: 'confirm_pickup', emoji: '📍', label: 'Bekreft henting',       type: 'chat'     as const, delta: 0,  minStatus: 'pending', note: (n: string) => `Hei! Du kan hente «${n}» hos meg – gi meg beskjed når det passer!` },
-  { id: 'remind_return',  emoji: '⏰', label: 'Påminnelse om retur',   type: 'chat'     as const, delta: 0,  minStatus: 'active',  note: (n: string) => `Hei! Bare en påminnelse om at «${n}» snart skal returneres 🙂` },
-  { id: 'all_good',       emoji: '👍', label: 'Alt bra?',              type: 'chat'     as const, delta: 0,  minStatus: 'active',  note: (n: string) => `Hei! Bare sjekker inn – er alt bra med «${n}»?` },
-]
+// ---------------------------------------------------------------------------
+// Context-aware suggestions
+// ---------------------------------------------------------------------------
+
+type Suggestion = {
+  id: string
+  label: string
+  type: 'proposal' | 'chat'
+  delta: number
+  note: (n: string) => string
+}
+
+function getSuggestions(status: string, isOwner: boolean, startDate: string | null, dueDate: string | null): Suggestion[] {
+  const today = todayYMD()
+  const isFuture = startDate ? startDate > today : false
+  const isActive = status === 'active'
+  const isPending = status === 'pending'
+  const isDeclined = status === 'declined'
+  const isChangeProposed = status === 'change_proposed'
+
+  if (isOwner) {
+    if (isPending) return [
+      { id: 'confirm_pickup', label: 'Bekreft henting',        type: 'chat',     delta: 0,  note: n => `Hei! Du kan hente «${n}» hos meg – gi meg beskjed når det passer! 📍` },
+      { id: 'propose_dates',  label: 'Foreslå andre datoer',   type: 'proposal', delta: 0,  note: n => `Hei! De valgte datoene passer ikke helt – kan vi finne noe annet?` },
+    ]
+    if (isFuture && (isActive || isChangeProposed)) return [
+      { id: 'confirm_pickup', label: 'Bekreft henting',        type: 'chat',     delta: 0,  note: n => `Hei! Du kan hente «${n}» hos meg – gi meg beskjed når det passer! 📍` },
+      { id: 'change_dates',   label: 'Endre låneperiode',      type: 'proposal', delta: 0,  note: n => `Hei! Ønsker å justere datoene for lånet av «${n}».` },
+      { id: 'need_back',      label: 'Trenger den tilbake',    type: 'proposal', delta: -3, note: n => `Hei! Jeg trenger «${n}» tilbake litt tidligere – passer det?` },
+    ]
+    if (isActive) return [
+      { id: 'need_back',      label: 'Trenger den tilbake',    type: 'proposal', delta: -3, note: n => `Hei! Jeg trenger «${n}» tilbake litt tidligere – passer det?` },
+      { id: 'no_rush',        label: 'Ingen hastverk',         type: 'proposal', delta: +5, note: n => `Hei! Ingen hastverk – du kan beholde «${n}» litt lenger 😊` },
+      { id: 'remind_return',  label: 'Påminnelse om retur',    type: 'chat',     delta: 0,  note: n => `Hei! Bare en påminnelse om at «${n}» snart skal returneres 🙂` },
+    ]
+    if (isDeclined) return [
+      { id: 'propose_new',    label: 'Foreslå nye datoer',     type: 'proposal', delta: 0,  note: n => `Hei! Har du mulighet til å låne «${n}» i en annen periode?` },
+    ]
+  } else {
+    // Borrower
+    if (isPending) return [
+      { id: 'pickup',         label: 'Avtal henting',          type: 'chat',     delta: 0,  note: n => `Hei! Når og hvor kan jeg hente «${n}»? 😊` },
+      { id: 'change_dates',   label: 'Endre låneperiode',      type: 'proposal', delta: 0,  note: n => `Hei! Ønsker å justere datoene for forespørselen min.` },
+    ]
+    if (isFuture && (isActive || isChangeProposed)) return [
+      { id: 'pickup',         label: 'Avtal henting',          type: 'chat',     delta: 0,  note: n => `Hei! Når og hvor kan jeg hente «${n}»? 😊` },
+      { id: 'change_dates',   label: 'Endre låneperiode',      type: 'proposal', delta: 0,  note: n => `Hei! Ønsker å justere datoene for lånet av «${n}».` },
+    ]
+    if (isActive) return [
+      { id: 'extend',         label: 'Forleng lånet',          type: 'proposal', delta: +3, note: n => `Hei! Kan jeg beholde «${n}» litt lenger? 🙏` },
+      { id: 'shorten',        label: 'Lever tilbake tidligere', type: 'proposal', delta: -2, note: n => `Hei! Jeg kan levere «${n}» tilbake tidligere – passer det? 😊` },
+      { id: 'ready_return',   label: 'Klar til å levere',      type: 'chat',     delta: 0,  note: n => `Hei! Jeg er klar til å levere tilbake «${n}» – passer det snart?` },
+    ]
+    if (isDeclined) return [
+      { id: 'propose_new',    label: 'Foreslå nye datoer',     type: 'proposal', delta: 0,  note: n => `Hei! Er det mulig å låne «${n}» i en annen periode?` },
+    ]
+  }
+  return []
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, openProposal, onProposalOpened }: LoanThreadProps) {
   const [messages, setMessages]         = useState<any[]>([])
@@ -64,12 +114,17 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
   const proposalRef = useRef<HTMLDivElement>(null)
   const inputRef    = useRef<HTMLTextAreaElement>(null)
 
-  const isActive  = loan?.status === 'active'
-  // If loan is already active, start date is locked — only end date can change
+  const today = todayYMD()
+  const isActive       = loan?.status === 'active'
   const startDateLocked = isActive && !!loan?.start_date
+  const isStartDay     = loan?.start_date === today
+  const isDueDay       = loan?.due_date === today
 
-  const suggestions = (isOwner ? OWNER_SUGGESTIONS : BORROWER_SUGGESTIONS)
-    .filter(s => s.minStatus === 'pending' || isActive)
+  const suggestions = getSuggestions(loan?.status, isOwner, loan?.start_date, loan?.due_date)
+
+  // -------------------------------------------------------------------------
+  // Effects
+  // -------------------------------------------------------------------------
 
   useEffect(() => {
     if (!loan?.id) return
@@ -79,17 +134,14 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     const supabase = createClient()
     const channel = supabase
       .channel(`loan_messages_${loan.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'loan_messages', filter: `loan_id=eq.${loan.id}` },
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'loan_messages', filter: `loan_id=eq.${loan.id}` },
         (payload) => {
           const newMsg = payload.new as any
           setMessages(prev => {
             const exists = prev.some(m => m.id === newMsg.id || (m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id))
             if (exists) return prev.map(m =>
               m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id
-                ? { ...newMsg, profiles: m.profiles }
-                : m
+                ? { ...newMsg, profiles: m.profiles } : m
             )
             return [...prev, newMsg]
           })
@@ -116,6 +168,10 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     }
   }, [openProposal])
 
+  // -------------------------------------------------------------------------
+  // Load
+  // -------------------------------------------------------------------------
+
   const loadMessages = async () => {
     setLoading(true)
     const supabase = createClient()
@@ -124,7 +180,26 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
       .select('*, profiles(id, name, email, avatar_url)')
       .eq('loan_id', loan.id)
       .order('created_at', { ascending: true })
-    setMessages(data || [])
+
+    const msgs = data || []
+
+    // Inject start-day prompt if not already present
+    if (isStartDay && isActive) {
+      const alreadyHasStartMsg = msgs.some(m => m.type === 'system' && m.body?.includes('starter lånet'))
+      if (!alreadyHasStartMsg) {
+        await injectSystemMessage(`📦 I dag starter lånet av «${item?.name ?? 'gjenstanden'}»`)
+      }
+    }
+
+    // Inject due-day prompt if not already present
+    if (isDueDay && isActive) {
+      const alreadyHasDueMsg = msgs.some(m => m.type === 'system' && m.body?.includes('siste dag'))
+      if (!alreadyHasDueMsg) {
+        await injectSystemMessage(`⏰ I dag er siste dag for lånet av «${item?.name ?? 'gjenstanden'}»`)
+      }
+    }
+
+    setMessages(msgs)
     setLoading(false)
   }
 
@@ -145,7 +220,20 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     }
   }
 
+  // -------------------------------------------------------------------------
+  // Helpers
+  // -------------------------------------------------------------------------
+
   const addLocal = (msg: any) => setMessages(prev => [...prev, msg])
+
+  async function injectSystemMessage(body: string) {
+    const supabase = createClient()
+    await supabase.from('loan_messages').insert({ loan_id: loan.id, sender_id: user.id, type: 'system', body })
+  }
+
+  // -------------------------------------------------------------------------
+  // Send chat
+  // -------------------------------------------------------------------------
 
   const sendChat = async (body: string) => {
     if (!body.trim() || sending) return
@@ -161,28 +249,26 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     setNewMessage('')
 
     const { data: msg, error: msgErr } = await supabase
-      .from('loan_messages')
-      .insert({ loan_id: loan.id, sender_id: user.id, type: 'chat', body })
-      .select('*, profiles(id, name, email, avatar_url)')
-      .single()
+      .from('loan_messages').insert({ loan_id: loan.id, sender_id: user.id, type: 'chat', body })
+      .select('*, profiles(id, name, email, avatar_url)').single()
 
-    if (msgErr) {
-      setMessages(prev => prev.filter(m => m.id !== tmpId))
-      setSending(false)
-      return
-    }
+    if (msgErr) { setMessages(prev => prev.filter(m => m.id !== tmpId)); setSending(false); return }
     setMessages(prev => prev.map(m => m.id === tmpId ? (msg || m) : m))
 
-    const recipientId = isOwner ? loan.borrower_id : item.owner_id
-    await supabase.from('notifications').insert({
-      user_id: recipientId,
-      type: 'loan_message',
-      title: `Ny melding om «${item?.name ?? 'gjenstand'}»`,
-      body: body.slice(0, 80),
-      loan_id: loan.id,
-    })
+    const recipientId = isOwner ? loan.borrower_id : item?.owner_id
+    if (recipientId) {
+      await supabase.from('notifications').insert({
+        user_id: recipientId, type: 'loan_message',
+        title: `Ny melding om «${item?.name ?? 'gjenstand'}»`,
+        body: body.slice(0, 80), loan_id: loan.id,
+      })
+    }
     setSending(false)
   }
+
+  // -------------------------------------------------------------------------
+  // Send proposal
+  // -------------------------------------------------------------------------
 
   const sendProposal = async () => {
     if (!propStart || !propEnd || submitting) return
@@ -190,11 +276,8 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     const supabase = createClient()
 
     const meta = {
-      proposed_start: propStart,
-      proposed_end: propEnd,
-      status: 'pending',
-      original_start: loan.start_date,
-      original_end: loan.due_date,
+      proposed_start: propStart, proposed_end: propEnd, status: 'pending',
+      original_start: loan.start_date, original_end: loan.due_date,
     }
     const tmpId = `tmp-${Date.now()}`
     addLocal({
@@ -205,35 +288,33 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     })
 
     const { data: msg, error: msgErr } = await supabase
-      .from('loan_messages')
-      .insert({ loan_id: loan.id, sender_id: user.id, type: 'change_proposal', body: propNote, metadata: meta })
-      .select('*, profiles(id, name, email, avatar_url)')
-      .single()
+      .from('loan_messages').insert({ loan_id: loan.id, sender_id: user.id, type: 'change_proposal', body: propNote, metadata: meta })
+      .select('*, profiles(id, name, email, avatar_url)').single()
 
-    if (msgErr) {
-      setMessages(prev => prev.filter(m => m.id !== tmpId))
-      setSubmitting(false)
-      return
-    }
+    if (msgErr) { setMessages(prev => prev.filter(m => m.id !== tmpId)); setSubmitting(false); return }
     setMessages(prev => prev.map(m => m.id === tmpId ? (msg || m) : m))
     await supabase.from('loans').update({ status: 'change_proposed' }).eq('id', loan.id)
     onLoanUpdated({ ...loan, status: 'change_proposed' })
 
-    const recipientId = isOwner ? loan.borrower_id : item.owner_id
-    await supabase.from('notifications').insert({
-      user_id: recipientId,
-      type: 'loan_change_proposal',
-      title: isOwner ? `📅 Utleier foreslår ny dato for «${item?.name ?? 'gjenstand'}»` : `📅 Låntaker vil endre datoer for «${item?.name ?? 'gjenstand'}»`,
-      body: `${fmt(propStart)} → ${fmt(propEnd)} – svar i meldingstråden`,
-      loan_id: loan.id,
-      action_url: `/loans/${loan.id}`,
-    })
+    const recipientId = isOwner ? loan.borrower_id : item?.owner_id
+    if (recipientId) {
+      await supabase.from('notifications').insert({
+        user_id: recipientId, type: 'loan_change_proposal',
+        title: isOwner ? `📅 Utleier foreslår ny dato for «${item?.name ?? 'gjenstand'}»` : `📅 Låntaker vil endre datoer for «${item?.name ?? 'gjenstand'}»`,
+        body: `${fmt(propStart)} → ${fmt(propEnd)} – svar i meldingstråden`,
+        loan_id: loan.id, action_url: `/loans/${loan.id}`,
+      })
+    }
 
     setPropStart(''); setPropEnd(''); setPropNote('')
     setShowProposal(false)
     setSubmitting(false)
     track(Events.PROPOSAL_SENT, { loan_id: loan.id, item_id: item?.id })
   }
+
+  // -------------------------------------------------------------------------
+  // Respond to proposal
+  // -------------------------------------------------------------------------
 
   const respondProposal = async (messageId: string, accept: boolean) => {
     const supabase = createClient()
@@ -262,10 +343,8 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     }
 
     const { data: sysMsg } = await supabase
-      .from('loan_messages')
-      .insert({ loan_id: loan.id, sender_id: user.id, type: 'system', body: sysBody })
-      .select('*, profiles(id, name, email, avatar_url)')
-      .single()
+      .from('loan_messages').insert({ loan_id: loan.id, sender_id: user.id, type: 'system', body: sysBody })
+      .select('*, profiles(id, name, email, avatar_url)').single()
     setMessages(prev => prev.map(m => m.id === tmpId ? (sysMsg || m) : m))
 
     await supabase.from('notifications').insert({
@@ -276,25 +355,39 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
       loan_id: loan.id,
     })
 
-    track(accept ? Events.PROPOSAL_ACCEPTED : Events.PROPOSAL_DECLINED, {
-      loan_id: loan.id,
-      item_id: item?.id,
-    })
+    track(accept ? Events.PROPOSAL_ACCEPTED : Events.PROPOSAL_DECLINED, { loan_id: loan.id, item_id: item?.id })
   }
 
-  const applySuggestion = (s: typeof BORROWER_SUGGESTIONS[0]) => {
+  // -------------------------------------------------------------------------
+  // Mark returned
+  // -------------------------------------------------------------------------
+
+  const markReturned = async () => {
+    const supabase = createClient()
+    await supabase.from('loans').update({ status: 'returned' }).eq('id', loan.id)
+    if (item?.id) await supabase.from('items').update({ available: true }).eq('id', item.id)
+    await injectSystemMessage(`✅ Gjenstanden er bekreftet returnert`)
+    onLoanUpdated({ ...loan, status: 'returned' })
+    setMessages(prev => [...prev, { id: `tmp-ret-${Date.now()}`, type: 'system', body: '✅ Gjenstanden er bekreftet returnert', created_at: new Date().toISOString() }])
+    track('loan_marked_returned', { loan_id: loan.id, item_id: item?.id })
+  }
+
+  // -------------------------------------------------------------------------
+  // Apply suggestion
+  // -------------------------------------------------------------------------
+
+  const applySuggestion = (s: Suggestion) => {
     const itemName = item?.name ?? 'gjenstanden'
     const note = s.note(itemName)
     if (s.type === 'chat') { setShowProposal(false); sendChat(note); return }
     setPropNote(note)
-    // Lock start date to existing if loan is active
-    const start = startDateLocked ? loan.start_date : (loan.start_date || new Date().toISOString().split('T')[0])
+    const start = startDateLocked ? loan.start_date : (loan.start_date || today)
     setPropStart(start)
-    const base = loan.due_date || new Date().toISOString().split('T')[0]
+    const base = loan.due_date || today
     const d = new Date(base)
     d.setDate(d.getDate() + s.delta)
-    const today = new Date()
-    if (d <= today) d.setDate(today.getDate() + 1)
+    const todayDate = new Date()
+    if (d <= todayDate) d.setDate(todayDate.getDate() + 1)
     setPropEnd(d.toISOString().split('T')[0])
     setShowProposal(true)
     setTimeout(() => proposalRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
@@ -321,10 +414,14 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     )
   }
 
+  // -------------------------------------------------------------------------
+  // Render
+  // -------------------------------------------------------------------------
+
   return (
     <div className="flex flex-col rounded-2xl overflow-hidden" style={{ background: 'rgba(245,245,245,0.8)' }}>
 
-      {/* ── Messages ──────────────────────────────────────────────────────── */}
+      {/* Messages */}
       <div className="flex flex-col px-3 py-4 gap-0.5 overflow-y-auto" style={{ minHeight: 200, maxHeight: 440 }}>
         {loading ? (
           <p className="text-center text-sm py-10" style={{ color: 'var(--terra-mid)' }}>Laster…</p>
@@ -341,20 +438,44 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
             ? (typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata)
             : null
 
-          // ── System pill ──────────────────────────────────────────────────
+          // System pill
           if (msg.type === 'system') {
+            // Start-day message — show "Bekreft henting" for owner
+            const isStartMsg = msg.body?.includes('starter lånet')
+            // Due-day message — show "Marker returnert" for owner
+            const isDueMsg = msg.body?.includes('siste dag')
+
             return (
-              <div key={msg.id} className="flex justify-center my-3 px-2">
+              <div key={msg.id} className="flex flex-col items-center my-3 px-2 gap-2">
                 <span className="system-message-pill">{msg.body}</span>
+                {isStartMsg && isOwner && loan.status === 'active' && (
+                  <button
+                    onClick={() => sendChat(`Hei! Du kan hente «${item?.name ?? 'gjenstanden'}» hos meg – gi meg beskjed når det passer! 📍`)}
+                    className="pill"
+                    style={{ fontSize: 11 }}
+                  >
+                    📍 Send henteinformasjon
+                  </button>
+                )}
+                {isDueMsg && isOwner && loan.status === 'active' && (
+                  <button
+                    onClick={markReturned}
+                    style={{
+                      fontSize: 11, fontWeight: 600, padding: '5px 14px', borderRadius: 99,
+                      background: 'rgba(74,124,89,0.1)', color: 'var(--terra-green)',
+                      border: '1px solid rgba(74,124,89,0.25)', cursor: 'pointer',
+                    }}
+                  >
+                    ✓ Bekreft retur
+                  </button>
+                )}
               </div>
             )
           }
 
-          // ── Change proposal card ─────────────────────────────────────────
+          // Change proposal card
           if (msg.type === 'change_proposal') {
-            // status field in metadata — treat missing/null as 'pending'
             const status = (meta?.status && meta.status !== '') ? meta.status : 'pending'
-            // Can respond if: not the sender of this specific proposal AND it's still pending
             const canRespond = !mine && status === 'pending'
             return (
               <div key={msg.id} className={`flex flex-col my-3 ${mine ? 'items-end' : 'items-start'}`}>
@@ -392,32 +513,16 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
                       </p>
                     ) : null}
                   </div>
-
-                  {/* ── Godta / Avslå — always styled as real buttons ── */}
                   {canRespond && (
                     <div style={{ display: 'flex', gap: 8, marginTop: 12, padding: '0 2px' }}>
                       <button
                         onClick={() => respondProposal(msg.id, true)}
-                        style={{
-                          flex: 1, padding: '9px 0', borderRadius: 99,
-                          background: 'var(--terra-green)', color: 'white',
-                          border: 'none', fontWeight: 700, fontSize: 13,
-                          cursor: 'pointer', letterSpacing: '-0.01em',
-                        }}
-                      >
-                        ✓ Godta
-                      </button>
+                        style={{ flex: 1, padding: '9px 0', borderRadius: 99, background: 'var(--terra-green)', color: 'white', border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                      >✓ Godta</button>
                       <button
                         onClick={() => respondProposal(msg.id, false)}
-                        style={{
-                          flex: 1, padding: '9px 0', borderRadius: 99,
-                          background: 'transparent', color: 'var(--terra-mid)',
-                          border: '1px solid rgba(156,123,101,0.35)',
-                          fontWeight: 500, fontSize: 13, cursor: 'pointer',
-                        }}
-                      >
-                        Avslå
-                      </button>
+                        style={{ flex: 1, padding: '9px 0', borderRadius: 99, background: 'transparent', color: 'var(--terra-mid)', border: '1px solid rgba(156,123,101,0.35)', fontWeight: 500, fontSize: 13, cursor: 'pointer' }}
+                      >Avslå</button>
                     </div>
                   )}
                 </div>
@@ -426,7 +531,7 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
             )
           }
 
-          // ── Chat bubble ──────────────────────────────────────────────────
+          // Chat bubble
           const showSender = !mine && !prevSameSender
           const showTimestamp = isLast || !nextSameSender
           const br = mine
@@ -437,8 +542,7 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
             <div key={msg.id} className={`flex flex-col ${mine ? 'items-end' : 'items-start'} ${prevSameSender ? 'mt-0.5' : 'mt-3'}`}>
               {showSender && (
                 <div className={`flex items-center gap-1.5 mb-0.5 px-1 ${mine ? 'flex-row-reverse' : ''}`}>
-                  <Link href={`/profile/${msg.profiles?.id}`}
-                    className="text-[11px] hover:underline" style={{ color: 'var(--terra-mid)' }}>
+                  <Link href={`/profile/${msg.profiles?.id}`} className="text-[11px] hover:underline" style={{ color: 'var(--terra-mid)' }}>
                     {senderName(msg)}
                   </Link>
                   {!isMe(msg) && msg.profiles?.id !== item?.owner_id && !isFriend && borrowerCommunity && (
@@ -474,61 +578,48 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
         <div ref={bottomRef} />
       </div>
 
-      {/* ── Proposal form ─────────────────────────────────────────────────── */}
+      {/* Proposal form */}
       {showProposal && (
         <div ref={proposalRef} className="glass-heavy border-t px-4 py-4 flex flex-col gap-3"
           style={{ borderTopColor: 'rgba(196,103,58,0.15)' }}>
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold" style={{ color: 'var(--terra-dark)' }}>📅 Foreslå endring</span>
-            <button
-              onClick={() => { setShowProposal(false); setPropNote(''); setPropStart(''); setPropEnd('') }}
-              className="text-xs" style={{ color: 'var(--terra-mid)' }}
-            >
-              Avbryt
-            </button>
+            <button onClick={() => { setShowProposal(false); setPropNote(''); setPropStart(''); setPropEnd('') }}
+              className="text-xs" style={{ color: 'var(--terra-mid)' }}>Avbryt</button>
           </div>
 
-          <div className="flex gap-2 flex-wrap">
-            {suggestions.map(s => (
-              <button key={s.id} onClick={() => applySuggestion(s)}
-                className="pill flex items-center gap-1 text-xs font-medium">
-                <span>{s.emoji}</span> {s.label}
-              </button>
-            ))}
-          </div>
+          {suggestions.filter(s => s.type === 'proposal').length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              {suggestions.filter(s => s.type === 'proposal').map(s => (
+                <button key={s.id} onClick={() => applySuggestion(s)}
+                  className="pill flex items-center gap-1 text-xs font-medium">
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1">
               <label className="text-xs uppercase tracking-wide font-medium" style={{ color: 'var(--terra-mid)' }}>
                 {startDateLocked ? 'Startdato (låst)' : 'Ny startdato'}
               </label>
-              <input
-                type="date"
-                value={propStart}
+              <input type="date" value={propStart}
                 onChange={e => !startDateLocked && setPropStart(e.target.value)}
                 disabled={startDateLocked}
-                min={startDateLocked ? undefined : new Date().toISOString().split('T')[0]}
+                min={startDateLocked ? undefined : today}
                 className="glass text-sm outline-none"
-                style={{
-                  borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)',
-                  opacity: startDateLocked ? 0.55 : 1,
-                  cursor: startDateLocked ? 'not-allowed' : 'pointer',
-                }}
-              />
+                style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)', opacity: startDateLocked ? 0.5 : 1, cursor: startDateLocked ? 'not-allowed' : 'pointer' }} />
               {startDateLocked && (
                 <p className="text-[10px]" style={{ color: 'var(--terra-mid)' }}>Aktivt lån — startdato kan ikke endres</p>
               )}
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs uppercase tracking-wide font-medium" style={{ color: 'var(--terra-mid)' }}>Ny sluttdato</label>
-              <input
-                type="date"
-                value={propEnd}
-                onChange={e => setPropEnd(e.target.value)}
-                min={propStart || new Date().toISOString().split('T')[0]}
+              <input type="date" value={propEnd} onChange={e => setPropEnd(e.target.value)}
+                min={propStart || today}
                 className="glass text-sm outline-none"
-                style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)' }}
-              />
+                style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)' }} />
             </div>
           </div>
 
@@ -538,29 +629,35 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
             </div>
           )}
 
-          <textarea
-            value={propNote}
-            onChange={e => setPropNote(e.target.value)}
-            rows={2}
+          <textarea value={propNote} onChange={e => setPropNote(e.target.value)} rows={2}
             placeholder="Legg til en melding (valgfritt)…"
             className="glass outline-none resize-none"
-            style={{ borderRadius: 12, padding: '10px 12px', fontSize: 14, color: 'var(--terra-dark)' }}
-          />
+            style={{ borderRadius: 12, padding: '10px 12px', fontSize: 14, color: 'var(--terra-dark)' }} />
 
-          <button
-            onClick={sendProposal}
-            disabled={!propStart || !propEnd || submitting}
-            className="btn-primary disabled:opacity-40"
-          >
+          <button onClick={sendProposal} disabled={!propStart || !propEnd || submitting}
+            className="btn-primary disabled:opacity-40">
             {submitting ? 'Sender…' : 'Send endringsforslag'}
           </button>
         </div>
       )}
 
-      {/* ── Input bar ─────────────────────────────────────────────────────── */}
+      {/* Input bar */}
       {!showProposal && (
         <div className="px-3 py-2 flex flex-col gap-2"
           style={{ background: 'rgba(245,245,245,0.8)', borderTop: '1px solid rgba(196,103,58,0.1)' }}>
+
+          {/* Context suggestions (chat type only in input bar) */}
+          {suggestions.filter(s => s.type === 'chat').length > 0 && (
+            <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+              {suggestions.filter(s => s.type === 'chat').map(s => (
+                <button key={s.id} onClick={() => applySuggestion(s)}
+                  className="pill flex-shrink-0 text-xs font-medium whitespace-nowrap">
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-end gap-2">
             <textarea
               ref={inputRef}
@@ -572,19 +669,15 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
               className="glass flex-1 outline-none resize-none text-[15px] leading-relaxed"
               style={{ borderRadius: 20, padding: '10px 16px', color: 'var(--terra-dark)', minHeight: 40, maxHeight: 120 }}
             />
-            <button
-              onClick={() => setShowProposal(true)}
-              className="btn-glass btn-sm flex-shrink-0 whitespace-nowrap"
-              style={{ height: 40, borderRadius: 20 }}
-            >
-              📅 Foreslå endring
-            </button>
-            <button
-              onClick={() => sendChat(newMessage)}
-              disabled={!newMessage.trim() || sending}
+            {suggestions.some(s => s.type === 'proposal') && (
+              <button onClick={() => setShowProposal(true)}
+                className="btn-glass btn-sm flex-shrink-0 whitespace-nowrap" style={{ height: 40, borderRadius: 20 }}>
+                📅 Foreslå endring
+              </button>
+            )}
+            <button onClick={() => sendChat(newMessage)} disabled={!newMessage.trim() || sending}
               className="flex-shrink-0 flex items-center justify-center disabled:opacity-25 transition-opacity"
-              style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--terra)' }}
-            >
+              style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--terra)' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
                 <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>

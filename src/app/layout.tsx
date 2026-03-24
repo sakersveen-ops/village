@@ -3,6 +3,7 @@ import './globals.css'
 import NavBar from '@/components/NavBar'
 import AppTourWrapper from '@/components/AppTourWrapper'
 import FeedbackButton from '@/components/FeedbackButton'
+import Script from 'next/script'
 import { Fraunces } from 'next/font/google'
 
 const fraunces = Fraunces({
@@ -25,6 +26,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <AppTourWrapper />
         <FeedbackButton />
+        <Script
+          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
+          strategy="lazyOnload"
+        />
       </body>
     </html>
   )

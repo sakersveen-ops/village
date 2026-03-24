@@ -588,9 +588,9 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
               className="text-xs" style={{ color: 'var(--terra-mid)' }}>Avbryt</button>
           </div>
 
-          {suggestions.filter(s => s.type === 'proposal').length > 0 && (
+          {suggestions.length > 0 && (
             <div className="flex gap-2 flex-wrap">
-              {suggestions.filter(s => s.type === 'proposal').map(s => (
+              {suggestions.map(s => (
                 <button key={s.id} onClick={() => applySuggestion(s)}
                   className="pill flex items-center gap-1 text-xs font-medium">
                   {s.label}
@@ -646,18 +646,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
         <div className="px-3 py-2 flex flex-col gap-2"
           style={{ background: 'rgba(245,245,245,0.8)', borderTop: '1px solid rgba(196,103,58,0.1)' }}>
 
-          {/* Context suggestions (chat type only in input bar) */}
-          {suggestions.filter(s => s.type === 'chat').length > 0 && (
-            <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-              {suggestions.filter(s => s.type === 'chat').map(s => (
-                <button key={s.id} onClick={() => applySuggestion(s)}
-                  className="pill flex-shrink-0 text-xs font-medium whitespace-nowrap">
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          )}
-
           <div className="flex items-end gap-2">
             <textarea
               ref={inputRef}
@@ -669,7 +657,7 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
               className="glass flex-1 outline-none resize-none text-[15px] leading-relaxed"
               style={{ borderRadius: 20, padding: '10px 16px', color: 'var(--terra-dark)', minHeight: 40, maxHeight: 120 }}
             />
-            {suggestions.some(s => s.type === 'proposal') && (
+            {suggestions.length > 0 && (
               <button onClick={() => setShowProposal(true)}
                 className="btn-glass btn-sm flex-shrink-0 whitespace-nowrap" style={{ height: 40, borderRadius: 20 }}>
                 📅 Foreslå endring

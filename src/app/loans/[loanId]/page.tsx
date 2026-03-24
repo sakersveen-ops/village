@@ -75,12 +75,6 @@ export default function LoanPage() {
       setBorrower(loanData.borrower)
       setLoading(false)
       track('loan_thread_page_viewed', { loan_id: loanId })
-        await supabase
-            .from('loan_message_reads')
-            .upsert(
-                { loan_id: loanId, user_id: user.id, read_at: new Date().toISOString() },
-                { onConflict: 'loan_id,user_id' }
-            )
     }
     load()
   }, [loanId])
@@ -149,7 +143,10 @@ export default function LoanPage() {
   const isLive      = ['pending','active','change_proposed'].includes(loan.status)
 
   return (
-    <div className="max-w-lg mx-auto" style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
+    <>
+    {/* Hide bottom nav on this page */}
+    <style>{`.bottom-nav { display: none !important; }`}</style>
+    <div className="max-w-lg mx-auto" style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden' }}>
 
       {/* Header */}
       <header className="page-header glass" style={{ borderRadius: '0 0 20px 20px', position: 'sticky', top: 0, zIndex: 40, flexShrink: 0 }}>
@@ -177,19 +174,10 @@ export default function LoanPage() {
                 {cpName}
               </p>
             </button>
-            {item?.name && (
-              <p style={{ fontSize: 11, color: 'var(--terra-mid)', margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {item.name}
-              </p>
-            )}
+
           </div>
 
-          {/* Open item — always use loan.item_id, never item?.id which may be undefined */}
-          <button onClick={() => router.push(`/items/${loan.item_id}`)}
-            className="btn-glass"
-            style={{ fontSize: 11.5, padding: '5px 11px', borderRadius: 10, flexShrink: 0 }}>
-            Se gjenstand
-          </button>
+
         </div>
       </header>
 
@@ -247,13 +235,7 @@ export default function LoanPage() {
               ✓ Marker som returnert
             </button>
           )}
-          {/* Proposal button — not shown when accept/decline is visible */}
-          {!(isOwner && loan.status === 'pending') && (
-            <button onClick={() => setOpenProposal(true)} className="btn-glass"
-              style={{ flex: 1, fontSize: 13 }}>
-              📅 {role === 'borrower' ? 'Endre datoer' : 'Foreslå datoendring'}
-            </button>
-          )}
+
         </div>
       )}
 
@@ -276,7 +258,7 @@ export default function LoanPage() {
         </div>
       )}
 
-      <div className="nav-spacer" />
     </div>
+    </>
   )
 }

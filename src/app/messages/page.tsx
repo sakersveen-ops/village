@@ -339,13 +339,17 @@ export default function MessagesPage() {
   // ---------------------------------------------------------------------------
 
   return (
+    <>
+    <style>{`.bottom-nav { display: none !important; }`}</style>
     <div className="max-w-lg mx-auto">
 
-      {/* Sticky header — flush to top, no gap below */}
+      {/* Sticky header — flush to top of screen, no safe-area gap */}
       <header className="page-header glass" style={{
         borderRadius: '0 0 20px 20px',
         position: 'sticky', top: 0, zIndex: 40,
+        paddingTop: 'max(12px, env(safe-area-inset-top))',
         paddingBottom: 12,
+        marginTop: 0,
       }}>
         {/* Row 1: title + unread badge */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -421,7 +425,8 @@ export default function MessagesPage() {
         )}
       </div>
 
-      <div className="nav-spacer" />
+      <div style={{ height: 'max(16px, env(safe-area-inset-bottom))' }} />
     </div>
+    </>
   )
 }

@@ -443,7 +443,7 @@ export default function NotificationsPage() {
   // ── Render ────────────────────────────────────────────────────────────────
   // No <header> here — NavBar owns the top bar
   return (
-    <div className="max-w-lg mx-auto">
+    <div className="max-w-lg mx-auto" style={{ marginTop: 0 }}>
       <div style={{ padding: '0 14px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (

@@ -444,7 +444,7 @@ export default function NotificationsPage() {
   // No <header> here — NavBar owns the top bar
   return (
     <div className="max-w-lg mx-auto">
-      <div style={{ padding: '4px 14px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ padding: '0 14px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="glass" style={{ borderRadius: 14, height: 58, opacity: 0.4 }} />

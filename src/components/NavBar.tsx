@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -10,6 +10,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/add': 'Del gjenstand',
   '/schedule': 'Mine avtaler',
   '/profile': 'Min profil',
+  '/notifications': 'Varsler',
 }
 
 function getTitle(pathname: string): string {
@@ -48,63 +49,89 @@ const iconBtnStyle = (active = false): React.CSSProperties => ({
   color: 'var(--terra-dark, #2C1A0E)',
 })
 
+// Shared event so NotificationsPage can trigger a re-fetch of unread count
+export const notifRefreshEvent =
+  typeof window !== 'undefined' ? new EventTarget() : null
+
 export default function NavBar() {
   const [unread, setUnread] = useState(0)
   const [hasUser, setHasUser] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const [markingAll, setMarkingAll] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
 
   const showBack = !isRootPath(pathname)
+  const isNotificationsPage = pathname === '/notifications'
+
+  const loadUnread = useCallback(async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setHasUser(false); return undefined }
+    setHasUser(true)
+
+    const ACTION_TYPES = ['friend_request', 'connection_request', 'join_request']
+    const { count } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('read', false)
+      .in('type', ACTION_TYPES)
+
+    setUnread(count || 0)
+    return user.id
+  }, [])
 
   useEffect(() => {
     setShowMenu(false)
   }, [pathname])
 
   useEffect(() => {
-    const load = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setHasUser(false); return }
-      setHasUser(true)
-
-      const [
-        { count: notifCount },
-        { data: pendingLoans },
-        { data: loanRequestNotifs },
-      ] = await Promise.all([
-        supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('read', false),
-        supabase.from('loans').select('id').eq('owner_id', user.id).eq('status', 'pending'),
-        supabase.from('notifications').select('loan_id').eq('user_id', user.id).eq('type', 'loan_request').eq('read', false),
-      ])
-
-      const coveredLoanIds = new Set((loanRequestNotifs || []).map((n: any) => n.loan_id))
-      const uncoveredLoans = (pendingLoans || []).filter((l: any) => !coveredLoanIds.has(l.id)).length
-      setUnread((notifCount || 0) + uncoveredLoans)
-
-      return user.id
-    }
-
     let channel: any = null
 
-    load().then(userId => {
+    loadUnread().then(userId => {
       if (!userId) return
       const supabase = createClient()
       channel = supabase
         .channel('navbar_notifications')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, () => { load() })
+        .on('postgres_changes', {
+          event: '*', schema: 'public', table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        }, () => loadUnread())
         .subscribe()
     })
 
-    const interval = setInterval(load, 30000)
+    // Listen for mark-all events from the notifications page
+    const handler = () => loadUnread()
+    notifRefreshEvent?.addEventListener('refresh', handler)
+
+    const interval = setInterval(loadUnread, 30000)
     return () => {
       clearInterval(interval)
+      notifRefreshEvent?.removeEventListener('refresh', handler)
       if (channel) {
         const supabase = createClient()
         supabase.removeChannel(channel)
       }
     }
-  }, [])
+  }, [loadUnread])
+
+  const handleMarkAllRead = async () => {
+    setMarkingAll(true)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', user.id)
+        .eq('read', false)
+      setUnread(0)
+      // Tell the notifications page to re-render its list
+      notifRefreshEvent?.dispatchEvent(new Event('marked-all-read'))
+    }
+    setMarkingAll(false)
+  }
 
   const signOut = async () => {
     const supabase = createClient()
@@ -117,13 +144,12 @@ export default function NavBar() {
 
   const title = getTitle(pathname)
 
-  // data-tour attributes wire up the AppTour spotlight to each nav element
   const navItems = [
-    { href: '/',                 icon: 'home',      label: 'Hjem',         tour: 'feed' },
-    { href: '/community/search', icon: 'community', label: 'Kretser',      tour: 'communities' },
+    { href: '/',                 icon: 'home',      label: 'Hjem',          tour: 'feed' },
+    { href: '/community/search', icon: 'community', label: 'Kretser',       tour: 'communities' },
     { href: '/add',              icon: null,         label: 'Del gjenstand', tour: 'add' },
-    { href: '/schedule',         icon: 'schedule',  label: 'Avtaler',      tour: 'schedule' },
-    { href: '/profile',          icon: 'profile',   label: 'Profil',       tour: 'profile' },
+    { href: '/schedule',         icon: 'schedule',  label: 'Avtaler',       tour: 'schedule' },
+    { href: '/profile',          icon: 'profile',   label: 'Profil',        tour: 'profile' },
   ]
 
   return (
@@ -133,6 +159,7 @@ export default function NavBar() {
         className="page-header glass"
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}
       >
+        {/* Left: back or search */}
         {showBack ? (
           <button onClick={() => router.back()} aria-label="Tilbake" style={iconBtnStyle()}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,#2C1A0E)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -147,27 +174,53 @@ export default function NavBar() {
           </Link>
         )}
 
+        {/* Centre: title */}
         <h1 className="page-header-title font-display">{title}</h1>
 
+        {/* Right: context-aware actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Varsler — data-tour for top bar */}
-          <Link href="/notifications" aria-label="Varsler" data-tour="notifications"
-            style={{ ...iconBtnStyle(pathname === '/notifications'), position: 'relative' }}>
-            <BellIcon />
-            {unread > 0 && (
-              <span style={{
-                position: 'absolute', top: 4, right: 4,
-                background: 'var(--terra, #C4673A)', color: 'white',
-                fontSize: 9, fontWeight: 700,
-                minWidth: 14, height: 14, borderRadius: 7,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: '0 3px', lineHeight: 1,
-                boxShadow: '0 0 0 2px rgba(250,247,242,0.9)',
-              }}>
-                {unread > 9 ? '9+' : unread}
-              </span>
-            )}
-          </Link>
+
+          {/* On notifications page: show "Merk alle som lest" button instead of bell */}
+          {isNotificationsPage ? (
+            unread > 0 ? (
+              <button
+                onClick={handleMarkAllRead}
+                disabled={markingAll}
+                style={{
+                  fontSize: 12, fontWeight: 600,
+                  padding: '6px 14px', borderRadius: 99,
+                  background: 'var(--terra)', color: 'white',
+                  border: 'none', cursor: 'pointer',
+                  opacity: markingAll ? 0.55 : 1,
+                  transition: 'opacity 0.15s',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {markingAll ? '…' : 'Merk alle som lest'}
+              </button>
+            ) : (
+              // Empty placeholder so title stays centred
+              <div style={{ width: 36 }} />
+            )
+          ) : (
+            <Link href="/notifications" aria-label="Varsler" data-tour="notifications"
+              style={{ ...iconBtnStyle(pathname === '/notifications'), position: 'relative' }}>
+              <BellIcon />
+              {unread > 0 && (
+                <span style={{
+                  position: 'absolute', top: 4, right: 4,
+                  background: 'var(--terra, #C4673A)', color: 'white',
+                  fontSize: 9, fontWeight: 700,
+                  minWidth: 14, height: 14, borderRadius: 7,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: '0 3px', lineHeight: 1,
+                  boxShadow: '0 0 0 2px rgba(250,247,242,0.9)',
+                }}>
+                  {unread > 9 ? '9+' : unread}
+                </span>
+              )}
+            </Link>
+          )}
 
           {/* Meldinger */}
           <Link href="/messages" aria-label="Meldinger" data-tour="messages"

@@ -4,112 +4,33 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { track, Events } from '@/lib/track'
+import { notifRefreshEvent } from '@/components/NavBar'
 
+// Types that require action — shown with unread border, NOT auto-read
 const ACTION_TYPES = new Set([
-  'loan_request',
-  'loan_change_proposal',
   'friend_request',
   'connection_request',
   'join_request',
 ])
 
-type FilterCategory = 'all' | 'mine_items' | 'their_items' | 'friends' | 'communities'
-
-const CATEGORY_TYPES: Record<FilterCategory, string[]> = {
-  all:         [],
-  mine_items:  ['loan_request', 'loan_change_proposal'],
-  their_items: ['loan_accepted', 'loan_declined', 'proposal_accepted', 'proposal_declined', 'loan_message'],
-  friends:     ['friend_request', 'friend_accepted', 'connection_request', 'connection_accepted', 'connection_disconnected'],
-  communities: ['join_request', 'join_accepted', 'join_declined'],
-}
-
-const CATEGORY_LABELS: Record<FilterCategory, string> = {
-  all:         'Alle',
-  mine_items:  'Mine gjenstander',
-  their_items: 'Andres gjenstander',
-  friends:     'Venner',
-  communities: 'Kretser',
-}
-
-const ALL_FILTERS: FilterCategory[] = ['all', 'mine_items', 'their_items', 'friends', 'communities']
-
-const NotifIcon = ({ type }: { type: string }) => {
-  if (type === 'loan_request' || type === 'loan_change_proposal') return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-      <rect x="2" y="13" width="14" height="3" rx="1.5" fill="var(--terra)" opacity="0.25"/>
-      <rect x="4" y="9" width="12" height="3" rx="1.5" fill="var(--terra)" opacity="0.45"/>
-      <rect x="3" y="5" width="13" height="4" rx="1.5" fill="var(--terra)"/>
-      <path d="M18 5v10" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
-      <path d="M20 15l-2 2.5L16 15" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  )
-  if (['loan_accepted','proposal_accepted','join_accepted','connection_accepted'].includes(type)) return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-      <circle cx="11" cy="11" r="9" fill="var(--terra-green)" opacity="0.15"/>
-      <circle cx="11" cy="11" r="9" stroke="var(--terra-green)" strokeWidth="1.5"/>
-      <path d="M7 11.5l2.5 2.5 5.5-5.5" stroke="var(--terra-green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  )
-  if (['loan_declined','proposal_declined','join_declined'].includes(type)) return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-      <circle cx="11" cy="11" r="9" fill="var(--terra)" opacity="0.1"/>
-      <circle cx="11" cy="11" r="9" stroke="var(--terra)" strokeWidth="1.5"/>
-      <path d="M8 8l6 6M14 8l-6 6" stroke="var(--terra)" strokeWidth="2" strokeLinecap="round"/>
-    </svg>
-  )
-  if (type === 'friend_request') return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-      <path d="M4 14c0-2.5 1.5-4 3.5-4h1L11 8h2l2 2h1c2 0 3 1.5 3 3" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M7.5 10l-3 3.5c-.5.6-.3 1.5.5 1.8l6 2.5c.7.3 1.4 0 1.7-.7l2-4.6" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M14.5 12l2.5 3c.5.7 0 1.6-.8 1.6H14" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-      <circle cx="9" cy="5.5" r="1.5" fill="var(--terra)" opacity="0.5"/>
-      <circle cx="13" cy="5.5" r="1.5" fill="var(--terra)" opacity="0.5"/>
-    </svg>
-  )
-  if (type === 'friend_accepted') return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-      <circle cx="8" cy="7" r="2.5" stroke="var(--terra-green)" strokeWidth="1.5"/>
-      <path d="M3 17c0-3 2-4.5 5-4.5s5 1.5 5 4.5" stroke="var(--terra-green)" strokeWidth="1.5" strokeLinecap="round"/>
-      <path d="M15 10l1.5 1.5 3-3" stroke="var(--terra-green)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  )
-  if (type === 'join_request') return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-      <path d="M3 10.5L11 4l8 6.5" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-      <rect x="7" y="12" width="8" height="7" rx="1" stroke="var(--terra)" strokeWidth="1.5"/>
-      <rect x="9.5" y="15" width="3" height="4" rx="0.5" fill="var(--terra)" opacity="0.35"/>
-    </svg>
-  )
-  if (['connection_request','connection_disconnected'].includes(type)) return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-      <circle cx="6" cy="11" r="3" stroke="var(--terra)" strokeWidth="1.5"/>
-      <circle cx="16" cy="11" r="3" stroke="var(--terra)" strokeWidth="1.5"/>
-      <path d="M9 11h4" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  )
-  if (type === 'loan_message') return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-      <path d="M19 13a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  )
-  return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-      <path d="M11 3a5 5 0 00-5 5v4l-1.5 2.5h13L16 12V8a5 5 0 00-5-5z" stroke="var(--terra)" strokeWidth="1.5" strokeLinejoin="round"/>
-      <path d="M9 17.5a2 2 0 004 0" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  )
-}
+// Types handled in message threads — never shown here
+const MESSAGE_THREAD_TYPES = [
+  'loan_request',
+  'loan_change_proposal',
+  'loan_accepted',
+  'loan_declined',
+  'proposal_accepted',
+  'proposal_declined',
+  'loan_message',
+]
 
 function formatDate(d: string) {
   const date = new Date(d)
   const today = new Date()
   const yesterday = new Date(Date.now() - 86400000)
-  if (date.toDateString() === today.toDateString()) {
+  if (date.toDateString() === today.toDateString())
     return date.toLocaleTimeString('no-NO', { hour: '2-digit', minute: '2-digit' })
-  }
-  if (date.toDateString() === yesterday.toDateString()) {
-    return 'I går'
-  }
+  if (date.toDateString() === yesterday.toDateString()) return 'I går'
   return date.toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
 }
 
@@ -119,7 +40,8 @@ function groupByDate(list: any[]) {
   const groups: Record<string, any[]> = {}
   for (const n of list) {
     const d = new Date(n.created_at).toDateString()
-    const label = d === today ? 'I dag'
+    const label =
+      d === today ? 'I dag'
       : d === yesterday ? 'I går'
       : new Date(n.created_at).toLocaleDateString('no-NO', { day: 'numeric', month: 'long' })
     if (!groups[label]) groups[label] = []
@@ -128,25 +50,115 @@ function groupByDate(list: any[]) {
   return groups
 }
 
+const NotifIcon = ({ type }: { type: string }) => {
+  if (['friend_accepted', 'join_accepted', 'connection_accepted'].includes(type)) return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <circle cx="11" cy="11" r="9" fill="var(--terra-green)" opacity="0.15"/>
+      <circle cx="11" cy="11" r="9" stroke="var(--terra-green)" strokeWidth="1.5"/>
+      <path d="M7 11.5l2.5 2.5 5.5-5.5" stroke="var(--terra-green)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+  if (['join_declined', 'connection_disconnected'].includes(type)) return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <circle cx="11" cy="11" r="9" fill="var(--terra)" opacity="0.1"/>
+      <circle cx="11" cy="11" r="9" stroke="var(--terra)" strokeWidth="1.5"/>
+      <path d="M8 8l6 6M14 8l-6 6" stroke="var(--terra)" strokeWidth="2" strokeLinecap="round"/>
+    </svg>
+  )
+  if (type === 'friend_request') return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <circle cx="8" cy="7" r="2.5" stroke="var(--terra)" strokeWidth="1.5"/>
+      <path d="M3 17c0-3 2-4.5 5-4.5s5 1.5 5 4.5" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M16 9v6M13 12h6" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )
+  if (type === 'connection_request') return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <circle cx="6" cy="11" r="3" stroke="var(--terra)" strokeWidth="1.5"/>
+      <circle cx="16" cy="11" r="3" stroke="var(--terra)" strokeWidth="1.5"/>
+      <path d="M9 11h4" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )
+  if (type === 'join_request') return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <path d="M3 10.5L11 4l8 6.5" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      <rect x="7" y="12" width="8" height="7" rx="1" stroke="var(--terra)" strokeWidth="1.5"/>
+    </svg>
+  )
+  if (type === 'friend_wishlist') return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <path d="M11 18s-7-5-7-9.5a4 4 0 0 1 7-2.6A4 4 0 0 1 18 8.5c0 4.5-7 9.5-7 9.5z" stroke="var(--terra)" strokeWidth="1.5"/>
+      <path d="M15 7l1.5 1.5 3-3" stroke="var(--terra-green)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+  if (type === 'near_friend_marked') return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <path d="M11 18s-7-5-7-9.5a4 4 0 0 1 7-2.6A4 4 0 0 1 18 8.5c0 4.5-7 9.5-7 9.5z" fill="var(--terra)" opacity="0.2" stroke="var(--terra)" strokeWidth="1.5"/>
+    </svg>
+  )
+  if (type === 'near_friend_post') return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <circle cx="8" cy="7" r="2.5" stroke="var(--terra)" strokeWidth="1.5"/>
+      <path d="M3 17c0-3 2-4.5 5-4.5s5 1.5 5 4.5" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
+      <rect x="13" y="10" width="7" height="8" rx="1.5" stroke="var(--terra)" strokeWidth="1.5"/>
+    </svg>
+  )
+  if (type === 'community_update' || type === 'community_role_change') return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <path d="M3 10.5L11 4l8 6.5V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" stroke="var(--terra)" strokeWidth="1.5" strokeLinejoin="round"/>
+      <rect x="8.5" y="13" width="5" height="7" rx="0.75" stroke="var(--terra)" strokeWidth="1.3"/>
+    </svg>
+  )
+  if (type === 'loan_start_owner' || type === 'loan_start_borrower') return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <rect x="3" y="6" width="13" height="4" rx="1.5" fill="var(--terra)"/>
+      <path d="M18 6v8" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M20 12l-2 2.5L16 12" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+  if (type === 'loan_return_owner' || type === 'loan_return_borrower') return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <rect x="3" y="6" width="13" height="4" rx="1.5" fill="var(--terra)" opacity="0.5"/>
+      <path d="M18 14V6" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M16 8l2-2.5L20 8" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+  return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <path d="M11 3a5 5 0 00-5 5v4l-1.5 2.5h13L16 12V8a5 5 0 00-5-5z" stroke="var(--terra)" strokeWidth="1.5" strokeLinejoin="round"/>
+      <path d="M9 17.5a2 2 0 004 0" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
 const btnAccept: React.CSSProperties = {
-  fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 99,
+  fontSize: 11, fontWeight: 600, padding: '5px 12px', borderRadius: 99,
   background: 'var(--terra-green)', color: 'white', border: 'none', cursor: 'pointer',
 }
 const btnDecline: React.CSSProperties = {
-  fontSize: 12, fontWeight: 500, padding: '6px 14px', borderRadius: 99,
+  fontSize: 11, fontWeight: 500, padding: '5px 12px', borderRadius: 99,
   background: 'transparent', color: 'var(--terra-mid)',
   border: '1px solid rgba(156,123,101,0.35)', cursor: 'pointer',
 }
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([])
-  const [filter, setFilter] = useState<FilterCategory>('all')
   const [loading, setLoading] = useState(true)
-  const [markingAll, setMarkingAll] = useState(false)
   const [handled, setHandled] = useState<Map<string, 'accepted' | 'declined'>>(new Map())
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [currentProfile, setCurrentProfile] = useState<any>(null)
   const router = useRouter()
+
+  const fetchNotifications = async (userId: string) => {
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('notifications')
+      .select(`*, loans(item_id, items(name), community_id, communities(name, avatar_emoji))`)
+      .eq('user_id', userId)
+      .not('type', 'in', `(${MESSAGE_THREAD_TYPES.map(t => `"${t}"`).join(',')})`)
+      .order('created_at', { ascending: false })
+    setNotifications(data || [])
+  }
 
   useEffect(() => {
     const load = async () => {
@@ -155,18 +167,14 @@ export default function NotificationsPage() {
       if (!user) { router.push('/login'); return }
       setCurrentUser(user)
 
-      const { data: prof } = await supabase.from('profiles').select('id, name').eq('id', user.id).single()
+      const { data: prof } = await supabase
+        .from('profiles').select('id, name').eq('id', user.id).single()
       setCurrentProfile(prof)
 
-      const { data } = await supabase
-        .from('notifications')
-        .select(`*, loans(item_id, items(name), community_id, communities(name, avatar_emoji))`)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-      setNotifications(data || [])
+      await fetchNotifications(user.id)
 
       // Auto-mark non-action notifications as read
-      const actionList = Array.from(ACTION_TYPES).map(t => `"${t}"`).join(',')
+      const actionList = [...ACTION_TYPES].map(t => `"${t}"`).join(',')
       await supabase
         .from('notifications')
         .update({ read: true })
@@ -179,51 +187,45 @@ export default function NotificationsPage() {
     load()
   }, [])
 
+  // Listen for "marked-all-read" event fired by NavBar
+  useEffect(() => {
+    const handler = () => {
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+      setHandled(new Map())
+    }
+    notifRefreshEvent?.addEventListener('marked-all-read', handler)
+    return () => notifRefreshEvent?.removeEventListener('marked-all-read', handler)
+  }, [])
+
   const markNotifRead = async (id: string) => {
     const supabase = createClient()
     await supabase.from('notifications').update({ read: true }).eq('id', id)
     setNotifications(prev => prev.map(x => x.id === id ? { ...x, read: true } : x))
-  }
-
-  const handleMarkAllRead = async () => {
-    setMarkingAll(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await supabase.from('notifications').update({ read: true }).eq('user_id', user.id).eq('read', false)
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
-    setMarkingAll(false)
+    notifRefreshEvent?.dispatchEvent(new Event('refresh'))
   }
 
   const handleFriendRequest = async (n: any, accept: boolean) => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-
     const fromId = n.metadata?.from_id
     let req: any = null
-
     if (fromId) {
-      const { data } = await supabase
-        .from('friend_requests').select('id, from_id, status')
+      const { data } = await supabase.from('friend_requests').select('id, from_id, status')
         .eq('to_id', user.id).eq('from_id', fromId)
         .order('created_at', { ascending: false }).limit(1).maybeSingle()
       req = data
     }
-
     if (!req) {
-      const { data } = await supabase
-        .from('friend_requests').select('id, from_id, status')
+      const { data } = await supabase.from('friend_requests').select('id, from_id, status')
         .eq('to_id', user.id).eq('status', 'pending')
         .order('created_at', { ascending: false }).limit(1).maybeSingle()
       req = data
     }
-
     if (req && req.status === 'pending') {
       await supabase.from('friend_requests')
         .update({ status: accept ? 'accepted' : 'declined' }).eq('id', req.id)
     }
-
     if (accept && req) {
       await supabase.from('friendships').upsert([
         { user_a: user.id, user_b: req.from_id },
@@ -234,7 +236,6 @@ export default function NotificationsPage() {
         title: 'Venneforespørsel godtatt!', body: 'Dere er nå venner',
       })
     }
-
     track(Events.FRIEND_REQUEST_HANDLED, { accepted: accept })
     await markNotifRead(n.id)
     setHandled(prev => new Map(prev).set(n.id, accept ? 'accepted' : 'declined'))
@@ -244,14 +245,12 @@ export default function NotificationsPage() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-
     const { data: conn } = await supabase
       .from('profile_connections').select('*')
       .or(`user_a.eq.${user.id},user_b.eq.${user.id}`)
       .eq('status', 'pending').neq('initiated_by', user.id)
       .limit(1).single()
     if (!conn) return
-
     if (accept) {
       await supabase.from('profile_connections')
         .update({ status: 'active', accepted_at: new Date().toISOString() }).eq('id', conn.id)
@@ -270,123 +269,136 @@ export default function NotificationsPage() {
       await supabase.from('profile_connections').update({ status: 'disconnected' }).eq('id', conn.id)
       track(Events.CONNECTION_DECLINED, { connection_id: conn.id })
     }
-
     await markNotifRead(n.id)
     setHandled(prev => new Map(prev).set(n.id, accept ? 'accepted' : 'declined'))
   }
 
-  // --- Merged feed: actions first (unread border), then rest sorted by time ---
+  const handleJoinRequest = async (n: any, accept: boolean) => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const requestId = n.metadata?.request_id
+    if (requestId) {
+      await supabase.from('join_requests')
+        .update({ status: accept ? 'accepted' : 'declined' }).eq('id', requestId)
+      if (accept) {
+        const { data: req } = await supabase
+          .from('join_requests').select('user_id, community_id').eq('id', requestId).single()
+        if (req) {
+          await supabase.from('community_members')
+            .insert({ user_id: req.user_id, community_id: req.community_id })
+          await supabase.from('notifications').insert({
+            user_id: req.user_id, type: 'join_accepted',
+            title: 'Du er med i kretsen!', body: 'Forespørselen din ble godtatt',
+          })
+        }
+      }
+    }
+    await markNotifRead(n.id)
+    setHandled(prev => new Map(prev).set(n.id, accept ? 'accepted' : 'declined'))
+  }
+
   const feed = useMemo(() => {
-    // Notifications handled this session become receipt items
     const withReceipts = notifications.map(n =>
       handled.has(n.id)
         ? { ...n, _receipt: true, _outcome: handled.get(n.id), read: true }
         : n
     )
-
-    // Separate pending actions (not yet handled) from everything else
     const pendingActions = withReceipts.filter(n => ACTION_TYPES.has(n.type) && !n._receipt)
     const rest = withReceipts.filter(n => !ACTION_TYPES.has(n.type) || n._receipt)
-
-    // Sort each group by recency
     const byTime = (a: any, b: any) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-
     return [...pendingActions.sort(byTime), ...rest.sort(byTime)]
   }, [notifications, handled])
 
-  const filtered = useMemo(() =>
-    filter === 'all' ? feed : feed.filter(n => CATEGORY_TYPES[filter].includes(n.type)),
-    [feed, filter]
-  )
+  const groups = groupByDate(feed)
 
-  const unreadCount = feed.filter(n => !n.read && ACTION_TYPES.has(n.type) && !handled.has(n.id)).length
-  const groups = groupByDate(filtered)
-
-  // --- Card ---
+  // ── Card ──────────────────────────────────────────────────────────────────
   const NotifCard = ({ n }: { n: any }) => {
     const isAction = ACTION_TYPES.has(n.type) && !n._receipt
     const needsBorder = isAction && !n.read
-    const outerStyle: React.CSSProperties = {
-      borderRadius: '16px', overflow: 'hidden',
+
+    const outer: React.CSSProperties = {
+      borderRadius: 14, overflow: 'hidden',
       borderLeft: needsBorder ? '3px solid var(--terra)' : undefined,
     }
-    const innerStyle: React.CSSProperties = {
-      borderRadius: needsBorder ? '0 16px 16px 0' : '16px',
-      padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: '12px',
+    const inner: React.CSSProperties = {
+      borderRadius: needsBorder ? '0 14px 14px 0' : 14,
+      padding: '10px 12px',
+      display: 'flex', alignItems: 'center', gap: 10,
     }
+
     const dot = !n.read && !isAction
-      ? <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--terra)', flexShrink: 0, marginTop: 6 }} />
+      ? <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--terra)', flexShrink: 0 }} />
       : null
 
+    const Meta = () => (
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
+          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--terra-dark)', margin: 0, lineHeight: 1.3 }}>{n.title}</p>
+          <span style={{ fontSize: 10, color: 'var(--terra-mid)', flexShrink: 0 }}>{formatDate(n.created_at)}</span>
+        </div>
+        {n.body && (
+          <p style={{ fontSize: 12, color: 'var(--terra-mid)', margin: '2px 0 0', lineHeight: 1.35 }}>{n.body}</p>
+        )}
+        {n.loans?.items?.name && (
+          <p style={{ fontSize: 11, color: 'var(--terra-mid)', margin: '1px 0 0', fontStyle: 'italic' }}>{n.loans.items.name}</p>
+        )}
+      </div>
+    )
+
     if (n._receipt) return (
-      <div style={outerStyle}>
-        <div className="glass" style={innerStyle}>
-          <span style={{ flexShrink: 0, marginTop: 2 }}><NotifIcon type={n.type} /></span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--terra-dark)', margin: 0 }}>{n.title}</p>
-            <p style={{ fontSize: 13, color: 'var(--terra-mid)', marginTop: 2 }}>{n.body}</p>
-            <p style={{ fontSize: 11, color: 'var(--terra-mid)', marginTop: 4 }}>{formatDate(n.created_at)}</p>
-            <p style={{ fontSize: 12, fontWeight: 600, marginTop: 6, color: n._outcome === 'accepted' ? 'var(--terra-green)' : 'var(--terra-mid)' }}>
-              {n._outcome === 'accepted' ? '✓ Godtatt' : '✕ Avslått'}
-            </p>
-          </div>
+      <div style={outer}>
+        <div className="glass" style={inner}>
+          <NotifIcon type={n.type} />
+          <Meta />
+          <span style={{
+            fontSize: 11, fontWeight: 600, flexShrink: 0,
+            color: n._outcome === 'accepted' ? 'var(--terra-green)' : 'var(--terra-mid)',
+          }}>
+            {n._outcome === 'accepted' ? '✓' : '✕'}
+          </span>
         </div>
       </div>
     )
 
-    if (n.type === 'friend_request') return (
-      <div style={outerStyle}>
-        <div className="glass" style={innerStyle}>
-          <span style={{ flexShrink: 0, marginTop: 2 }}><NotifIcon type={n.type} /></span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--terra-dark)', margin: 0 }}>{n.title}</p>
-            <p style={{ fontSize: 13, color: 'var(--terra-mid)', marginTop: 2 }}>{n.body}</p>
-            <p style={{ fontSize: 11, color: 'var(--terra-mid)', marginTop: 4 }}>{formatDate(n.created_at)}</p>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <button onClick={() => handleFriendRequest(n, true)} style={btnAccept}>✓ Godta</button>
-              <button onClick={() => handleFriendRequest(n, false)} style={btnDecline}>Avslå</button>
+    if (ACTION_TYPES.has(n.type)) {
+      const handler =
+        n.type === 'friend_request' ? handleFriendRequest
+        : n.type === 'connection_request' ? handleConnectionRequest
+        : handleJoinRequest
+      return (
+        <div style={outer}>
+          <div className="glass" style={{ ...inner, flexWrap: 'wrap' as const }}>
+            <NotifIcon type={n.type} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--terra-dark)', margin: 0, lineHeight: 1.3 }}>{n.title}</p>
+                <span style={{ fontSize: 10, color: 'var(--terra-mid)', flexShrink: 0 }}>{formatDate(n.created_at)}</span>
+              </div>
+              {n.body && <p style={{ fontSize: 12, color: 'var(--terra-mid)', margin: '2px 0 0' }}>{n.body}</p>}
+              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                <button onClick={() => handler(n, true)} style={btnAccept}>✓ Godta</button>
+                <button onClick={() => handler(n, false)} style={btnDecline}>Avslå</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    )
+      )
+    }
 
-    if (n.type === 'connection_request') return (
-      <div style={outerStyle}>
-        <div className="glass" style={innerStyle}>
-          <span style={{ flexShrink: 0, marginTop: 2 }}><NotifIcon type={n.type} /></span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--terra-dark)', margin: 0 }}>{n.title}</p>
-            <p style={{ fontSize: 13, color: 'var(--terra-mid)', marginTop: 2 }}>{n.body}</p>
-            <p style={{ fontSize: 11, color: 'var(--terra-mid)', marginTop: 4 }}>{formatDate(n.created_at)}</p>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <button onClick={() => handleConnectionRequest(n, true)} style={btnAccept}>🔗 Godta</button>
-              <button onClick={() => handleConnectionRequest(n, false)} style={btnDecline}>Avslå</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-
-    const href = n.type === 'join_request' && n.loans?.community_id
-      ? `/community/${n.loans.community_id}`
+    const href =
+      n.type === 'join_request' && n.loans?.community_id ? `/community/${n.loans.community_id}`
       : ['connection_accepted', 'connection_disconnected'].includes(n.type) ? '/settings'
-      : n.loans?.item_id ? `/items/${n.loans.item_id}` : '#'
+      : n.loans?.item_id ? `/items/${n.loans.item_id}`
+      : '#'
 
     return (
-      <Link href={href}>
-        <div style={outerStyle}>
-          <div className="glass" style={innerStyle}>
-            <span style={{ flexShrink: 0, marginTop: 2 }}><NotifIcon type={n.type} /></span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--terra-dark)', margin: 0 }}>{n.title}</p>
-              <p style={{ fontSize: 13, color: 'var(--terra-mid)', marginTop: 2 }}>{n.body}</p>
-              {n.loans?.items?.name && (
-                <p style={{ fontSize: 12, color: 'var(--terra-mid)', marginTop: 2, fontStyle: 'italic' }}>{n.loans.items.name}</p>
-              )}
-              <p style={{ fontSize: 11, color: 'var(--terra-mid)', marginTop: 4 }}>{formatDate(n.created_at)}</p>
-            </div>
+      <Link href={href} onClick={() => !n.read && markNotifRead(n.id)}>
+        <div style={outer}>
+          <div className="glass" style={inner}>
+            <NotifIcon type={n.type} />
+            <Meta />
             {dot}
           </div>
         </div>
@@ -394,57 +406,31 @@ export default function NotificationsPage() {
     )
   }
 
+  // ── Page ──────────────────────────────────────────────────────────────────
+  // No <header> here — NavBar owns the top bar and injects the title + button
   return (
     <div className="max-w-lg mx-auto">
-      <header className="page-header glass" style={{ borderRadius: '0 0 20px 20px', position: 'sticky', top: 0, zIndex: 40 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <h1 className="page-header-title font-display" style={{ margin: 0 }}>Varsler</h1>
-          {unreadCount > 0 && (
-            <button onClick={handleMarkAllRead} disabled={markingAll}
-              style={{ fontSize: 12, color: 'var(--terra)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', opacity: markingAll ? 0.5 : 1 }}>
-              {markingAll ? 'Markerer…' : 'Merk alle som lest'}
-            </button>
-          )}
-        </div>
-
-        {/* Filter pills — always show all categories */}
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' }}>
-          {ALL_FILTERS.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setFilter(cat)}
-              className={`pill ${filter === cat ? 'active' : ''}`}
-              style={{ fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0 }}
-            >
-              {CATEGORY_LABELS[cat]}
-            </button>
-          ))}
-        </div>
-      </header>
-
-      <div style={{ padding: '12px 16px 0', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ padding: '10px 14px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {loading ? (
-          Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="glass" style={{ borderRadius: 16, height: 72, opacity: 0.5 }} />
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="glass" style={{ borderRadius: 14, height: 58, opacity: 0.4 }} />
           ))
-        ) : notifications.length === 0 ? (
+        ) : feed.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '72px 24px 0', color: 'var(--terra-mid)' }}>
             <div style={{ fontSize: 44, marginBottom: 12 }}>🏘️</div>
             <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--terra-dark)', marginBottom: 6 }}>Ingen varsler ennå</p>
-            <p style={{ fontSize: 13, lineHeight: 1.5 }}>Her dukker det opp varsler knyttet til dine låneavtaler, meldingsutvekslinger og venneforespørsler.</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '72px 24px 0', color: 'var(--terra-mid)' }}>
-            <div style={{ fontSize: 44, marginBottom: 12 }}>🔍</div>
-            <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--terra-dark)', marginBottom: 6 }}>Ingen varsler i denne kategorien</p>
+            <p style={{ fontSize: 13, lineHeight: 1.5 }}>Her dukker det opp varsler om venner, kretser og lån.</p>
           </div>
         ) : (
           Object.entries(groups).map(([label, items]) => (
             <div key={label}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--terra-mid)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>
+              <p style={{
+                fontSize: 10, fontWeight: 700, color: 'var(--terra-mid)',
+                textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6,
+              }}>
                 {label}
               </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {items.map(n => <NotifCard key={n.id} n={n} />)}
               </div>
             </div>

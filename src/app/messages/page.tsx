@@ -344,7 +344,7 @@ export default function MessagesPage() {
       {/* Sticky header — sits just below the app navbar (which is ~60px tall) */}
       <header style={{
         borderRadius: '0 0 20px 20px',
-        position: 'sticky', top: 60, zIndex: 40,
+        position: 'sticky', top: 0, zIndex: 40,
         background: '#FDF5F0',
         borderBottom: '1px solid rgba(196,103,58,0.12)',
         padding: '12px 16px',

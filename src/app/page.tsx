@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -29,13 +29,14 @@ function normalizeCategory(cat: string): string {
 }
 
 const DEFAULT_VISIBLE = 5
+const MIN_COUNT_DISPLAY = 5 // hide count if fewer than this
 
 interface RequestGroup {
   userId: string
   name: string
   avatar_url: string | null
   requests: any[]
-  hasSeen: boolean
+  lastSeenIdx: number // index of last seen slide (-1 = none seen)
 }
 
 // ── "Jeg har dette" confirmation modal ──
@@ -140,31 +141,46 @@ function HarDetteModal({
 
 // ── Fullskjerm story viewer for én venns requests ──
 function RequestStoryViewer({
-  group, user, profile, onClose, onHarDette,
+  group, user, profile, onClose, onHarDette, onUpdateProgress,
 }: {
   group: RequestGroup
   user: any
   profile: any
   onClose: () => void
   onHarDette: (req: any) => void
+  onUpdateProgress: (userId: string, lastSeenIdx: number) => void
 }) {
-  const [idx, setIdx] = useState(0)
+  const startIdx = Math.min(group.lastSeenIdx + 1, group.requests.length - 1)
+  const [idx, setIdx] = useState(startIdx < 0 ? 0 : startIdx)
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)
   const [activeReq, setActiveReq] = useState<any | null>(null)
+
+  // Drag-to-dismiss state
+  const [dragY, setDragY] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStartY = useRef<number | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const total = group.requests.length
   const req = group.requests[idx]
 
   const advance = useCallback(() => {
     setIdx(prev => {
-      if (prev < total - 1) { setProgress(0); return prev + 1 }
-      onClose(); return prev
+      if (prev < total - 1) {
+        setProgress(0)
+        const next = prev + 1
+        onUpdateProgress(group.userId, next - 1)
+        return next
+      }
+      onUpdateProgress(group.userId, total - 1)
+      onClose()
+      return prev
     })
-  }, [total, onClose])
+  }, [total, onClose, group.userId, onUpdateProgress])
 
   useEffect(() => {
-    if (paused || activeReq) return
+    if (paused || activeReq || isDragging) return
     const interval = setInterval(() => {
       setProgress(prev => {
         if (prev >= 100) { advance(); return 0 }
@@ -172,49 +188,130 @@ function RequestStoryViewer({
       })
     }, 50)
     return () => clearInterval(interval)
-  }, [paused, activeReq, advance])
+  }, [paused, activeReq, isDragging, advance])
 
   const goTo = (i: number) => { setIdx(i); setProgress(0) }
 
   const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (activeReq) return
+    if (activeReq || isDragging || dragY !== 0) return
     const x = e.clientX
     const w = (e.currentTarget as HTMLElement).offsetWidth
     if (x < w * 0.35) { if (idx > 0) goTo(idx - 1) }
     else advance()
   }
 
+  // ── Drag-to-dismiss handlers ──
+  const handleDragStart = (clientY: number) => {
+    dragStartY.current = clientY
+    setIsDragging(false)
+  }
+
+  const handleDragMove = (clientY: number) => {
+    if (dragStartY.current === null) return
+    const delta = clientY - dragStartY.current
+    if (delta > 0) {
+      setIsDragging(true)
+      setDragY(delta)
+      setPaused(true)
+    }
+  }
+
+  const handleDragEnd = () => {
+    if (dragY > 100) {
+      onUpdateProgress(group.userId, idx - 1)
+      onClose()
+    } else {
+      setDragY(0)
+      setPaused(false)
+    }
+    setIsDragging(false)
+    dragStartY.current = null
+  }
+
   if (!req) return null
 
   const emoji = CAT_EMOJI[normalizeCategory(req.category)] ?? '🔍'
+  const opacity = Math.max(0, 1 - dragY / 300)
+  const scale = Math.max(0.9, 1 - dragY / 1500)
+  const borderRadius = Math.min(32, dragY / 4)
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col" style={{ background: '#1a0f08', maxWidth: 480, margin: '0 auto' }}>
-      {/* Progress bars */}
-      <div className="flex gap-1 px-3" style={{ paddingTop: 'max(env(safe-area-inset-top), 12px)' }}>
-        {Array.from({ length: total }).map((_, i) => (
-          <div key={i} className="flex-1 rounded-full overflow-hidden" style={{ height: 2, background: 'rgba(255,255,255,0.25)' }}>
-            <div className="h-full rounded-full" style={{
-              background: '#fff',
-              width: i < idx ? '100%' : i === idx ? `${progress}%` : '0%',
-              transition: 'none',
-            }} />
-          </div>
-        ))}
+    <div
+      ref={containerRef}
+      className="fixed inset-0 z-[60] flex flex-col"
+      style={{
+        background: '#1a0f08',
+        maxWidth: 480,
+        margin: '0 auto',
+        transform: `translateY(${dragY}px) scale(${scale})`,
+        opacity,
+        borderRadius: dragY > 0 ? borderRadius : 0,
+        transition: isDragging ? 'none' : 'transform 300ms ease, opacity 300ms ease, border-radius 300ms ease',
+        overflow: 'hidden',
+      }}
+      onMouseDown={e => handleDragStart(e.clientY)}
+      onMouseMove={e => { if (dragStartY.current !== null) handleDragMove(e.clientY) }}
+      onMouseUp={handleDragEnd}
+      onMouseLeave={handleDragEnd}
+      onTouchStart={e => handleDragStart(e.touches[0].clientY)}
+      onTouchMove={e => handleDragMove(e.touches[0].clientY)}
+      onTouchEnd={handleDragEnd}
+    >
+      {/* Drag handle indicator at top */}
+      <div style={{
+        paddingTop: 'max(env(safe-area-inset-top), 8px)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 0,
+      }}>
+        <div style={{
+          width: 36,
+          height: 4,
+          borderRadius: 2,
+          background: 'rgba(255,255,255,0.3)',
+          marginBottom: 8,
+          cursor: 'grab',
+        }} />
+
+        {/* Progress bars */}
+        <div className="flex gap-1 px-3 w-full">
+          {Array.from({ length: total }).map((_, i) => (
+            <div key={i} className="flex-1 rounded-full overflow-hidden" style={{ height: 2, background: 'rgba(255,255,255,0.25)' }}>
+              <div className="h-full rounded-full" style={{
+                background: '#fff',
+                width: i < idx ? '100%' : i === idx ? `${progress}%` : '0%',
+                transition: 'none',
+              }} />
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 pt-3 pb-2">
-        <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center"
-          style={{ background: 'var(--terra)' }}>
-          {group.avatar_url
-            ? <img src={group.avatar_url} className="w-full h-full object-cover" />
-            : <span className="text-sm font-bold text-white">{group.name[0].toUpperCase()}</span>
-          }
-        </div>
-        <span className="text-sm font-semibold flex-1 text-white">{group.name}</span>
+      <div
+        className="flex items-center gap-3 px-4 pt-3 pb-2"
+        onMouseDown={e => e.stopPropagation()}
+      >
+        <Link
+          href={`/profile/${group.userId}`}
+          onClick={e => e.stopPropagation()}
+          onMouseDown={e => e.stopPropagation()}
+          className="flex items-center gap-2.5 flex-1 min-w-0"
+        >
+          <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center"
+            style={{ background: 'var(--terra)' }}>
+            {group.avatar_url
+              ? <img src={group.avatar_url} className="w-full h-full object-cover" />
+              : <span className="text-sm font-bold text-white">{group.name[0].toUpperCase()}</span>
+            }
+          </div>
+          <span className="text-sm font-semibold text-white truncate" style={{ textDecoration: 'none' }}>{group.name}</span>
+        </Link>
         <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>{idx + 1} / {total}</span>
-        <button onClick={onClose}
+        <button
+          onClick={e => { e.stopPropagation(); onUpdateProgress(group.userId, idx - 1); onClose() }}
+          onMouseDown={e => e.stopPropagation()}
           className="flex items-center justify-center rounded-full"
           style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.15)', color: '#fff' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -227,8 +324,10 @@ function RequestStoryViewer({
       <div
         className="flex-1 relative"
         onClick={handleTap}
-        onMouseDown={() => setPaused(true)} onMouseUp={() => setPaused(false)}
-        onTouchStart={() => setPaused(true)} onTouchEnd={() => setPaused(false)}
+        onMouseDown={e => { setPaused(true) }}
+        onMouseUp={() => { if (!isDragging) setPaused(false) }}
+        onTouchStart={() => setPaused(true)}
+        onTouchEnd={() => { if (!isDragging) setPaused(false) }}
         style={{ cursor: 'pointer', userSelect: 'none' }}
       >
         {req.image_url
@@ -270,6 +369,7 @@ function RequestStoryViewer({
 
           <button
             onClick={e => { e.stopPropagation(); setPaused(true); setActiveReq(req) }}
+            onMouseDown={e => e.stopPropagation()}
             className="w-full py-3.5 rounded-2xl text-sm font-semibold mt-3"
             style={{ background: 'var(--terra)', color: '#fff' }}>
             🤝 Jeg har dette!
@@ -282,7 +382,7 @@ function RequestStoryViewer({
           req={activeReq}
           senderName={profile?.name || user?.email?.split('@')[0] || 'Noen'}
           onClose={() => { setActiveReq(null); setPaused(false) }}
-          onSent={() => { setActiveReq(null); setPaused(false); onClose() }}
+          onSent={() => { setActiveReq(null); setPaused(false); onUpdateProgress(group.userId, total - 1); onClose() }}
         />
       )}
     </div>
@@ -369,13 +469,23 @@ export default function FeedPage() {
                 name: req.profiles?.name ?? 'Ukjent',
                 avatar_url: req.profiles?.avatar_url ?? null,
                 requests: [],
-                hasSeen: true,
+                lastSeenIdx: -1,
               })
             }
             const g = groupMap.get(req.user_id)!
             g.requests.push(req)
-            if (!seen.has(req.id)) g.hasSeen = false
           }
+
+          // Compute lastSeenIdx per group: highest index where all requests up to that index are seen
+          for (const g of groupMap.values()) {
+            let lastSeen = -1
+            for (let i = 0; i < g.requests.length; i++) {
+              if (seen.has(g.requests[i].id)) lastSeen = i
+              else break
+            }
+            g.lastSeenIdx = lastSeen
+          }
+
           setRequestGroups([...groupMap.values()])
         } catch {
           // item_requests-tabellen finnes ikke ennå
@@ -389,16 +499,38 @@ export default function FeedPage() {
 
   const openGroup = async (group: RequestGroup) => {
     setActiveGroup(group)
-    const unseenIds = group.requests.filter(r => !seenIds.has(r.id)).map(r => r.id)
-    if (unseenIds.length === 0) return
-    setSeenIds(prev => new Set([...prev, ...unseenIds]))
+    // Mark only the first unseen as "visited" — rest are marked as story advances
+    const firstUnseenId = group.requests[group.lastSeenIdx + 1]?.id
+    if (!firstUnseenId) return
+    try {
+      const supabase = createClient()
+      await supabase.from('item_request_views').insert([
+        { user_id: user.id, request_id: firstUnseenId }
+      ])
+    } catch { /* tabell mangler */ }
+  }
+
+  // Called by story viewer when it advances or closes
+  const handleUpdateProgress = async (userId: string, lastSeenIdx: number) => {
     setRequestGroups(prev =>
-      prev.map(g => g.userId === group.userId ? { ...g, hasSeen: true } : g)
+      prev.map(g => {
+        if (g.userId !== userId) return g
+        return { ...g, lastSeenIdx }
+      })
     )
+    // Persist newly seen IDs up to lastSeenIdx
+    const group = requestGroups.find(g => g.userId === userId)
+    if (!group) return
+    const newIds = group.requests
+      .slice(0, lastSeenIdx + 1)
+      .map(r => r.id)
+      .filter(id => !seenIds.has(id))
+    if (newIds.length === 0) return
+    setSeenIds(prev => new Set([...prev, ...newIds]))
     try {
       const supabase = createClient()
       await supabase.from('item_request_views').insert(
-        unseenIds.map(id => ({ user_id: user.id, request_id: id }))
+        newIds.map(id => ({ user_id: user.id, request_id: id }))
       )
     } catch { /* tabell mangler */ }
   }
@@ -412,16 +544,15 @@ export default function FeedPage() {
 
   const totalAvailable = feedItems.filter(i => i.available).length
 
-  const feedCategories = [
-    { id: 'all', label: 'Alle', emoji: '✨' },
-    ...CATEGORIES.map((c: any) => ({ id: c.id, label: c.label, emoji: CAT_EMOJI[c.id] ?? '📦' })),
-  ]
+  const feedCategories = CATEGORIES.map((c: any) => ({
+    id: c.id,
+    label: c.label,
+    emoji: CAT_EMOJI[c.id] ?? '📦',
+  }))
 
-  const sortedCategories = [...feedCategories].sort((a, b) => {
-    if (a.id === 'all') return -1
-    if (b.id === 'all') return 1
-    return countByCategory(b.id) - countByCategory(a.id)
-  })
+  const sortedCategories = [...feedCategories].sort((a, b) =>
+    countByCategory(b.id) - countByCategory(a.id)
+  )
 
   const allFilteredItems = feedItems
     .filter(i => activeCategory === 'all' || normalizeCategory(i.category) === activeCategory)
@@ -449,7 +580,9 @@ export default function FeedPage() {
 
   const noFriends = friendCount === 0
   const noItems   = feedItems.length === 0
-  const hasNewRequests = requestGroups.some(g => !g.hasSeen)
+
+  // A group is "new" (shows ring) if not all slides have been seen
+  const isGroupNew = (g: RequestGroup) => g.lastSeenIdx < g.requests.length - 1
 
   return (
     <div className="max-w-lg mx-auto">
@@ -460,35 +593,44 @@ export default function FeedPage() {
           <div>
             <div className="flex justify-between items-baseline mb-3">
               <h2 className="font-display text-[var(--terra-dark)] text-base font-semibold">Kretsen trenger</h2>
-              {hasNewRequests && (
+              {requestGroups.some(isGroupNew) && (
                 <span className="text-[10px] font-semibold text-[var(--terra)] uppercase tracking-wide">Nytt</span>
               )}
             </div>
             <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4" style={{ scrollbarWidth: 'none' }}>
-              {requestGroups.map(group => (
-                <button key={group.userId} onClick={() => openGroup(group)}
-                  className="flex flex-col items-center gap-1 flex-shrink-0 w-16">
-                  <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{
-                    padding: '2px',
-                    background: group.hasSeen ? 'rgba(156,123,101,0.3)' : 'var(--terra)',
-                    opacity: group.hasSeen ? 0.55 : 1,
-                    transition: 'opacity 300ms ease',
-                  }}>
-                    <div className="w-full h-full rounded-full bg-[#FAF7F2] flex items-center justify-center overflow-hidden" style={{ padding: '2px' }}>
-                      {group.avatar_url
-                        ? <img src={group.avatar_url} className="w-full h-full rounded-full object-cover" />
-                        : <div className="w-full h-full rounded-full bg-[#E8DDD0] flex items-center justify-center text-sm font-bold text-[#6B4226]">
-                            {group.name[0].toUpperCase()}
-                          </div>
-                      }
+              {requestGroups.map(group => {
+                const isNew = isGroupNew(group)
+                // Partial: some seen but not all
+                const isPartial = group.lastSeenIdx >= 0 && group.lastSeenIdx < group.requests.length - 1
+                return (
+                  <button key={group.userId} onClick={() => openGroup(group)}
+                    className="flex flex-col items-center gap-1 flex-shrink-0 w-16">
+                    <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{
+                      padding: '2px',
+                      background: !isNew
+                        ? 'rgba(156,123,101,0.3)'
+                        : isPartial
+                          ? 'conic-gradient(var(--terra) 0%, var(--terra) 60%, rgba(156,123,101,0.3) 60%)'
+                          : 'var(--terra)',
+                      opacity: !isNew ? 0.55 : 1,
+                      transition: 'opacity 300ms ease',
+                    }}>
+                      <div className="w-full h-full rounded-full bg-[#FAF7F2] flex items-center justify-center overflow-hidden" style={{ padding: '2px' }}>
+                        {group.avatar_url
+                          ? <img src={group.avatar_url} className="w-full h-full rounded-full object-cover" />
+                          : <div className="w-full h-full rounded-full bg-[#E8DDD0] flex items-center justify-center text-sm font-bold text-[#6B4226]">
+                              {group.name[0].toUpperCase()}
+                            </div>
+                        }
+                      </div>
                     </div>
-                  </div>
-                  <span className="text-[10px] text-[var(--terra-dark)] text-center leading-tight w-full truncate">{group.name}</span>
-                  {group.requests.length > 1 && (
-                    <span className="text-[9px] text-[var(--terra-mid)]">{group.requests.length} ting</span>
-                  )}
-                </button>
-              ))}
+                    <span className="text-[10px] text-[var(--terra-dark)] text-center leading-tight w-full truncate">{group.name}</span>
+                    {group.requests.length > 1 && (
+                      <span className="text-[9px] text-[var(--terra-mid)]">{group.requests.length} ting</span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
@@ -533,42 +675,77 @@ export default function FeedPage() {
               </p>
             </div>
 
-            <div className="grid grid-cols-3 gap-2.5">
-              {sortedCategories.map(cat => {
-                const count = countByCategory(cat.id)
-                const isCatEmpty = cat.id !== 'all' && count === 0
-                const isActive = activeCategory === cat.id
+            {/* ── Category grid: "Alle" full-width + 2×3 below ── */}
+            <div className="flex flex-col gap-2.5">
+              {/* "Alle" button spans full width */}
+              {(() => {
+                const allCount = countByCategory('all')
+                const isActive = activeCategory === 'all'
                 return (
                   <button
-                    key={cat.id}
-                    onClick={() => {
-                      if (isCatEmpty) return
-                      setActiveCategory(cat.id)
-                      setShowAllItems(false)
-                      if (cat.id !== 'all') track(Events.CATEGORY_FILTERED, { category: cat.id })
-                    }}
-                    disabled={isCatEmpty}
-                    style={{ opacity: isCatEmpty ? 0.45 : 1 }}
+                    onClick={() => { setActiveCategory('all'); setShowAllItems(false) }}
                     className={[
-                      'rounded-[16px] p-3 flex flex-col items-center gap-1.5 border transition-all duration-200',
+                      'rounded-[16px] px-4 py-3 flex items-center justify-between w-full border transition-all duration-200 active:scale-[0.98]',
                       isActive
                         ? 'bg-[var(--terra)] border-[var(--terra)] shadow-sm'
                         : 'glass border-[rgba(196,103,58,0.18)]',
-                      isCatEmpty ? 'cursor-default' : 'active:scale-95',
                     ].join(' ')}
                   >
-                    <span className="text-2xl">{cat.emoji}</span>
-                    <span className={`text-xs font-medium leading-tight ${isActive ? 'text-white' : 'text-[var(--terra-dark)]'}`}>
-                      {cat.label}
-                    </span>
-                    <span className={`text-[10px] font-semibold tabular-nums ${isActive ? 'text-white/80' : 'text-[var(--terra-mid)]'}`}>
-                      {cat.id === 'all'
-                        ? `${totalAvailable} tilgjengelig`
-                        : count === 0 ? '—' : `${count} ledig${count !== 1 ? 'e' : ''}`}
-                    </span>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-2xl">✨</span>
+                      <span className={`text-sm font-semibold ${isActive ? 'text-white' : 'text-[var(--terra-dark)]'}`}>
+                        Alle kategorier
+                      </span>
+                    </div>
+                    {allCount >= MIN_COUNT_DISPLAY && (
+                      <span className={`text-xs font-semibold tabular-nums ${isActive ? 'text-white/80' : 'text-[var(--terra-mid)]'}`}>
+                        {allCount} tilgjengelig
+                      </span>
+                    )}
                   </button>
                 )
-              })}
+              })()}
+
+              {/* 2×3 grid for the 6 categories */}
+              <div className="grid grid-cols-2 gap-2.5">
+                {sortedCategories.map(cat => {
+                  const count = countByCategory(cat.id)
+                  const isCatEmpty = count === 0
+                  const isActive = activeCategory === cat.id
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => {
+                        if (isCatEmpty) return
+                        setActiveCategory(cat.id)
+                        setShowAllItems(false)
+                        track(Events.CATEGORY_FILTERED, { category: cat.id })
+                      }}
+                      disabled={isCatEmpty}
+                      style={{ opacity: isCatEmpty ? 0.45 : 1 }}
+                      className={[
+                        'rounded-[16px] p-3 flex items-center gap-3 border transition-all duration-200',
+                        isActive
+                          ? 'bg-[var(--terra)] border-[var(--terra)] shadow-sm'
+                          : 'glass border-[rgba(196,103,58,0.18)]',
+                        isCatEmpty ? 'cursor-default' : 'active:scale-95',
+                      ].join(' ')}
+                    >
+                      <span className="text-2xl flex-shrink-0">{cat.emoji}</span>
+                      <div className="flex flex-col items-start min-w-0">
+                        <span className={`text-xs font-semibold leading-tight truncate w-full ${isActive ? 'text-white' : 'text-[var(--terra-dark)]'}`}>
+                          {cat.label}
+                        </span>
+                        {count >= MIN_COUNT_DISPLAY && (
+                          <span className={`text-[10px] font-medium tabular-nums mt-0.5 ${isActive ? 'text-white/75' : 'text-[var(--terra-mid)]'}`}>
+                            {count} ledig{count !== 1 ? 'e' : ''}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
 
             <div>
@@ -634,6 +811,7 @@ export default function FeedPage() {
           profile={profile}
           onClose={() => setActiveGroup(null)}
           onHarDette={() => {}}
+          onUpdateProgress={handleUpdateProgress}
         />
       )}
 

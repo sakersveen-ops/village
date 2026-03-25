@@ -7,12 +7,22 @@ import ItemRequestCard from '@/components/ItemRequestCard'
 import StoryRing from '@/components/StoryRing'
 
 const CATEGORIES = [
-  { id: 'barn', label: 'Barn', emoji: '🧸' },
-  { id: 'kjole', label: 'Kjoler', emoji: '👗' },
-  { id: 'verktøy', label: 'Verktøy', emoji: '🔧' },
-  { id: 'bok', label: 'Bøker', emoji: '📚' },
-  { id: 'annet', label: 'Annet', emoji: '📦' },
+  { id: 'hjem-og-hage',          label: 'Hjem & hage',        emoji: '🏠' },
+  { id: 'baby-og-barn',          label: 'Baby & barn',        emoji: '🧸' },
+  { id: 'fest-og-arrangement',   label: 'Fest & arrangement', emoji: '🎉' },
+  { id: 'friluft-og-sport',      label: 'Friluft & sport',    emoji: '⛷️' },
+  { id: 'klar-og-mote',          label: 'Klær & mote',        emoji: '👗' },
+  { id: 'boker',                 label: 'Bøker',              emoji: '📚' },
 ]
+
+const CATEGORY_EMOJI: Record<string, string> = {
+  'hjem-og-hage':        '🏠',
+  'baby-og-barn':        '🧸',
+  'fest-og-arrangement': '🎉',
+  'friluft-og-sport':    '⛷️',
+  'klar-og-mote':        '👗',
+  'boker':               '📚',
+}
 
 type AccessLevel = 'friend' | 'friend_of_friend' | 'community' | 'stranger'
 
@@ -42,7 +52,6 @@ export default function UserProfilePage() {
       if (!user) { router.push('/login'); return }
       setViewer(user)
 
-      // Egen profil → redirect
       if (userId === user.id) { router.push('/profile'); return }
 
       const { data: vp } = await supabase.from('profiles').select('*').eq('id', user.id).single()
@@ -86,7 +95,6 @@ export default function UserProfilePage() {
       )
       setPublicCommunities(publicComs)
 
-      // Felles venner
       const { data: myFriendsFull } = await supabase
         .from('friendships')
         .select('user_b, profiles!friendships_user_b_fkey(id, name, username, avatar_url)')
@@ -101,7 +109,6 @@ export default function UserProfilePage() {
       else if (shared.length > 0) level = 'community'
       setAccessLevel(level)
 
-      // Gjenstander — kun hvis venn
       if (friend) {
         const { data: allItems } = await supabase
           .from('items').select('*, item_access(*)')
@@ -121,7 +128,6 @@ export default function UserProfilePage() {
         })
         setItems(visible)
 
-        // Venneliste til denne brukeren (for venner-seksjonen)
         const { data: theirFriendsFull } = await supabase
           .from('friendships')
           .select('user_b, profiles!friendships_user_b_fkey(id, name, username, avatar_url)')
@@ -163,7 +169,6 @@ export default function UserProfilePage() {
   }
 
   const displayName = (p: any) => p?.name || p?.username || p?.email?.split('@')[0]
-  const catEmoji = (cat: string) => CATEGORIES.find(c => c.id === cat)?.emoji || '📦'
   const availableCategories = CATEGORIES.filter(c => items.some(i => i.category === c.id))
   const filteredItems = items.filter(item => {
     const matchSearch = itemSearch.trim().length < 2 ||
@@ -177,13 +182,10 @@ export default function UserProfilePage() {
   if (!profile) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Fant ikke brukeren</div>
 
   // ── Fremmed-visning ──
-  // Kun profilbilde, navn, brukernavn og legg-til-venn-knapp
   if (!isFriend) {
     return (
       <div className="max-w-lg mx-auto pb-24">
         <div style={{ background: '#FAF7F2', borderBottom: '1px solid #E8DDD0' }} className="px-4 pt-6 pb-8">
-
-          {/* Avatar + navn */}
           <div className="flex flex-col items-center text-center pt-4">
             <div className="flex items-center justify-center text-white font-bold text-3xl overflow-hidden mb-4"
               style={{ width: 88, height: 88, borderRadius: '50%', background: 'var(--terra)' }}>
@@ -191,7 +193,6 @@ export default function UserProfilePage() {
                 ? <img src={profile.avatar_url} className="w-full h-full object-cover" alt={displayName(profile)} />
                 : displayName(profile)?.[0]?.toUpperCase()}
             </div>
-
             <h1 className="font-display text-xl font-bold" style={{ color: 'var(--terra-dark)' }}>
               {displayName(profile)}
             </h1>
@@ -201,8 +202,6 @@ export default function UserProfilePage() {
             {profile.city && (
               <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>📍 {profile.city}</p>
             )}
-
-            {/* Relasjons-hint */}
             <p className="text-xs mt-2" style={{ color: 'var(--terra-mid)' }}>
               {accessLevel === 'friend_of_friend'
                 ? `${mutualFriends.length > 0 ? mutualFriends.length : ''} felles ${mutualFriends.length === 1 ? 'venn' : 'venner'}`
@@ -210,14 +209,10 @@ export default function UserProfilePage() {
                 ? '🏘️ Dere er i samme krets'
                 : '👤 Ikke tilkoblet'}
             </p>
-
-            {/* Følg-knapp */}
             <button onClick={toggleStar} className="mt-3 text-xl" aria-label={isStarred ? 'Slutt å følge' : 'Følg'}>
               {isStarred ? '❤️' : '🤍'}
             </button>
           </div>
-
-          {/* Legg til som venn */}
           <div className="mt-6">
             {!friendRequestSent ? (
               <button onClick={sendFriendRequest} className="btn-primary w-full"
@@ -238,7 +233,6 @@ export default function UserProfilePage() {
   }
 
   // ── Venn-visning ──
-  // Full profil: gjenstander, venner, kretser
   return (
     <div className="max-w-lg mx-auto pb-24">
 
@@ -266,7 +260,6 @@ export default function UserProfilePage() {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0 mt-1">
-            {/* Direktemelding */}
             <Link href={`/messages/${userId}`} aria-label="Send melding"
               className="w-9 h-9 flex items-center justify-center rounded-full"
               style={{ background: 'rgba(196,103,58,0.10)', border: '1px solid rgba(196,103,58,0.15)', color: 'var(--terra-dark)' }}>
@@ -343,7 +336,7 @@ export default function UserProfilePage() {
         )}
       </div>
 
-      {/* Høydepunkter — venner kan se, men ikke opprette */}
+      {/* Stories */}
       <div style={{ borderBottom: '1px solid #E8DDD0', background: '#FAF7F2' }}>
         <StoryRing
           ownerId={userId as string}
@@ -352,47 +345,19 @@ export default function UserProfilePage() {
         />
       </div>
 
-      {/* ItemRequest-kort — kun for venner */}
-      {viewer && (
-        <ItemRequestCard
-          profileUserId={userId as string}
-          viewerId={viewer.id}
-          isOwner={false}
-          ownerName={displayName(profile)}
-        />
-      )}
-
       <div className="px-4 pt-5 flex flex-col gap-6 pb-8">
 
-        {/* Venner-seksjon */}
-        {friends.length > 0 && (
-          <div>
-            <h2 className="font-bold mb-3" style={{ color: 'var(--terra-dark)' }}>
-              Venner
-              <span className="font-normal text-sm ml-1.5" style={{ color: 'var(--terra-mid)' }}>({friends.length})</span>
-            </h2>
-            <div className="rounded-2xl px-4 py-3 flex items-center gap-1 shadow-sm flex-wrap" style={{ background: '#fff' }}>
-              {friends.slice(0, 10).map((f: any) => (
-                <Link key={f.id} href={`/profile/${f.id}`}>
-                  <div className="flex items-center justify-center font-bold text-sm overflow-hidden"
-                    style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #fff' }}>
-                    {f.avatar_url
-                      ? <img src={f.avatar_url} className="w-full h-full object-cover" alt="" />
-                      : <span className="text-xs" style={{ color: '#6B4226' }}>{displayName(f)?.[0]?.toUpperCase()}</span>}
-                  </div>
-                </Link>
-              ))}
-              {friends.length > 10 && (
-                <div className="flex items-center justify-center text-xs font-bold"
-                  style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
-                  +{friends.length - 10}
-                </div>
-              )}
-            </div>
-          </div>
+        {/* ── 1) Ønsker ── */}
+        {viewer && (
+          <ItemRequestCard
+            profileUserId={userId as string}
+            viewerId={viewer.id}
+            isOwner={false}
+            ownerName={displayName(profile)}
+          />
         )}
 
-        {/* Delte gjenstander */}
+        {/* ── 2) Delte gjenstander ── */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-bold" style={{ color: 'var(--terra-dark)' }}>
@@ -403,7 +368,6 @@ export default function UserProfilePage() {
             </h2>
           </div>
 
-          {/* Søk — kun hvis > 3 gjenstander */}
           {items.length > 3 && (
             <div className="relative mb-3">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm pointer-events-none">🔍</span>
@@ -417,9 +381,8 @@ export default function UserProfilePage() {
             </div>
           )}
 
-          {/* Kategorifilter */}
           {availableCategories.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 mb-3">
+            <div className="flex gap-2 overflow-x-auto pb-1 mb-3" style={{ scrollbarWidth: 'none' }}>
               <button onClick={() => setItemCategory('')}
                 className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0"
                 style={!itemCategory
@@ -455,13 +418,14 @@ export default function UserProfilePage() {
                           style={{ width: 48, height: 48 }} alt={item.name} />
                       : <div className="flex items-center justify-center text-xl flex-shrink-0 rounded-xl"
                           style={{ width: 48, height: 48, background: '#E8DDD0' }}>
-                          {catEmoji(item.category)}
+                          {CATEGORY_EMOJI[item.category] ?? '📦'}
                         </div>
                     }
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
                       <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
-                        {catEmoji(item.category)} {CATEGORIES.find(c => c.id === item.category)?.label || item.category}
+                        {CATEGORY_EMOJI[item.category] ?? '📦'}{' '}
+                        {CATEGORIES.find(c => c.id === item.category)?.label || item.category?.replace(/-/g, ' ')}
                       </p>
                     </div>
                     {item.price && (
@@ -482,6 +446,35 @@ export default function UserProfilePage() {
             </div>
           )}
         </div>
+
+        {/* ── 3) Venner ── */}
+        {friends.length > 0 && (
+          <div>
+            <h2 className="font-bold mb-3" style={{ color: 'var(--terra-dark)' }}>
+              Venner
+              <span className="font-normal text-sm ml-1.5" style={{ color: 'var(--terra-mid)' }}>({friends.length})</span>
+            </h2>
+            <div className="rounded-2xl px-4 py-3 flex items-center gap-1 shadow-sm flex-wrap" style={{ background: '#fff' }}>
+              {friends.slice(0, 10).map((f: any) => (
+                <Link key={f.id} href={`/profile/${f.id}`}>
+                  <div className="flex items-center justify-center font-bold text-sm overflow-hidden"
+                    style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #fff' }}>
+                    {f.avatar_url
+                      ? <img src={f.avatar_url} className="w-full h-full object-cover" alt="" />
+                      : <span className="text-xs" style={{ color: '#6B4226' }}>{displayName(f)?.[0]?.toUpperCase()}</span>}
+                  </div>
+                </Link>
+              ))}
+              {friends.length > 10 && (
+                <div className="flex items-center justify-center text-xs font-bold"
+                  style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
+                  +{friends.length - 10}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
       </div>
 
       <div className="nav-spacer" />

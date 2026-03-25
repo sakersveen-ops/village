@@ -339,17 +339,16 @@ export default function MessagesPage() {
   // ---------------------------------------------------------------------------
 
   return (
-    <>
-    <style>{`.bottom-nav { display: none !important; }`}</style>
     <div className="max-w-lg mx-auto">
 
-      {/* Sticky header — flush to top of screen, no safe-area gap */}
-      <header className="page-header glass" style={{
+      {/* Sticky header — sits just below the app navbar (which is ~60px tall) */}
+      <header style={{
         borderRadius: '0 0 20px 20px',
-        position: 'sticky', top: 0, zIndex: 40,
-        paddingTop: 'max(12px, env(safe-area-inset-top))',
-        paddingBottom: 12,
-        marginTop: 0,
+        position: 'sticky', top: 60, zIndex: 40,
+        background: '#FDF5F0',
+        borderBottom: '1px solid rgba(196,103,58,0.12)',
+        padding: '12px 16px',
+        boxShadow: '0 2px 12px rgba(44,26,14,0.06)',
       }}>
         {/* Row 1: title + unread badge */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -425,8 +424,7 @@ export default function MessagesPage() {
         )}
       </div>
 
-      <div style={{ height: 'max(16px, env(safe-area-inset-bottom))' }} />
+      <div className="nav-spacer" />
     </div>
-    </>
   )
 }

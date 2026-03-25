@@ -1,19 +1,19 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { track, Events } from '@/lib/track'
 import { notifRefreshEvent } from '@/components/NavBar'
 
-// Types that require action — shown with unread border, NOT auto-read
+// Types that require explicit action — never auto-read
 const ACTION_TYPES = new Set([
   'friend_request',
   'connection_request',
   'join_request',
 ])
 
-// Types handled in message threads — never shown here
+// Types handled in message threads — filtered out at query level
 const MESSAGE_THREAD_TYPES = [
   'loan_request',
   'loan_change_proposal',
@@ -147,19 +147,48 @@ export default function NotificationsPage() {
   const [handled, setHandled] = useState<Map<string, 'accepted' | 'declined'>>(new Map())
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [currentProfile, setCurrentProfile] = useState<any>(null)
+  // Tracks IDs already queued for auto-read to prevent double-firing
+  const seenRef = useRef<Set<string>>(new Set())
+  const observerRef = useRef<IntersectionObserver | null>(null)
   const router = useRouter()
 
-  const fetchNotifications = async (userId: string) => {
+  // ── Mark a single notification as read ──────────────────────────────────
+  const markNotifRead = useCallback(async (id: string) => {
+    if (seenRef.current.has(id)) return
+    seenRef.current.add(id)
     const supabase = createClient()
-    const { data } = await supabase
-      .from('notifications')
-      .select(`*, loans(item_id, items(name), community_id, communities(name, avatar_emoji))`)
-      .eq('user_id', userId)
-      .not('type', 'in', `(${MESSAGE_THREAD_TYPES.map(t => `"${t}"`).join(',')})`)
-      .order('created_at', { ascending: false })
-    setNotifications(data || [])
-  }
+    await supabase.from('notifications').update({ read: true }).eq('id', id)
+    setNotifications(prev => prev.map(x => x.id === id ? { ...x, read: true } : x))
+    notifRefreshEvent?.dispatchEvent(new Event('refresh'))
+  }, [])
 
+  // ── IntersectionObserver: auto-read non-action cards on scroll ───────────
+  useEffect(() => {
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return
+          const id = (entry.target as HTMLElement).dataset.notifId
+          if (!id) return
+          // Small delay so a fast scroll-past doesn't count
+          setTimeout(() => {
+            if (document.contains(entry.target)) markNotifRead(id)
+          }, 800)
+        })
+      },
+      { threshold: 0.8 },
+    )
+    return () => observerRef.current?.disconnect()
+  }, [markNotifRead])
+
+  // Attach IntersectionObserver to a card element (skip action cards)
+  const observeCard = useCallback((el: HTMLElement | null, id: string, isAction: boolean) => {
+    if (!el || isAction || seenRef.current.has(id)) return
+    el.dataset.notifId = id
+    observerRef.current?.observe(el)
+  }, [])
+
+  // ── Initial data load ────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       const supabase = createClient()
@@ -171,23 +200,26 @@ export default function NotificationsPage() {
         .from('profiles').select('id, name').eq('id', user.id).single()
       setCurrentProfile(prof)
 
-      await fetchNotifications(user.id)
-
-      // Auto-mark non-action notifications as read
-      const actionList = [...ACTION_TYPES].map(t => `"${t}"`).join(',')
-      await supabase
+      const { data } = await supabase
         .from('notifications')
-        .update({ read: true })
+        .select(`*, loans(item_id, items(name), community_id, communities(name, avatar_emoji))`)
         .eq('user_id', user.id)
-        .eq('read', false)
-        .not('type', 'in', `(${actionList})`)
+        // Never show message-thread types here
+        .not('type', 'in', `(${MESSAGE_THREAD_TYPES.map(t => `"${t}"`).join(',')})`)
+        // FIX: action types that are already read (= handled) are excluded from the feed.
+        // Non-action types always show regardless of read state (they fade via dot indicator).
+        .or(`type.not.in.(${[...ACTION_TYPES].map(t => `"${t}"`).join(',')}),read.eq.false`)
+        .order('created_at', { ascending: false })
 
+      setNotifications(data || [])
+      // Pre-seed seenRef so already-read items don't re-trigger the observer
+      ;(data || []).filter((n: any) => n.read).forEach((n: any) => seenRef.current.add(n.id))
       setLoading(false)
     }
     load()
   }, [])
 
-  // Listen for "marked-all-read" event fired by NavBar
+  // Listen for "marked-all-read" fired by NavBar
   useEffect(() => {
     const handler = () => {
       setNotifications(prev => prev.map(n => ({ ...n, read: true })))
@@ -197,13 +229,7 @@ export default function NotificationsPage() {
     return () => notifRefreshEvent?.removeEventListener('marked-all-read', handler)
   }, [])
 
-  const markNotifRead = async (id: string) => {
-    const supabase = createClient()
-    await supabase.from('notifications').update({ read: true }).eq('id', id)
-    setNotifications(prev => prev.map(x => x.id === id ? { ...x, read: true } : x))
-    notifRefreshEvent?.dispatchEvent(new Event('refresh'))
-  }
-
+  // ── Action handlers ──────────────────────────────────────────────────────
   const handleFriendRequest = async (n: any, accept: boolean) => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -222,7 +248,7 @@ export default function NotificationsPage() {
         .order('created_at', { ascending: false }).limit(1).maybeSingle()
       req = data
     }
-    if (req && req.status === 'pending') {
+    if (req?.status === 'pending') {
       await supabase.from('friend_requests')
         .update({ status: accept ? 'accepted' : 'declined' }).eq('id', req.id)
     }
@@ -298,6 +324,7 @@ export default function NotificationsPage() {
     setHandled(prev => new Map(prev).set(n.id, accept ? 'accepted' : 'declined'))
   }
 
+  // ── Feed composition ─────────────────────────────────────────────────────
   const feed = useMemo(() => {
     const withReceipts = notifications.map(n =>
       handled.has(n.id)
@@ -313,7 +340,7 @@ export default function NotificationsPage() {
 
   const groups = groupByDate(feed)
 
-  // ── Card ──────────────────────────────────────────────────────────────────
+  // ── Card ─────────────────────────────────────────────────────────────────
   const NotifCard = ({ n }: { n: any }) => {
     const isAction = ACTION_TYPES.has(n.type) && !n._receipt
     const needsBorder = isAction && !n.read
@@ -347,8 +374,9 @@ export default function NotificationsPage() {
       </div>
     )
 
+    // Receipt card (just handled this session)
     if (n._receipt) return (
-      <div style={outer}>
+      <div ref={el => observeCard(el, n.id, false)} style={outer}>
         <div className="glass" style={inner}>
           <NotifIcon type={n.type} />
           <Meta />
@@ -362,40 +390,46 @@ export default function NotificationsPage() {
       </div>
     )
 
-    if (ACTION_TYPES.has(n.type)) {
-      const handler =
-        n.type === 'friend_request' ? handleFriendRequest
-        : n.type === 'connection_request' ? handleConnectionRequest
-        : handleJoinRequest
-      return (
-        <div style={outer}>
-          <div className="glass" style={{ ...inner, flexWrap: 'wrap' as const }}>
-            <NotifIcon type={n.type} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--terra-dark)', margin: 0, lineHeight: 1.3 }}>{n.title}</p>
-                <span style={{ fontSize: 10, color: 'var(--terra-mid)', flexShrink: 0 }}>{formatDate(n.created_at)}</span>
-              </div>
-              {n.body && <p style={{ fontSize: 12, color: 'var(--terra-mid)', margin: '2px 0 0' }}>{n.body}</p>}
-              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                <button onClick={() => handler(n, true)} style={btnAccept}>✓ Godta</button>
-                <button onClick={() => handler(n, false)} style={btnDecline}>Avslå</button>
-              </div>
+    // Action card (pending godta/avslå)
+    if (isAction) return (
+      <div style={outer}>
+        <div className="glass" style={{ ...inner, flexWrap: 'wrap' as const }}>
+          <NotifIcon type={n.type} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--terra-dark)', margin: 0, lineHeight: 1.3 }}>{n.title}</p>
+              <span style={{ fontSize: 10, color: 'var(--terra-mid)', flexShrink: 0 }}>{formatDate(n.created_at)}</span>
+            </div>
+            {n.body && <p style={{ fontSize: 12, color: 'var(--terra-mid)', margin: '2px 0 0' }}>{n.body}</p>}
+            <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+              <button onClick={() => {
+                const h = n.type === 'friend_request' ? handleFriendRequest
+                  : n.type === 'connection_request' ? handleConnectionRequest
+                  : handleJoinRequest
+                h(n, true)
+              }} style={btnAccept}>✓ Godta</button>
+              <button onClick={() => {
+                const h = n.type === 'friend_request' ? handleFriendRequest
+                  : n.type === 'connection_request' ? handleConnectionRequest
+                  : handleJoinRequest
+                h(n, false)
+              }} style={btnDecline}>Avslå</button>
             </div>
           </div>
         </div>
-      )
-    }
+      </div>
+    )
 
+    // Regular info card — tappable, auto-read on scroll
     const href =
-      n.type === 'join_request' && n.loans?.community_id ? `/community/${n.loans.community_id}`
-      : ['connection_accepted', 'connection_disconnected'].includes(n.type) ? '/settings'
+      ['connection_accepted', 'connection_disconnected'].includes(n.type) ? '/settings'
+      : n.loans?.community_id ? `/community/${n.loans.community_id}`
       : n.loans?.item_id ? `/items/${n.loans.item_id}`
       : '#'
 
     return (
-      <Link href={href} onClick={() => !n.read && markNotifRead(n.id)}>
-        <div style={outer}>
+      <Link href={href}>
+        <div ref={el => observeCard(el, n.id, false)} style={outer}>
           <div className="glass" style={inner}>
             <NotifIcon type={n.type} />
             <Meta />
@@ -406,11 +440,11 @@ export default function NotificationsPage() {
     )
   }
 
-  // ── Page ──────────────────────────────────────────────────────────────────
-  // No <header> here — NavBar owns the top bar and injects the title + button
+  // ── Render ────────────────────────────────────────────────────────────────
+  // No <header> here — NavBar owns the top bar
   return (
     <div className="max-w-lg mx-auto">
-      <div style={{ padding: '10px 14px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ padding: '4px 14px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="glass" style={{ borderRadius: 14, height: 58, opacity: 0.4 }} />

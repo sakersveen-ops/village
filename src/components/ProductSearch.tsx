@@ -16,19 +16,21 @@ export default function ProductSearch({ onSelect }: Props) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const search = useCallback(async (q: string) => {
-    if (!q || q.length < 2) { setResults([]); return }
+    if (!q || q.length < 2) { setResults([]); setError(null); return }
     setLoading(true)
     setError(null)
+    setResults([])
     try {
       const res = await fetch(`/api/product-search?q=${encodeURIComponent(q)}`)
       if (!res.ok) throw new Error('Søk feilet')
       const data = await res.json()
-      setResults(data.results ?? [])
-      if ((data.results ?? []).length === 0) {
-        setError('Ingen treff. Prøv et annet søkeord eller scan strekkoden.')
+      const hits = data.results ?? []
+      setResults(hits)
+      if (hits.length === 0) {
+        setError('Ingen treff. Prøv et mer spesifikt navn, f.eks. "Stokke Tripp Trapp" eller "BABYBJÖRN bæresele".')
       }
     } catch {
-      setError('Kunne ikke koble til produktdatabasen. Sjekk nettforbindelsen.')
+      setError('Søket feilet. Sjekk nettforbindelsen og prøv igjen.')
     } finally {
       setLoading(false)
     }
@@ -37,20 +39,19 @@ export default function ProductSearch({ onSelect }: Props) {
   const handleInput = (val: string) => {
     setQuery(val)
     if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => search(val), 500)
+    // Litt lengre debounce siden Claude-søk tar noe tid
+    timerRef.current = setTimeout(() => search(val), 700)
   }
 
-  // In production: use @zxing/browser to open camera and decode barcode
-  // Then call /api/product-search?barcode=<ean>
+  // TODO: bytt ut simulering med ekte @zxing/browser kamera-decode
+  // const barcode = await scanBarcodeWithCamera()
+  // const res = await fetch(`/api/product-search?barcode=${barcode}`)
   const handleScan = async () => {
     setScanLoading(true)
     setError(null)
     setResults([])
     try {
-      // TODO: replace with real camera + ZXing decode
-      // const barcode = await scanBarcodeWithCamera()
-      // const res = await fetch(`/api/product-search?barcode=${barcode}`)
-      await new Promise(r => setTimeout(r, 1500))
+      await new Promise(r => setTimeout(r, 1200))
       const res = await fetch(`/api/product-search?barcode=8712930089193`)
       if (!res.ok) throw new Error()
       const data = await res.json()
@@ -68,9 +69,9 @@ export default function ProductSearch({ onSelect }: Props) {
 
   return (
     <div>
-      {/* Two equal-weight entry points */}
+      {/* To likeverdige innganger */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
-        {/* Search input styled as a card-button */}
+
         <label style={{
           display: 'flex', flexDirection: 'column', gap: '6px',
           background: 'rgba(255,248,243,0.92)', border: '1.5px solid rgba(196,103,58,0.2)',
@@ -93,7 +94,6 @@ export default function ProductSearch({ onSelect }: Props) {
           </div>
         </label>
 
-        {/* Scan button — same height as search card */}
         <button
           onClick={handleScan}
           disabled={scanLoading}
@@ -118,22 +118,28 @@ export default function ProductSearch({ onSelect }: Props) {
         </button>
       </div>
 
-      {/* Loading */}
+      {/* Loading — viser hint om at dette tar litt lenger */}
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 0' }}>
           <Spinner />
-          <span style={{ fontSize: '13px', color: 'var(--terra-mid)' }}>Søker i produktkatalog...</span>
+          <span style={{ fontSize: '13px', color: 'var(--terra-mid)' }}>
+            Søker etter {query}…
+          </span>
         </div>
       )}
 
-      {/* Error */}
+      {/* Feilmelding */}
       {error && !loading && (
-        <p style={{ fontSize: '13px', color: '#A83200', background: 'rgba(196,103,58,0.08)', borderRadius: '10px', padding: '10px 12px', marginBottom: '10px' }}>
+        <p style={{
+          fontSize: '13px', color: '#A83200',
+          background: 'rgba(196,103,58,0.08)', borderRadius: '10px',
+          padding: '10px 12px', marginBottom: '10px',
+        }}>
           {error}
         </p>
       )}
 
-      {/* Results */}
+      {/* Resultater */}
       {!loading && results.length > 0 && (
         <div>
           <p style={{ fontSize: '11px', color: 'var(--terra-mid)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>
@@ -152,24 +158,26 @@ export default function ProductSearch({ onSelect }: Props) {
                   width: '100%',
                 }}
                 onMouseEnter={e => {
-                  const b = e.currentTarget
-                  b.style.borderColor = 'rgba(196,103,58,0.5)'
-                  b.style.transform = 'scale(0.99)'
+                  e.currentTarget.style.borderColor = 'rgba(196,103,58,0.5)'
+                  e.currentTarget.style.transform = 'scale(0.99)'
                 }}
                 onMouseLeave={e => {
-                  const b = e.currentTarget
-                  b.style.borderColor = 'rgba(196,103,58,0.18)'
-                  b.style.transform = 'scale(1)'
+                  e.currentTarget.style.borderColor = 'rgba(196,103,58,0.18)'
+                  e.currentTarget.style.transform = 'scale(1)'
                 }}
               >
-                {/* Product image or placeholder */}
                 <div style={{
                   width: '56px', height: '56px', borderRadius: '10px', flexShrink: 0,
                   background: 'rgba(196,103,58,0.08)', overflow: 'hidden',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   {p.imageUrl
-                    ? <img src={p.imageUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ? <img
+                        src={p.imageUrl}
+                        alt={p.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                      />
                     : <ProductIcon />
                   }
                 </div>
@@ -192,11 +200,9 @@ export default function ProductSearch({ onSelect }: Props) {
   )
 }
 
-// ── SVG icons — thin stroke, rounded caps ────────────────────────────────────
-
 function SearchIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
       <circle cx="6.5" cy="6.5" r="4.5" stroke="#9C7B65" strokeWidth="1.5" strokeLinecap="round" />
       <line x1="10.5" y1="10.5" x2="14" y2="14" stroke="#9C7B65" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
@@ -205,7 +211,7 @@ function SearchIcon() {
 
 function CameraIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
       <rect x="1" y="4" width="14" height="10" rx="2" stroke="#9C7B65" strokeWidth="1.5" />
       <circle cx="8" cy="9" r="2.5" stroke="#9C7B65" strokeWidth="1.5" />
       <path d="M5.5 4L6.5 2h3l1 2" stroke="#9C7B65" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -215,7 +221,7 @@ function CameraIcon() {
 
 function ProductIcon() {
   return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
       <path d="M20 7L12 3L4 7V17L12 21L20 17V7Z" stroke="#9C7B65" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M12 3V21M4 7L12 11L20 7" stroke="#9C7B65" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
@@ -224,7 +230,7 @@ function ProductIcon() {
 
 function ChevronIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
       <path d="M5 3L9 7L5 11" stroke="#9C7B65" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )

@@ -4,15 +4,13 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { track, Events } from '@/lib/track'
-import { CATEGORIES } from '@/lib/categories'
-
+import { CATEGORIES, normalizeCategory } from '@/lib/categories'
+ 
 const CAT_EMOJI: Record<string, string> = {
-  'hjem-og-hage': '🏠',
-  'baby-og-barn': '🧸',
-  'fest-og-arrangement': '🎉',
-  'friluft-og-sport': '⛺',
-  'klar-og-mote': '👗',
-  'boker': '📚',
+  'baby-og-barn':        '🧸',
+  'klar-og-mote':        '👗',
+  'boker':               '📚',
+  'annet':               '📦',
 }
 
 // Legacy DB values → new top-level IDs

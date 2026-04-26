@@ -6,21 +6,14 @@ import Link from 'next/link'
 import ItemCalendar from '@/components/ItemCalendar'
 import LoanThread from '@/components/LoanThread'
 import { track, Events, startTimer } from '@/lib/track'
-
-const CATEGORY_GRADIENTS: Record<string, { gradient: string; label: string }> = {
-  'verktøy':     { gradient: 'linear-gradient(135deg, #4A7C59 0%, #2d5a3d 100%)', label: 'Verktøy' },
-  'bok':         { gradient: 'linear-gradient(135deg, #C4673A 0%, #8B3A1E 100%)', label: 'Bøker' },
-  'elektronikk': { gradient: 'linear-gradient(135deg, #2C1A0E 0%, #4a3020 100%)', label: 'Elektronikk' },
-  'sport':       { gradient: 'linear-gradient(135deg, #3a7fbf 0%, #1a4f7f 100%)', label: 'Sport' },
-  'barn':        { gradient: 'linear-gradient(135deg, #e07b4a 0%, #c4673a 100%)', label: 'Barn' },
-  'hage':        { gradient: 'linear-gradient(135deg, #5a9a6a 0%, #3a7a4a 100%)', label: 'Hage' },
-  'kjøkken':     { gradient: 'linear-gradient(135deg, #9C7B65 0%, #6B4226 100%)', label: 'Kjøkken' },
-  'klær':        { gradient: 'linear-gradient(135deg, #b86ea0 0%, #7a3a6a 100%)', label: 'Klær' },
-}
+import { normalizeCategory, getCategoryById, getCategoryGradient as getCatGradient } from '@/lib/categories'
 
 const getCategoryGradient = (category?: string) => {
   if (!category) return { gradient: 'linear-gradient(135deg, #C4673A 0%, #8B3A1E 100%)', label: 'VILLAGE' }
-  return CATEGORY_GRADIENTS[category.toLowerCase()] || { gradient: 'linear-gradient(135deg, #9C7B65 0%, #6B4226 100%)', label: category }
+  const normalized = normalizeCategory(category)
+  const cat = getCategoryById(normalized)
+  if (cat) return { gradient: cat.gradient, label: cat.label }
+  return { gradient: 'linear-gradient(135deg, #9C7B65 0%, #6B4226 100%)', label: category }
 }
 
 export default function ItemPage() {
@@ -157,6 +150,13 @@ export default function ItemPage() {
       alert('Kunne ikke sende forespørsel. Sjekk at du er logget inn og prøv igjen.')
       return
     }
+
+    await supabase.from('loan_messages').insert({
+      loan_id: newLoan.id,
+      sender_id: user.id,
+      type: 'chat',
+      body: message,
+    })
 
     await supabase.from('notifications').insert({
       user_id: notifyUserId,

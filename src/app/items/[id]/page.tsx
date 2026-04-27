@@ -6,7 +6,7 @@ import Link from 'next/link'
 import ItemCalendar from '@/components/ItemCalendar'
 import LoanThread from '@/components/LoanThread'
 import { track, Events, startTimer } from '@/lib/track'
-import { normalizeCategory, getCategoryById, getCategoryGradient as getCatGradient } from '@/lib/categories'
+import { normalizeCategory, getCategoryById } from '@/lib/categories'
 
 const getCategoryGradient = (category?: string) => {
   if (!category) return { gradient: 'linear-gradient(135deg, #C4673A 0%, #8B3A1E 100%)', label: 'VILLAGE' }
@@ -15,6 +15,9 @@ const getCategoryGradient = (category?: string) => {
   if (cat) return { gradient: cat.gradient, label: cat.label }
   return { gradient: 'linear-gradient(135deg, #9C7B65 0%, #6B4226 100%)', label: category }
 }
+
+// Statuser som regnes som "aktivt" for tilgjengelighetsvisning
+const ACTIVE_STATUSES = ['confirmed', 'active', 'change_proposed', 'pending_return', 'overdue']
 
 export default function ItemPage() {
   const [item, setItem]                     = useState<any>(null)
@@ -52,11 +55,12 @@ export default function ItemPage() {
       setItem(item)
       setMessage(`Hei! Kan jeg låne «${item?.name}»? 😊`)
 
+      // Hent alle ikke-avsluttede lån inkl. nye statuser
       const { data: loans } = await supabase
         .from('loans')
         .select('*, profiles!loans_borrower_id_fkey(id, name, email, avatar_url)')
         .eq('item_id', id)
-        .in('status', ['pending', 'active', 'change_proposed'])
+        .in('status', ['pending', 'confirmed', 'active', 'change_proposed', 'pending_return', 'overdue'])
         .order('start_date', { ascending: true })
       setAllLoans(loans || [])
 
@@ -142,8 +146,7 @@ export default function ItemPage() {
         status: 'pending',
         community_id: item.community_id || null,
       })
-      .select()
-      .single()
+      .select().single()
 
     if (loanError || !newLoan?.id) {
       console.error('Loan insert failed:', loanError)
@@ -152,15 +155,11 @@ export default function ItemPage() {
     }
 
     await supabase.from('loan_messages').insert({
-      loan_id: newLoan.id,
-      sender_id: user.id,
-      type: 'chat',
-      body: message,
+      loan_id: newLoan.id, sender_id: user.id, type: 'chat', body: message,
     })
 
     await supabase.from('notifications').insert({
-      user_id: notifyUserId,
-      type: 'loan_request',
+      user_id: notifyUserId, type: 'loan_request',
       title: 'Ny låneforespørsel',
       body: `${userProfile?.name || user.email?.split('@')[0]} vil låne «${item.name}»`,
       loan_id: newLoan.id,
@@ -176,16 +175,16 @@ export default function ItemPage() {
     })
   }
 
+  // Godta → setter nå 'confirmed' (ikke 'active')
   const respondToLoan = async (loanId: string, accept: boolean) => {
     const supabase = createClient()
 
     const { data: updated } = await supabase
       .from('loans')
-      .update({ status: accept ? 'active' : 'declined' })
+      .update({ status: accept ? 'confirmed' : 'declined' })
       .eq('id', loanId)
       .eq('status', 'pending')
-      .select()
-      .single()
+      .select().single()
 
     if (!updated) {
       alert('Denne forespørselen er allerede behandlet.')
@@ -196,28 +195,17 @@ export default function ItemPage() {
       return
     }
 
-    await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('loan_id', loanId)
-      .eq('type', 'loan_request')
-      .eq('user_id', user.id)
-
-    if (accept) {
-      await supabase.from('items').update({ available: false }).eq('id', id)
-      setItem((i: any) => ({ ...i, available: false }))
-    }
+    await supabase.from('notifications').update({ read: true })
+      .eq('loan_id', loanId).eq('type', 'loan_request').eq('user_id', user.id)
 
     const targetLoan = pendingLoans.find(l => l.id === loanId)
     const isCoOwner = user?.id === item.connected_profile_id
     const actorName = userProfile?.name || user.email?.split('@')[0]
 
     await supabase.from('loan_messages').insert({
-      loan_id: loanId,
-      sender_id: user.id,
-      type: 'system',
+      loan_id: loanId, sender_id: user.id, type: 'system',
       body: accept
-        ? `✅ Forespørsel godtatt${targetLoan?.start_date ? ` – ${fd(targetLoan.start_date)}${targetLoan?.due_date ? ` → ${fd(targetLoan.due_date)}` : ''}` : ''}`
+        ? `✅ Forespørsel godtatt – klar til henting ${targetLoan?.start_date ? fd(targetLoan.start_date) : ''}`
         : `❌ Forespørsel avslått`,
     })
 
@@ -225,7 +213,7 @@ export default function ItemPage() {
       user_id: targetLoan?.borrower_id,
       type: accept ? 'loan_accepted' : 'loan_declined',
       title: accept ? '✓ Forespørsel godtatt!' : 'Forespørsel avslått',
-      body: accept ? `Lånet av «${item.name}» er godkjent` : `Forespørselen om «${item.name}» ble avslått`,
+      body: accept ? `Lånet av «${item.name}» er godkjent – klar til henting` : `Forespørselen om «${item.name}» ble avslått`,
       loan_id: loanId,
     })
 
@@ -242,24 +230,16 @@ export default function ItemPage() {
 
     setPendingLoans(prev => prev.filter(l => l.id !== loanId))
     if (accept && targetLoan) {
-      setAllLoans(prev => prev.map(l => l.id === loanId ? { ...l, status: 'active' } : l))
+      setAllLoans(prev => prev.map(l => l.id === loanId ? { ...l, status: 'confirmed' } : l))
     }
     track(accept ? Events.LOAN_ACCEPTED : Events.LOAN_DECLINED, {
-      loan_id: loanId,
-      item_id: item.id,
+      loan_id: loanId, item_id: item.id,
       handled_by: isCoOwner ? 'co_owner' : 'owner',
     })
   }
 
-  const markReturned = async (loanId: string) => {
-    const supabase = createClient()
-    await supabase.from('loans').update({ status: 'returned' }).eq('id', loanId)
-    await supabase.from('items').update({ available: true }).eq('id', id)
-    setItem((i: any) => ({ ...i, available: true }))
-    setAllLoans(prev => prev.filter(l => l.id !== loanId))
-  }
-
   const fd = (d: string) => new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
+
   const isOverdue = (due: string) => due && new Date(due) < new Date()
   const isDueSoon = (due: string) => {
     if (!due) return false
@@ -274,7 +254,7 @@ export default function ItemPage() {
   const isOwner        = user?.id === item.owner_id
   const isCoOwner      = user?.id === item.connected_profile_id
   const hasOwnerAccess = isOwner || isCoOwner
-  const activeLoan     = allLoans.find(l => l.status === 'active')
+  const activeLoan     = allLoans.find(l => ACTIVE_STATUSES.includes(l.status))
   const categoryGfx    = getCategoryGradient(item.category)
 
   return (
@@ -310,7 +290,7 @@ export default function ItemPage() {
 
       <div className="px-4 pt-5 flex flex-col gap-4">
 
-        {/* ── Title + price ── */}
+        {/* ── Tittel + pris ── */}
         <div className="flex justify-between items-start">
           <h1 className="font-display flex-1"
             style={{ fontSize: 26, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
@@ -331,7 +311,7 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* ── Availability banner ── */}
+        {/* ── Tilgjengelighetsbanner ── */}
         {item.available ? (
           <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
             <span className="status-pill active">● Tilgjengelig nå</span>
@@ -350,26 +330,25 @@ export default function ItemPage() {
               <div className="flex-1">
                 <Link href={`/profile/${activeLoan.profiles?.id}`}
                   className="text-sm font-medium hover:underline" style={{ color: 'var(--terra-dark)' }}>
-                  Lånt av {activeLoan.profiles?.name || activeLoan.profiles?.email?.split('@')[0]}
+                  {activeLoan.status === 'confirmed' ? 'Godtatt — ' : 'Lånt av '}
+                  {activeLoan.profiles?.name || activeLoan.profiles?.email?.split('@')[0]}
                 </Link>
                 {activeLoan.due_date && (
                   <p className="text-xs mt-0.5 font-medium"
-                    style={{ color: isOverdue(activeLoan.due_date) ? '#ef4444' : isDueSoon(activeLoan.due_date) ? 'var(--terra)' : 'var(--terra-mid)' }}>
-                    {isOverdue(activeLoan.due_date)
-                      ? `⚠️ Skulle vært returnert ${fd(activeLoan.due_date)}`
-                      : isDueSoon(activeLoan.due_date)
-                        ? `⏰ Returneres snart – ${fd(activeLoan.due_date)}`
-                        : `Returneres ${fd(activeLoan.due_date)}`}
+                    style={{ color: activeLoan.status === 'overdue' ? '#E24B4A' : isOverdue(activeLoan.due_date) ? '#ef4444' : isDueSoon(activeLoan.due_date) ? 'var(--terra)' : 'var(--terra-mid)' }}>
+                    {activeLoan.status === 'overdue'
+                      ? `⚠️ Forfalt — skulle vært returnert ${fd(activeLoan.due_date)}`
+                      : activeLoan.status === 'confirmed'
+                        ? `Hentes ${fd(activeLoan.start_date)}`
+                        : isOverdue(activeLoan.due_date)
+                          ? `⚠️ Skulle vært returnert ${fd(activeLoan.due_date)}`
+                          : isDueSoon(activeLoan.due_date)
+                            ? `⏰ Returneres snart – ${fd(activeLoan.due_date)}`
+                            : `Returneres ${fd(activeLoan.due_date)}`}
                   </p>
                 )}
               </div>
             </div>
-            {hasOwnerAccess && (
-              <button onClick={() => markReturned(activeLoan.id)}
-                className="btn-primary mt-3 w-full">
-                ✓ Bekreft at {activeLoan.profiles?.name || activeLoan.profiles?.email?.split('@')[0]} har levert tilbake
-              </button>
-            )}
           </div>
         ) : null}
 
@@ -384,7 +363,7 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* ── Owner card ── */}
+        {/* ── Eier-kort ── */}
         <Link href={`/profile/${item.profiles?.id}`}>
           <div className="item-card" style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(196,103,58,0.18)' }}>
             <div className="item-card-body glass-card"
@@ -406,7 +385,7 @@ export default function ItemPage() {
           </div>
         </Link>
 
-        {/* ── Calendar ── */}
+        {/* ── Kalender ── */}
         <ItemCalendar
           loans={allLoans}
           blockedDates={blockedDates}
@@ -416,7 +395,7 @@ export default function ItemPage() {
           isOwner={hasOwnerAccess}
         />
 
-        {/* ══ OWNER / CO-OWNER VIEWS ══ */}
+        {/* ══ EIER / CO-EIER VISNINGER ══ */}
 
         {hasOwnerAccess && item.available && pendingLoans.length === 0 && !activeLoan && (
           <div className="flex gap-2">
@@ -451,14 +430,23 @@ export default function ItemPage() {
           </div>
         )}
 
-        {hasOwnerAccess && activeLoan && (
+        {/* Aktivt lån eller bekreftet — vis meldingstråd */}
+        {hasOwnerAccess && activeLoan && ACTIVE_STATUSES.includes(activeLoan.status) && (
           <div className="flex flex-col gap-2">
-            <h2 className="font-display font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>Meldingstråd</h2>
-            <LoanThread loan={activeLoan} item={item} user={user} isOwner={true}
-              onLoanUpdated={updated => setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))} />
+            <LoanThread
+              loan={activeLoan} item={item} user={user} isOwner={true}
+              onLoanUpdated={updated => {
+                setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))
+                if (updated.status === 'returned') {
+                  setItem((i: any) => ({ ...i, available: true }))
+                  setAllLoans(prev => prev.filter(l => l.id !== updated.id))
+                }
+              }}
+            />
           </div>
         )}
 
+        {/* Innkommende forespørsler */}
         {hasOwnerAccess && pendingLoans.length > 0 && (
           <div className="flex flex-col gap-3">
             <h2 className="font-display font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
@@ -491,7 +479,6 @@ export default function ItemPage() {
 
                   {l.status === 'change_proposed' ? (
                     <div className="glass" style={{ borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: 12, border: '1px solid rgba(196,103,58,0.3)' }}>
-                      <span style={{ fontSize: 18, marginTop: 2 }}>📅</span>
                       <div>
                         <p className="text-sm font-semibold" style={{ color: 'var(--terra)' }}>Endringsforslag sendt</p>
                         <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Venter på svar fra låntaker – se meldingstråden</p>
@@ -510,7 +497,7 @@ export default function ItemPage() {
                           }, 80)
                         }}
                         className="btn-glass btn-sm flex-1">
-                        📅 Foreslå endring
+                        Foreslå endring
                       </button>
                       <button onClick={() => respondToLoan(l.id, false)} className="btn-sm btn-decline flex-1">
                         Avslå
@@ -525,7 +512,7 @@ export default function ItemPage() {
                     openProposal={proposalLoanId === l.id}
                     onProposalOpened={() => setProposalLoanId(null)}
                     onLoanUpdated={updated => {
-                      if (updated.status === 'active') {
+                      if (updated.status === 'confirmed') {
                         setPendingLoans(prev => prev.filter(p => p.id !== updated.id))
                       } else {
                         setPendingLoans(prev => prev.map(p => p.id === updated.id ? updated : p))
@@ -539,8 +526,9 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* ══ BORROWER VIEWS ══ */}
+        {/* ══ LÅNTAKER VISNINGER ══ */}
 
+        {/* pending — venter på godkjenning */}
         {!hasOwnerAccess && loan?.status === 'pending' && (
           <div className="flex flex-col gap-3">
             <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
@@ -551,10 +539,26 @@ export default function ItemPage() {
           </div>
         )}
 
+        {/* confirmed — godtatt, klar til henting */}
+        {!hasOwnerAccess && loan?.status === 'confirmed' && (
+          <div className="flex flex-col gap-3">
+            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(56,138,221,0.3)', background: 'rgba(56,138,221,0.04)' }}>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: '#185FA5' }}>Godtatt — klar til henting!</p>
+                <p className="text-xs mt-0.5" style={{ color: '#378ADD' }}>
+                  {loan.start_date ? `Hentes ${fd(loan.start_date)}` : 'Avtal henting i tråden'}
+                </p>
+              </div>
+            </div>
+            <LoanThread loan={loan} item={item} user={user} isOwner={false}
+              onLoanUpdated={updated => setLoan(updated)} />
+          </div>
+        )}
+
+        {/* change_proposed */}
         {!hasOwnerAccess && loan?.status === 'change_proposed' && (
           <div className="flex flex-col gap-3">
             <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(196,103,58,0.3)' }}>
-              <span style={{ fontSize: 24 }}>📅</span>
               <div>
                 <p className="text-sm font-semibold" style={{ color: 'var(--terra)' }}>Utleier har foreslått endring</p>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Se meldingstråden og svar på forslaget</p>
@@ -563,13 +567,12 @@ export default function ItemPage() {
             <LoanThread loan={loan} item={item} user={user} isOwner={false}
               onLoanUpdated={updated => {
                 setLoan(updated)
-                if (updated.status === 'active') {
-                  setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))
-                }
+                setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))
               }} />
           </div>
         )}
 
+        {/* active */}
         {!hasOwnerAccess && loan?.status === 'active' && (
           <div className="flex flex-col gap-3">
             <div className="glass" style={{ borderRadius: 16, padding: 16 }}>
@@ -591,6 +594,35 @@ export default function ItemPage() {
           </div>
         )}
 
+        {/* pending_return — venter på utleiers bekreftelse */}
+        {!hasOwnerAccess && loan?.status === 'pending_return' && (
+          <div className="flex flex-col gap-3">
+            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(56,138,221,0.3)', background: 'rgba(56,138,221,0.04)' }}>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: '#185FA5' }}>Levering registrert</p>
+                <p className="text-xs mt-0.5" style={{ color: '#378ADD' }}>Venter på at {ownerName} bekrefter mottak</p>
+              </div>
+            </div>
+            <LoanThread loan={loan} item={item} user={user} isOwner={false}
+              onLoanUpdated={updated => setLoan(updated)} />
+          </div>
+        )}
+
+        {/* overdue */}
+        {!hasOwnerAccess && loan?.status === 'overdue' && (
+          <div className="flex flex-col gap-3">
+            <div className="glass" style={{ borderRadius: 16, padding: 16, border: '1px solid rgba(226,75,74,0.3)', background: 'rgba(226,75,74,0.04)' }}>
+              <span className="status-pill" style={{ background: '#FCEBEB', color: '#791F1F' }}>⚠️ Forfalt — returner snarest</span>
+              {loan.due_date && (
+                <p className="text-sm mt-2" style={{ color: '#E24B4A' }}>Skulle vært returnert {fd(loan.due_date)}</p>
+              )}
+            </div>
+            <LoanThread loan={loan} item={item} user={user} isOwner={false}
+              onLoanUpdated={updated => setLoan(updated)} />
+          </div>
+        )}
+
+        {/* Ikke lånt, tilgjengelig */}
         {!hasOwnerAccess && !loan && item.available && (
           <div className="flex flex-col gap-3">
             <h2 className="font-display font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
@@ -639,6 +671,7 @@ export default function ItemPage() {
           </div>
         )}
 
+        {/* Ikke lånt, utilgjengelig */}
         {!hasOwnerAccess && !loan && !item.available && (
           <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
             <span className="status-pill declined">Utlånt akkurat nå</span>

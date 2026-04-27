@@ -112,6 +112,29 @@ function getQuickActions(status: string, isOwner: boolean): QuickAction[] {
   return []
 }
 
+// ── CounterpartRow ────────────────────────────────────────────────────────────
+
+function CounterpartRow({ loan, item, isOwner }: { loan: any; item: any; isOwner: boolean }) {
+  const profile = isOwner ? (loan?.profiles ?? null) : (item?.profiles ?? null)
+  const name = profile?.name ?? profile?.email?.split('@')[0] ?? null
+  const avatarUrl = profile?.avatar_url ?? null
+  const profileId = profile?.id ?? null
+  const roleLabel = isOwner ? 'Låntaker' : 'Eier'
+  const ss = statusStyle(loan?.status ?? '')
+  if (!name) return null
+  return (
+    <Link href={profileId ? `/profile/${profileId}` : '#'}
+      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderTop: `0.5px solid ${ss.cardBorder}`, textDecoration: 'none' }}>
+      <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(196,103,58,0.12)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 600, color: 'var(--terra)' }}>
+        {avatarUrl ? <img src={avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" /> : name[0]?.toUpperCase()}
+      </div>
+      <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>
+        {roleLabel}: <span style={{ color: 'var(--terra-dark)', fontWeight: 500 }}>{name}</span>
+      </span>
+    </Link>
+  )
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, openProposal, onProposalOpened }: LoanThreadProps) {
@@ -426,19 +449,41 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
       {/* ── AVTALEKORT ── */}
       <div style={{ background: 'rgba(255,248,243,0.95)', border: `1px solid ${ss.cardBorder}`, borderRadius: 16, overflow: 'hidden', marginBottom: 6 }}>
 
-        {/* Header — alltid synlig, klikk for å kollapse */}
+        {/* Header — produktbilde + navn + status, klikk for å kollapse */}
         <button
           onClick={() => setCardOpen(o => !o)}
-          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: ss.cardHeaderBg, border: 'none', cursor: 'pointer', textAlign: 'left' }}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: ss.pillBg, color: ss.pillColor }}>
-              {ss.label}
-            </span>
-            <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>
-              {loan?.start_date && loan?.due_date ? `${fmt(loan.start_date)} → ${fmt(loan.due_date)}` : ''}
-            </span>
+          {/* Produktbilde eller kategori-fallback */}
+          {item?.image_url ? (
+            <img src={item.image_url} alt={item?.name ?? ''}
+              style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
+          ) : (
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(196,103,58,0.12)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M20 7L12 3L4 7V17L12 21L20 17V7Z" stroke="#9C7B65" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M12 3V21M4 7L12 11L20 7" stroke="#9C7B65" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          )}
+
+          {/* Navn + status + datoer */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--terra-dark)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 4 }}>
+              {item?.name ?? ''}
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: ss.pillBg, color: ss.pillColor, flexShrink: 0 }}>
+                {ss.label}
+              </span>
+              {loan?.start_date && loan?.due_date && (
+                <span style={{ fontSize: 11, color: 'var(--terra-mid)' }}>
+                  {fmt(loan.start_date)} → {fmt(loan.due_date)}
+                </span>
+              )}
+            </div>
           </div>
+
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ transform: cardOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}>
             <path d="M3 5l4 4 4-4" stroke="var(--terra-mid)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -447,6 +492,9 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
         {/* Body — kollapses */}
         {cardOpen && (
           <div>
+            {/* Låntaker / utleier-rad */}
+            <CounterpartRow loan={loan} item={item} isOwner={isOwner} />
+
             {/* Datorad */}
             <div style={{ display: 'flex', borderTop: `0.5px solid ${ss.cardBorder}` }}>
               <div style={{ flex: 1, padding: '10px 14px', borderRight: `0.5px solid ${ss.cardBorder}` }}>

@@ -13,19 +13,6 @@ const CAT_EMOJI: Record<string, string> = {
   'annet':               '📦',
 }
 
-// Legacy DB values → new top-level IDs
-const LEGACY_CAT_MAP: Record<string, string> = {
-  'barn':     'baby-og-barn',
-  'kjole':    'klar-og-mote',
-  'verktøy':  'hjem-og-hage',
-  'bok':      'boker',
-  'annet':    'hjem-og-hage',
-}
-
-function normalizeCategory(cat: string): string {
-  return LEGACY_CAT_MAP[cat] ?? cat
-}
-
 const DEFAULT_VISIBLE = 5
 const MIN_COUNT_DISPLAY = 5 // hide count if fewer than this
 

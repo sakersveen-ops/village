@@ -593,9 +593,9 @@ export default function FeedPage() {
                     <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{
                       padding: '2px',
                       background: !isNew
-                        ? 'rgba(156,123,101,0.3)'
+                        ? 'rgba(107,122,130,0.3)'
                         : isPartial
-                          ? 'conic-gradient(var(--terra) 0%, var(--terra) 60%, rgba(156,123,101,0.3) 60%)'
+                          ? 'conic-gradient(var(--terra) 0%, var(--terra) 60%, rgba(107,122,130,0.3) 60%)'
                           : 'var(--terra)',
                       opacity: !isNew ? 0.55 : 1,
                       transition: 'opacity 300ms ease',

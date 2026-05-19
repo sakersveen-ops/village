@@ -493,7 +493,7 @@ export default function ProfilePage() {
                             )}
                           </p>
                           <span className="text-xs flex items-center gap-0.5 px-1.5 py-0.5 rounded-full"
-                            style={{ background: 'var(--glass-bg)', color: '#7A5540', lineHeight: 1.2 }}>
+                            style={{ background: 'var(--glass-bg)', color: 'var(--terra-mid)', lineHeight: 1.2 }}>
                             <span>{access.icon}</span>
                             <span>{access.label}</span>
                           </span>
@@ -502,7 +502,7 @@ export default function ProfilePage() {
                       <span className="px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
                         style={{ fontSize: 10, ...(item.available
                           ? { background: '#EEF4F0', color: 'var(--terra-green)' }
-                          : { background: '#FFF0E6', color: 'var(--terra)' }) }}>
+                          : { background: 'var(--glass-bg)', color: 'var(--terra)' }) }}>
                         {item.available ? 'Ledig' : 'Utlånt'}
                       </span>
                     </div>
@@ -512,7 +512,7 @@ export default function ProfilePage() {
               {filteredItems.length > 5 && (
                 <Link href="/items/manage"
                   className="flex items-center justify-center text-sm w-full py-2.5 rounded-xl"
-                  style={{ color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.2)', background: 'rgba(196,103,58,0.04)' }}>
+                  style={{ color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.2)', background: 'rgba(46,98,113,0.04)' }}>
                   Vis alle {filteredItems.length} gjenstander →
                 </Link>
               )}
@@ -720,7 +720,7 @@ export default function ProfilePage() {
         <button
           onClick={() => setShowInviteComposer(true)}
           className="flex items-center justify-center gap-1.5 text-sm w-full py-2.5 rounded-xl mb-4"
-          style={{ color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.25)', background: 'rgba(196,103,58,0.04)' }}>
+          style={{ color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.25)', background: 'rgba(46,98,113,0.04)' }}>
           <span>👥</span>
           <span>Inviter venner til Village</span>
         </button>

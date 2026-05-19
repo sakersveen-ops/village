@@ -129,7 +129,7 @@ export default function ShareWithCommunityPage() {
                       key={item.id}
                       onClick={() => toggleItem(item.id)}
                       className={`flex items-center gap-3 rounded-2xl px-4 py-3 shadow-sm transition-colors text-left ${
-                        selected ? 'bg-[#FFF0E6] border border-[var(--terra)]' : 'bg-white border border-transparent'
+                        selected ? 'bg-[var(--glass-bg)] border border-[var(--terra)]' : 'bg-white border border-transparent'
                       }`}
                     >
                       {item.image_url ? (

@@ -439,7 +439,7 @@ export default function UserProfilePage() {
               {filteredItems.length > 5 && (
                 <Link href={`/profile/${userId}/items`}
                   className="flex items-center justify-center text-sm w-full py-2.5 rounded-xl"
-                  style={{ color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.2)', background: 'rgba(196,103,58,0.04)' }}>
+                  style={{ color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.2)', background: 'rgba(46,98,113,0.04)' }}>
                   Vis alle {filteredItems.length} gjenstander →
                 </Link>
               )}

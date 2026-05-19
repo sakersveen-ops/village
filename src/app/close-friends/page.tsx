@@ -66,7 +66,7 @@ export default function CloseFriendsPage() {
               <button
                 key={f.user_b}
                 onClick={() => toggle(f.user_b)}
-                className={`flex items-center gap-3 rounded-2xl px-4 py-3 shadow-sm transition-colors ${isClose ? 'bg-[#FFF0E6] border border-[var(--terra)]' : 'bg-white border border-transparent'}`}
+                className={`flex items-center gap-3 rounded-2xl px-4 py-3 shadow-sm transition-colors ${isClose ? 'bg-[var(--glass-bg)] border border-[var(--terra)]' : 'bg-white border border-transparent'}`}
               >
                 <div className="w-10 h-10 rounded-full bg-[var(--glass-border)] flex items-center justify-center font-bold text-sm text-[#1A3542] overflow-hidden flex-shrink-0">
                   {f.profiles?.avatar_url

@@ -202,7 +202,7 @@ export default function SearchPage() {
               height: 36,
               borderRadius: 12,
               border: '1px solid rgba(46,98,113,0.18)',
-              background: 'rgba(255,248,243,0.7)',
+              background: 'rgba(252,254,255,0.7)',
               padding: '0 28px 0 32px',
               fontSize: 14,
               color: 'var(--terra-dark)',
@@ -236,7 +236,7 @@ export default function SearchPage() {
                 transition: 'all 200ms ease',
                 background: tab === t ? 'white' : 'transparent',
                 color: tab === t ? 'var(--terra-dark)' : 'var(--terra-mid)',
-                boxShadow: tab === t ? '0 1px 8px rgba(44,26,14,0.08), inset 0 1px 0 rgba(255,255,255,0.9)' : 'none',
+                boxShadow: tab === t ? '0 1px 8px rgba(26,37,48,0.08), inset 0 1px 0 rgba(255,255,255,0.9)' : 'none',
               }}
             >
               {t.charAt(0).toUpperCase() + t.slice(1)}

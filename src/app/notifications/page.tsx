@@ -138,7 +138,7 @@ const btnAccept: React.CSSProperties = {
 const btnDecline: React.CSSProperties = {
   fontSize: 11, fontWeight: 500, padding: '5px 12px', borderRadius: 99,
   background: 'transparent', color: 'var(--terra-mid)',
-  border: '1px solid rgba(156,123,101,0.35)', cursor: 'pointer',
+  border: '1px solid rgba(107,122,130,0.35)', cursor: 'pointer',
 }
 
 export default function NotificationsPage() {

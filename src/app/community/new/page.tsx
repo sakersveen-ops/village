@@ -90,7 +90,7 @@ export default function NewCommunityPage() {
                 className="w-11 h-11 rounded-xl text-xl flex items-center justify-center border-2 transition-all active:scale-95"
                 style={{
                   borderColor: emoji === e ? 'var(--terra)' : 'rgba(46,98,113,0.2)',
-                  background: emoji === e ? 'rgba(46,98,113,0.08)' : 'rgba(255,248,243,0.7)',
+                  background: emoji === e ? 'rgba(46,98,113,0.08)' : 'rgba(252,254,255,0.7)',
                 }}
               >
                 {e}
@@ -141,7 +141,7 @@ export default function NewCommunityPage() {
                   onClick={() => setVisibility(opt.id)}
                   className="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
                   style={{
-                    background: selected ? 'rgba(196,103,58,0.07)' : 'rgba(255,248,243,0.6)',
+                    background: selected ? 'rgba(46,98,113,0.07)' : 'rgba(252,254,255,0.6)',
                     border: `1.5px solid ${active ? 'var(--terra)' : selected ? 'rgba(46,98,113,0.3)' : 'rgba(46,98,113,0.15)'}`,
                     backdropFilter: 'blur(10px)',
                   }}
@@ -174,7 +174,7 @@ export default function NewCommunityPage() {
 
           {/* Contextual info */}
           <div className="mt-2 px-3 py-2 rounded-lg"
-            style={{ background: 'rgba(196,103,58,0.06)', border: '1px solid rgba(46,98,113,0.12)' }}>
+            style={{ background: 'rgba(46,98,113,0.06)', border: '1px solid rgba(46,98,113,0.12)' }}>
             <p className="text-xs text-[var(--terra-mid)]">
               {visibility === 'friends' && '🔒 Kun venner kan finne kretsen. Nye medlemmer trenger invitasjonslenke eller din godkjenning.'}
               {visibility === 'friends_of_friends' && '🔗 Venners venner kan se kretsen og søke om å bli med. Du godkjenner alle forespørsler.'}

@@ -383,7 +383,7 @@ export default function MessagesUserPage() {
                 fontWeight: activeLoanId === t.loan_id ? 600 : 400,
                 color: activeLoanId === t.loan_id ? 'var(--terra)' : 'var(--terra-mid)',
                 border: activeLoanId === t.loan_id ? '1.5px solid rgba(46,98,113,0.4)' : '1px solid rgba(46,98,113,0.15)',
-                background: activeLoanId === t.loan_id ? 'rgba(196,103,58,0.07)' : undefined,
+                background: activeLoanId === t.loan_id ? 'rgba(46,98,113,0.07)' : undefined,
                 textAlign: 'left',
                 minWidth: 120,
               }}

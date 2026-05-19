@@ -99,12 +99,12 @@ function loanBarStyle(status: string, role: 'lender' | 'borrower'): BarStyle {
         badgeBg: '#FCEBEB', badgeColor: '#791F1F', label: 'Forfalt', pillClass: 'red' }
 
     case 'declined':
-      return { background: 'rgba(156,123,101,0.3)',
-        badgeBg: '#F1EFE8', badgeColor: '#5F5E5A', label: 'Avslått', pillClass: 'gray' }
+      return { background: 'rgba(107,122,130,0.3)',
+        badgeBg: 'var(--glass-bg)', badgeColor: '#5F5E5A', label: 'Avslått', pillClass: 'gray' }
 
     default: // returned
-      return { background: 'rgba(156,123,101,0.2)', opacity: 0.55,
-        badgeBg: '#F1EFE8', badgeColor: '#5F5E5A', label: 'Returnert', pillClass: 'gray' }
+      return { background: 'rgba(107,122,130,0.2)', opacity: 0.55,
+        badgeBg: 'var(--glass-bg)', badgeColor: '#5F5E5A', label: 'Returnert', pillClass: 'gray' }
   }
 }
 
@@ -347,7 +347,7 @@ export default function SchedulePage() {
                 Godta forespørsel
               </button>
               <button disabled={actionLoading} onClick={() => handleDeclineLoan(loan.id)}
-                style={{ padding: '9px 0', borderRadius: 11, background: 'transparent', color: 'var(--terra-mid)', border: '1px solid rgba(156,123,101,0.3)', fontWeight: 500, fontSize: 13, cursor: 'pointer' }}>
+                style={{ padding: '9px 0', borderRadius: 11, background: 'transparent', color: 'var(--terra-mid)', border: '1px solid rgba(107,122,130,0.3)', fontWeight: 500, fontSize: 13, cursor: 'pointer' }}>
                 Avslå
               </button>
             </>)}
@@ -496,11 +496,11 @@ export default function SchedulePage() {
           {/* Table */}
           <div style={{ display: 'flex', overflow: 'hidden' }}>
             {/* Fixed label col */}
-            <div style={{ width: LABEL_WIDTH, flexShrink: 0, background: 'rgba(255,248,243,0.92)' }}>
+            <div style={{ width: LABEL_WIDTH, flexShrink: 0, background: 'rgba(252,254,255,0.92)' }}>
               <div style={{ height: HEADER_H, borderBottom: '1px solid rgba(46,98,113,0.1)' }} />
               {rows.map(row => (
                 <div key={row.item_id}
-                  style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', gap: 8, padding: '0 8px 0 12px', borderBottom: '1px solid rgba(196,103,58,0.07)', cursor: 'pointer' }}
+                  style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', gap: 8, padding: '0 8px 0 12px', borderBottom: '1px solid rgba(46,98,113,0.07)', cursor: 'pointer' }}
                   onClick={() => router.push(`/items/${row.item_id}`)}>
                   {row.item_image
                     ? <img src={row.item_image} alt="" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
@@ -538,7 +538,7 @@ export default function SchedulePage() {
                   {days.map((d, i) => {
                     const isToday = i === PAST_DAYS
                     return (
-                      <div key={i} style={{ width: COL_WIDTH, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: isToday ? 'var(--terra)' : 'var(--terra-mid)', fontWeight: isToday ? 800 : 400, background: isToday ? 'rgba(196,103,58,0.06)' : undefined }}>
+                      <div key={i} style={{ width: COL_WIDTH, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: isToday ? 'var(--terra)' : 'var(--terra-mid)', fontWeight: isToday ? 800 : 400, background: isToday ? 'rgba(46,98,113,0.06)' : undefined }}>
                         {d.getDate()}
                       </div>
                     )
@@ -546,8 +546,8 @@ export default function SchedulePage() {
                 </div>
                 {/* Data rows */}
                 {rows.map(row => (
-                  <div key={row.item_id} style={{ height: ROW_HEIGHT, position: 'relative', borderBottom: '1px solid rgba(196,103,58,0.06)' }}>
-                    <div style={{ position: 'absolute', left: PAST_DAYS * COL_WIDTH, top: 0, width: COL_WIDTH, height: '100%', background: 'rgba(196,103,58,0.04)', borderLeft: '1px solid rgba(196,103,58,0.16)', pointerEvents: 'none' }} />
+                  <div key={row.item_id} style={{ height: ROW_HEIGHT, position: 'relative', borderBottom: '1px solid rgba(46,98,113,0.06)' }}>
+                    <div style={{ position: 'absolute', left: PAST_DAYS * COL_WIDTH, top: 0, width: COL_WIDTH, height: '100%', background: 'rgba(46,98,113,0.04)', borderLeft: '1px solid rgba(46,98,113,0.16)', pointerEvents: 'none' }} />
                     {row.loans.map(loan => {
                       const geo = barGeo(loan)
                       if (!geo) return null

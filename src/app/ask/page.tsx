@@ -201,11 +201,11 @@ function AskPageInnerComponent() {
           </label>
           <div className="glass rounded-[16px] p-1 flex gap-1">
             <button onClick={() => setAudience('friends')} className="flex-1 py-2.5 rounded-[12px] text-sm font-medium transition-all"
-              style={{ background: audience === 'friends' ? 'white' : 'transparent', color: audience === 'friends' ? 'var(--terra-dark)' : 'var(--terra-mid)', boxShadow: audience === 'friends' ? '0 1px 8px rgba(44,26,14,0.08)' : 'none' }}>
+              style={{ background: audience === 'friends' ? 'white' : 'transparent', color: audience === 'friends' ? 'var(--terra-dark)' : 'var(--terra-mid)', boxShadow: audience === 'friends' ? '0 1px 8px rgba(26,37,48,0.08)' : 'none' }}>
               👥 Venner
             </button>
             <button onClick={() => setAudience('friends_of_friends')} className="flex-1 py-2.5 rounded-[12px] text-sm font-medium transition-all"
-              style={{ background: audience === 'friends_of_friends' ? 'white' : 'transparent', color: audience === 'friends_of_friends' ? 'var(--terra-dark)' : 'var(--terra-mid)', boxShadow: audience === 'friends_of_friends' ? '0 1px 8px rgba(44,26,14,0.08)' : 'none' }}>
+              style={{ background: audience === 'friends_of_friends' ? 'white' : 'transparent', color: audience === 'friends_of_friends' ? 'var(--terra-dark)' : 'var(--terra-mid)', boxShadow: audience === 'friends_of_friends' ? '0 1px 8px rgba(26,37,48,0.08)' : 'none' }}>
               🌐 Venners venner
             </button>
           </div>

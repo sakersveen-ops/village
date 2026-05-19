@@ -270,7 +270,7 @@ export default function MessagesPage() {
           <div style={{
             position: 'absolute', bottom: -3, right: -3,
             width: 20, height: 20, borderRadius: '50%',
-            border: '2px solid rgba(255,248,243,0.95)',
+            border: '2px solid rgba(252,254,255,0.95)',
             overflow: 'hidden', background: 'var(--terra)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
@@ -348,7 +348,7 @@ export default function MessagesPage() {
         background: '#FDF5F0',
         borderBottom: '1px solid rgba(46,98,113,0.12)',
         padding: '12px 16px',
-        boxShadow: '0 2px 12px rgba(44,26,14,0.06)',
+        boxShadow: '0 2px 12px rgba(26,37,48,0.06)',
       }}>
         {/* Row 1: title + unread badge */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -372,7 +372,7 @@ export default function MessagesPage() {
             style={{
               flexShrink: 0, padding: '7px 12px', borderRadius: 11, fontSize: 12, fontWeight: 600,
               border: unreadOnly ? '1.5px solid rgba(46,98,113,0.45)' : '1px solid rgba(46,98,113,0.18)',
-              background: unreadOnly ? 'rgba(46,98,113,0.1)' : 'rgba(255,248,243,0.6)',
+              background: unreadOnly ? 'rgba(46,98,113,0.1)' : 'rgba(252,254,255,0.6)',
               color: unreadOnly ? 'var(--terra)' : 'var(--terra-mid)',
               cursor: 'pointer', whiteSpace: 'nowrap',
             }}
@@ -384,7 +384,7 @@ export default function MessagesPage() {
           <div style={{
             flex: 1, display: 'flex', alignItems: 'center', gap: 8,
             borderRadius: 11, padding: '7px 12px',
-            background: 'rgba(255,248,243,0.6)', border: '1px solid rgba(46,98,113,0.15)',
+            background: 'rgba(252,254,255,0.6)', border: '1px solid rgba(46,98,113,0.15)',
           }}>
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--terra-mid)" strokeWidth="2" strokeLinecap="round">
               <circle cx="7" cy="7" r="5"/><line x1="11" y1="11" x2="14" y2="14"/>

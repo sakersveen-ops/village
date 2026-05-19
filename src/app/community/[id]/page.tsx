@@ -362,7 +362,7 @@ export default function CommunityPage() {
                   className="w-14 h-14 rounded-2xl object-cover"
                 />
               ) : (
-                <div className="w-14 h-14 rounded-2xl bg-[#FFF0E6] flex items-center justify-center text-3xl">
+                <div className="w-14 h-14 rounded-2xl bg-[var(--glass-bg)] flex items-center justify-center text-3xl">
                   {community.avatar_emoji}
                 </div>
               )}
@@ -414,7 +414,7 @@ export default function CommunityPage() {
               className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors flex-shrink-0 ${
                 tab === t ? 'border-transparent text-white' : 'text-[#1A3542] border-[var(--glass-border)]'
               }`}
-              style={tab === t ? { background: 'var(--terra)' } : { background: 'rgba(255,248,243,0.6)', backdropFilter: 'blur(8px)' }}
+              style={tab === t ? { background: 'var(--terra)' } : { background: 'rgba(252,254,255,0.6)', backdropFilter: 'blur(8px)' }}
             >
               {t === 'feed' ? 'Feed'
                 : t === 'members' ? `Medlemmer (${members.length})`
@@ -435,7 +435,7 @@ export default function CommunityPage() {
                 <button
                   onClick={() => setShowInviteModal(true)}
                   className="w-full border border-dashed rounded-2xl py-3 text-sm font-medium"
-                  style={{ borderColor: 'var(--terra)', color: 'var(--terra)', background: 'rgba(196,103,58,0.04)' }}
+                  style={{ borderColor: 'var(--terra)', color: 'var(--terra)', background: 'rgba(46,98,113,0.04)' }}
                 >
                   👥 Inviter venner
                 </button>
@@ -443,7 +443,7 @@ export default function CommunityPage() {
             )}
             {items.length === 0 ? (
               <div className="rounded-3xl p-8 text-center" style={{
-                background: 'linear-gradient(135deg, rgba(255,240,230,0.7) 0%, rgba(250,247,242,0.7) 100%)',
+                background: 'linear-gradient(135deg, rgba(225,240,245,0.7) 0%, rgba(250,247,242,0.7) 100%)',
                 border: '1px solid rgba(46,98,113,0.15)',
               }}>
                 <div className="text-5xl mb-3">🌱</div>
@@ -502,7 +502,7 @@ export default function CommunityPage() {
                         </div>
                       ) : (
                         <div className="w-full h-36 flex items-center justify-center text-4xl"
-                          style={{ background: 'linear-gradient(135deg, rgba(255,240,230,1) 0%, rgba(232,221,208,1) 100%)' }}>
+                          style={{ background: 'linear-gradient(135deg, rgba(225,240,245,1) 0%, rgba(225,232,235,1) 100%)' }}>
                           📦
                         </div>
                       )}

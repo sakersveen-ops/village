@@ -133,7 +133,7 @@ export default function ManageItemsPage() {
                   <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
                     style={item.available
                       ? { background: '#EEF4F0', color: 'var(--terra-green)' }
-                      : { background: '#FFF0E6', color: 'var(--terra)' }
+                      : { background: 'var(--glass-bg)', color: 'var(--terra)' }
                     }>
                     {item.available ? 'Ledig' : 'Utlånt'}
                   </span>
@@ -146,7 +146,7 @@ export default function ManageItemsPage() {
                   {/* Slett */}
                   <button onClick={() => setConfirmDelete(item.id)} aria-label="Slett"
                     className="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 text-sm"
-                    style={{ background: '#FFF0E6', border: '1px solid rgba(46,98,113,0.2)', color: 'var(--terra)' }}>
+                    style={{ background: 'var(--glass-bg)', border: '1px solid rgba(46,98,113,0.2)', color: 'var(--terra)' }}>
                     🗑
                   </button>
                 </div>
@@ -154,7 +154,7 @@ export default function ManageItemsPage() {
                 {/* Bekreft-sletting — inline under kortet */}
                 {confirmDelete === item.id && (
                   <div className="rounded-2xl px-4 py-3 mt-1 flex items-center justify-between gap-3"
-                    style={{ background: '#FFF0E6', border: '1px solid rgba(46,98,113,0.2)' }}>
+                    style={{ background: 'var(--glass-bg)', border: '1px solid rgba(46,98,113,0.2)' }}>
                     <p className="text-sm flex-1" style={{ color: 'var(--terra-dark)' }}>
                       Slette «{item.name}»?
                     </p>

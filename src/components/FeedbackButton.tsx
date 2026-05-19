@@ -101,14 +101,14 @@ export default function FeedbackButton() {
           width: 44,
           height: 44,
           borderRadius: '50%',
-          background: 'var(--terra, #C4673A)',
+          background: 'var(--terra, #296b49)',
           color: 'white',
           border: 'none',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: '0 4px 16px rgba(196,103,58,0.40), 0 1px 4px rgba(44,26,14,0.15)',
+          boxShadow: '0 4px 16px rgba(34, 119, 77, 0.4), 0 1px 4px rgba(44,26,14,0.15)',
           transition: 'transform 150ms ease, box-shadow 150ms ease',
         }}
         onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.08)')}
@@ -180,7 +180,7 @@ export default function FeedbackButton() {
                 >
                   Gi tilbakemelding
                 </h2>
-                <p style={{ fontSize: 12, color: 'var(--terra-mid, #9C7B65)', marginTop: 3 }}>
+                <p style={{ fontSize: 12, color: 'var(--terra-mid, rgba(46,98,113,0.40))', marginTop: 3 }}>
                   📍 {getPageTitle(pathname)}
                 </p>
               </div>
@@ -230,7 +230,7 @@ export default function FeedbackButton() {
                   <span style={{
                     fontSize: 11,
                     fontWeight: type === t.value ? 700 : 500,
-                    color: type === t.value ? 'var(--terra, #C4673A)' : 'var(--terra-dark, #2C1A0E)',
+                    color: type === t.value ? 'var(--terra, rgba(46,98,113,0.40))' : 'var(--terra-dark, #2C1A0E)',
                   }}>
                     {t.label}
                   </span>

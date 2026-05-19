@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="no">
-      <body className={`${fraunces.variable} bg-[#FAF7F2] min-h-screen`}>
+      <body className={`${fraunces.variable} min-h-screen`}>
         <NavBar />
         {children}
         <AppTourWrapper />

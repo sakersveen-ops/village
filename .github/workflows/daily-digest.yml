@@ -2,10 +2,8 @@ name: 🌅 Village – Daglig morgenrapport
 
 on:
   schedule:
-    # Kjøres kl 07:00 Oslo-tid (UTC+2 sommer = 05:00 UTC, UTC+1 vinter = 06:00 UTC)
-    # Bruk 05:00 UTC for å treffe 07:00 om sommeren (CEST)
     - cron: '0 5 * * *'
-  workflow_dispatch: # Kan også kjøres manuelt fra GitHub UI
+  workflow_dispatch:
 
 jobs:
   send-digest:
@@ -21,16 +19,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Installer avhengigheter
-        run: npm ci --prefix .github/scripts || (cd .github/scripts && npm install)
+        run: cd .github/scripts && npm install
 
       - name: Kjør daglig rapport
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          REPORT_EMAIL_TO: ${{ secrets.REPORT_EMAIL_TO }}
-          REPORT_EMAIL_FROM: ${{ secrets.REPORT_EMAIL_FROM }}
+          REPORT_EMAIL_TO: ${{ vars.REPORT_EMAIL_TO }}
+          REPORT_EMAIL_FROM: ${{ vars.REPORT_EMAIL_FROM }}
         run: node .github/scripts/daily-digest.mjs

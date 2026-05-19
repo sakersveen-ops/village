@@ -329,7 +329,7 @@ Returner KUN JSON, ingen annen tekst.` }
     }).select().single()
 
     if (error || !item?.id) {
-      console.error('Insert failed:', error)
+      console.error('Insert failed:', JSON.stringify(error))
       setSaving(false)
       return
     }

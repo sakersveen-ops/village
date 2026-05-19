@@ -67,7 +67,7 @@ export default function ManageItemsPage() {
       <header className="page-header glass" style={{ borderRadius: '0 0 20px 20px' }}>
         <Link href="/profile" aria-label="Tilbake">
           <span className="w-9 h-9 flex items-center justify-center rounded-full shadow-sm"
-            style={{ background: '#fff', border: '1px solid #E8DDD0', color: '#6B4226' }}>
+            style={{ background: '#fff', border: '1px solid var(--glass-border)', color: '#1A3542' }}>
             ←
           </span>
         </Link>
@@ -97,7 +97,7 @@ export default function ManageItemsPage() {
                 className="px-2.5 py-1 rounded-full text-xs whitespace-nowrap flex-shrink-0 transition-colors"
                 style={sortKey === opt.id
                   ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
-                  : { background: '#fff', color: '#6B4226', border: '1px solid #E8DDD0' }
+                  : { background: '#fff', color: '#1A3542', border: '1px solid var(--glass-border)' }
                 }>
                 {opt.label}
               </button>
@@ -122,7 +122,7 @@ export default function ManageItemsPage() {
                     ? <img src={item.image_url} alt={item.name}
                         className="rounded-xl object-cover flex-shrink-0" style={{ width: 48, height: 48 }} />
                     : <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                        style={{ width: 48, height: 48, background: '#E8DDD0' }}>
+                        style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
                         {CAT_EMOJI[item.category] ?? '📦'}
                       </div>
                   }
@@ -140,13 +140,13 @@ export default function ManageItemsPage() {
                   {/* Rediger */}
                   <Link href={`/items/${item.id}/edit`} aria-label="Rediger"
                     className="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 text-sm"
-                    style={{ background: '#FAF7F2', border: '1px solid #E8DDD0', color: '#6B4226' }}>
+                    style={{ background: 'var(--glass-bg-heavy)', border: '1px solid var(--glass-border)', color: '#1A3542' }}>
                     ✏️
                   </Link>
                   {/* Slett */}
                   <button onClick={() => setConfirmDelete(item.id)} aria-label="Slett"
                     className="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 text-sm"
-                    style={{ background: '#FFF0E6', border: '1px solid rgba(196,103,58,0.2)', color: 'var(--terra)' }}>
+                    style={{ background: '#FFF0E6', border: '1px solid rgba(46,98,113,0.2)', color: 'var(--terra)' }}>
                     🗑
                   </button>
                 </div>
@@ -154,13 +154,13 @@ export default function ManageItemsPage() {
                 {/* Bekreft-sletting — inline under kortet */}
                 {confirmDelete === item.id && (
                   <div className="rounded-2xl px-4 py-3 mt-1 flex items-center justify-between gap-3"
-                    style={{ background: '#FFF0E6', border: '1px solid rgba(196,103,58,0.2)' }}>
+                    style={{ background: '#FFF0E6', border: '1px solid rgba(46,98,113,0.2)' }}>
                     <p className="text-sm flex-1" style={{ color: 'var(--terra-dark)' }}>
                       Slette «{item.name}»?
                     </p>
                     <button onClick={() => setConfirmDelete(null)}
                       className="text-xs px-3 py-1.5 rounded-full"
-                      style={{ border: '1px solid #E8DDD0', color: 'var(--terra-mid)', background: '#fff' }}>
+                      style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-mid)', background: '#fff' }}>
                       Avbryt
                     </button>
                     <button onClick={() => deleteItem(item.id)}

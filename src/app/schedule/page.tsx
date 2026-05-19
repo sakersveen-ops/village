@@ -73,9 +73,9 @@ function loanBarStyle(status: string, role: 'lender' | 'borrower'): BarStyle {
   switch (status) {
     case 'pending':
       return role === 'lender'
-        ? { background: 'rgba(196,103,58,0.18)', border: '2px dashed rgba(196,103,58,0.55)',
+        ? { background: 'rgba(46,98,113,0.18)', border: '2px dashed rgba(46,98,113,0.55)',
             badgeBg: '#FAEEDA', badgeColor: '#633806', label: 'Handling kreves', pillClass: 'amber' }
-        : { background: 'rgba(196,103,58,0.35)',
+        : { background: 'rgba(46,98,113,0.35)',
             badgeBg: '#FAEEDA', badgeColor: '#633806', label: 'Venter godkjenning', pillClass: 'amber' }
 
     case 'confirmed':
@@ -87,7 +87,7 @@ function loanBarStyle(status: string, role: 'lender' | 'borrower'): BarStyle {
         badgeBg: '#EAF3DE', badgeColor: '#27500A', label: 'Aktivt lån', pillClass: 'green' }
 
     case 'change_proposed':
-      return { background: 'rgba(196,103,58,0.45)',
+      return { background: 'rgba(46,98,113,0.45)',
         badgeBg: '#FAEEDA', badgeColor: '#633806', label: 'Endringsforslag', pillClass: 'amber' }
 
     case 'pending_return':
@@ -307,7 +307,7 @@ export default function SchedulePage() {
         <div style={{ position: 'fixed', inset: 0, zIndex: 50 }} onClick={() => setPopup(null)} />
         <div
           className="glass-heavy"
-          style={{ position: 'fixed', top, left, width: 276, zIndex: 51, borderRadius: 18, padding: '15px 16px', boxShadow: '0 12px 40px rgba(44,26,14,0.15)' }}
+          style={{ position: 'fixed', top, left, width: 276, zIndex: 51, borderRadius: 18, padding: '15px 16px', boxShadow: '0 12px 40px rgba(26,37,48,0.15)' }}
           onClick={e => e.stopPropagation()}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -326,7 +326,7 @@ export default function SchedulePage() {
               : `${possessive(ownerName)} gjenstand`}
           </p>
 
-          <div style={{ borderTop: '1px solid rgba(196,103,58,0.1)', paddingTop: 11, display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 13 }}>
+          <div style={{ borderTop: '1px solid rgba(46,98,113,0.1)', paddingTop: 11, display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 13 }}>
             {[
               { label: 'Fra',      value: fmtMed(loan.start_date) },
               { label: 'Til',      value: fmtMed(loan.due_date)   },
@@ -408,7 +408,7 @@ export default function SchedulePage() {
       >
         {loan.items?.image_url
           ? <img src={loan.items.image_url} alt="" style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
-          : <div style={{ width: 44, height: 44, borderRadius: 10, background: isOverdue ? 'rgba(226,75,74,0.1)' : 'rgba(196,103,58,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{emoji}</div>
+          : <div style={{ width: 44, height: 44, borderRadius: 10, background: isOverdue ? 'rgba(226,75,74,0.1)' : 'rgba(46,98,113,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{emoji}</div>
         }
         <div style={{ flex: 1, minWidth: 0 }}>
           <p className="font-display" style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--terra-dark)', margin: '0 0 1px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -448,7 +448,7 @@ export default function SchedulePage() {
               </button>
             ))}
           </div>
-          <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(196,103,58,0.2)' }}>
+          <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(46,98,113,0.2)' }}>
             {(['gantt', 'liste'] as const).map(m => (
               <button key={m} onClick={() => setViewMode(m)}
                 style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 600, border: 'none', cursor: 'pointer',
@@ -481,7 +481,7 @@ export default function SchedulePage() {
           {/* Legend */}
           <div style={{ display: 'flex', gap: 12, padding: '10px 14px 6px', flexWrap: 'wrap' }}>
             {[
-              { bg: 'rgba(196,103,58,0.35)',        label: 'Forespurt' },
+              { bg: 'rgba(46,98,113,0.35)',        label: 'Forespurt' },
               { bg: 'rgba(56,138,221,0.45)',          label: 'Godtatt' },
               { bg: 'var(--terra-green)',              label: 'Aktivt' },
               { bg: 'rgba(226,75,74,0.7)',             label: 'Forfalt' },
@@ -497,14 +497,14 @@ export default function SchedulePage() {
           <div style={{ display: 'flex', overflow: 'hidden' }}>
             {/* Fixed label col */}
             <div style={{ width: LABEL_WIDTH, flexShrink: 0, background: 'rgba(255,248,243,0.92)' }}>
-              <div style={{ height: HEADER_H, borderBottom: '1px solid rgba(196,103,58,0.1)' }} />
+              <div style={{ height: HEADER_H, borderBottom: '1px solid rgba(46,98,113,0.1)' }} />
               {rows.map(row => (
                 <div key={row.item_id}
                   style={{ height: ROW_HEIGHT, display: 'flex', alignItems: 'center', gap: 8, padding: '0 8px 0 12px', borderBottom: '1px solid rgba(196,103,58,0.07)', cursor: 'pointer' }}
                   onClick={() => router.push(`/items/${row.item_id}`)}>
                   {row.item_image
                     ? <img src={row.item_image} alt="" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }} />
-                    : <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(196,103,58,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
+                    : <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(46,98,113,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>
                         {CAT_EMOJI[row.item_category] ?? '📦'}
                       </div>
                   }
@@ -526,7 +526,7 @@ export default function SchedulePage() {
             <div ref={scrollRef} style={{ flex: 1, overflowX: 'auto', overflowY: 'hidden' }}>
               <div style={{ width: TOTAL_DAYS * COL_WIDTH }}>
                 {/* Month row */}
-                <div style={{ display: 'flex', height: 22, borderBottom: '1px solid rgba(196,103,58,0.1)' }}>
+                <div style={{ display: 'flex', height: 22, borderBottom: '1px solid rgba(46,98,113,0.1)' }}>
                   {months.map((m, i) => (
                     <div key={i} style={{ width: m.count * COL_WIDTH, flexShrink: 0, display: 'flex', alignItems: 'center', paddingLeft: 6, fontSize: 9, fontWeight: 800, color: 'var(--terra-mid)', letterSpacing: '0.07em' }}>
                       {m.label}
@@ -534,7 +534,7 @@ export default function SchedulePage() {
                   ))}
                 </div>
                 {/* Day row */}
-                <div style={{ display: 'flex', height: 24, borderBottom: '1px solid rgba(196,103,58,0.12)' }}>
+                <div style={{ display: 'flex', height: 24, borderBottom: '1px solid rgba(46,98,113,0.12)' }}>
                   {days.map((d, i) => {
                     const isToday = i === PAST_DAYS
                     return (

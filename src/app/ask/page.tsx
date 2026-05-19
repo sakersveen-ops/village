@@ -119,9 +119,9 @@ function AskPageInnerComponent() {
       <header className="page-header glass">
         <button
           onClick={() => router.back()}
-          style={{ width: 36, height: 36, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(196,103,58,0.10)', border: '1px solid rgba(196,103,58,0.15)', flexShrink: 0, cursor: 'pointer' }}
+          style={{ width: 36, height: 36, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(46,98,113,0.10)', border: '1px solid rgba(46,98,113,0.15)', flexShrink: 0, cursor: 'pointer' }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,#2C1A0E)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,var(--terra-dark))" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>

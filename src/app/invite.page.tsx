@@ -44,10 +44,10 @@ export default function InvitePage() {
           <button
             onClick={() => setShowComposer(true)}
             className="rounded-2xl p-5 flex items-center gap-4 shadow-sm text-left"
-            style={{ background: '#fff', border: '1.5px solid rgba(196,103,58,0.2)' }}
+            style={{ background: '#fff', border: '1.5px solid rgba(46,98,113,0.2)' }}
           >
             <div className="flex items-center justify-center rounded-2xl flex-shrink-0 text-2xl"
-              style={{ width: 52, height: 52, background: 'rgba(196,103,58,0.1)' }}>
+              style={{ width: 52, height: 52, background: 'rgba(46,98,113,0.1)' }}>
               ✉️
             </div>
             <div className="flex-1">
@@ -69,7 +69,7 @@ export default function InvitePage() {
           <div className="rounded-2xl p-4 shadow-sm" style={{ background: '#fff' }}>
             <p className="text-xs font-medium mb-2" style={{ color: 'var(--terra-mid)' }}>Din invitasjonslenke</p>
             <p className="text-sm break-all rounded-xl p-3 mb-3"
-              style={{ background: '#FAF7F2', color: 'var(--terra-dark)' }}>
+              style={{ background: 'var(--glass-bg-heavy)', color: 'var(--terra-dark)' }}>
               {inviteUrl}
             </p>
             <button onClick={copyLink}

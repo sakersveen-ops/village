@@ -178,7 +178,7 @@ export default function SearchPage() {
       <header className="page-header glass">
         <button
           onClick={() => router.back()}
-          style={{ width: 36, height: 36, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(196,103,58,0.10)', border: '1px solid rgba(196,103,58,0.15)', flexShrink: 0, cursor: 'pointer' }}
+          style={{ width: 36, height: 36, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(46,98,113,0.10)', border: '1px solid rgba(46,98,113,0.15)', flexShrink: 0, cursor: 'pointer' }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
@@ -201,7 +201,7 @@ export default function SearchPage() {
               width: '100%',
               height: 36,
               borderRadius: 12,
-              border: '1px solid rgba(196,103,58,0.18)',
+              border: '1px solid rgba(46,98,113,0.18)',
               background: 'rgba(255,248,243,0.7)',
               padding: '0 28px 0 32px',
               fontSize: 14,
@@ -314,7 +314,7 @@ export default function SearchPage() {
                         onClick={() => router.push(`/items/${item.id}`)}
                         style={{
                           borderRadius: 16,
-                          border: '1px solid rgba(196,103,58,0.18)',
+                          border: '1px solid rgba(46,98,113,0.18)',
                           background: 'white',
                           display: 'flex',
                           alignItems: 'center',
@@ -324,17 +324,17 @@ export default function SearchPage() {
                           opacity: isUnavailable ? 0.45 : 1,
                           transition: 'opacity 150ms ease, box-shadow 150ms ease',
                         }}
-                        onMouseEnter={e => { if (!isUnavailable) (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(44,26,14,0.10)' }}
+                        onMouseEnter={e => { if (!isUnavailable) (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(26,37,48,0.10)' }}
                         onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}
                       >
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                           {item.image_url ? (
                             <img src={item.image_url} style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', display: 'block' }} alt={item.name} />
                           ) : (
-                            <div style={{ width: 52, height: 52, borderRadius: 10, background: '#E8DDD0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>📦</div>
+                            <div style={{ width: 52, height: 52, borderRadius: 10, background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>📦</div>
                           )}
                           {!hasDateFilter && (
-                            <span style={{ position: 'absolute', bottom: 2, right: 2, width: 9, height: 9, borderRadius: '50%', border: '2px solid white', background: item.available ? '#4A7C59' : '#C4673A' }} />
+                            <span style={{ position: 'absolute', bottom: 2, right: 2, width: 9, height: 9, borderRadius: '50%', border: '2px solid white', background: item.available ? '#4A7C59' : 'var(--terra)' }} />
                           )}
                         </div>
 
@@ -344,10 +344,10 @@ export default function SearchPage() {
                               {item.name}
                             </p>
                             {isOwn && (
-                              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--terra)', background: 'rgba(196,103,58,0.10)', borderRadius: 6, padding: '1px 5px', whiteSpace: 'nowrap' }}>Din</span>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--terra)', background: 'rgba(46,98,113,0.10)', borderRadius: 6, padding: '1px 5px', whiteSpace: 'nowrap' }}>Din</span>
                             )}
                             {isConnected && (
-                              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--terra-mid)', background: 'rgba(196,103,58,0.08)', borderRadius: 6, padding: '1px 5px', whiteSpace: 'nowrap' }}>🔗 Delt</span>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--terra-mid)', background: 'rgba(46,98,113,0.08)', borderRadius: 6, padding: '1px 5px', whiteSpace: 'nowrap' }}>🔗 Delt</span>
                             )}
                           </div>
                           <p style={{ color: 'var(--terra-mid)', fontSize: 11, margin: '2px 0 0' }}>
@@ -384,11 +384,11 @@ export default function SearchPage() {
                   <div
                     key={c.id}
                     onClick={() => router.push(`/communities/${c.id}`)}
-                    style={{ borderRadius: 16, border: '1px solid rgba(196,103,58,0.18)', background: 'white', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer', transition: 'box-shadow 150ms ease' }}
-                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(44,26,14,0.10)'}
+                    style={{ borderRadius: 16, border: '1px solid rgba(46,98,113,0.18)', background: 'white', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer', transition: 'box-shadow 150ms ease' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(26,37,48,0.10)'}
                     onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}
                   >
-                    <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(196,103,58,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(46,98,113,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
                       {c.avatar_emoji ?? '🏘️'}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -416,14 +416,14 @@ export default function SearchPage() {
                   <div
                     key={p.id}
                     onClick={() => router.push(`/profile/${p.id}`)}
-                    style={{ borderRadius: 16, border: '1px solid rgba(196,103,58,0.18)', background: 'white', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer', transition: 'box-shadow 150ms ease' }}
-                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(44,26,14,0.10)'}
+                    style={{ borderRadius: 16, border: '1px solid rgba(46,98,113,0.18)', background: 'white', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer', transition: 'box-shadow 150ms ease' }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(26,37,48,0.10)'}
                     onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}
                   >
                     {p.avatar_url ? (
                       <img src={p.avatar_url} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt={p.name} />
                     ) : (
-                      <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(196,103,58,0.12)', border: '1px solid rgba(196,103,58,0.20)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: 'var(--terra)', flexShrink: 0 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(46,98,113,0.12)', border: '1px solid rgba(46,98,113,0.20)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: 'var(--terra)', flexShrink: 0 }}>
                         {(p.name ?? '?')[0].toUpperCase()}
                       </div>
                     )}

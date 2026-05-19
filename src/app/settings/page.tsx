@@ -29,8 +29,8 @@ function Toggle({ value, onChange }: { value: boolean; onChange: () => void }) {
       className="flex-shrink-0"
       style={{
         width: 44, height: 26, borderRadius: 13,
-        background: value ? 'var(--terra)' : 'rgba(196,103,58,0.15)',
-        border: `1.5px solid ${value ? 'var(--terra)' : 'rgba(196,103,58,0.25)'}`,
+        background: value ? 'var(--terra)' : 'rgba(46,98,113,0.15)',
+        border: `1.5px solid ${value ? 'var(--terra)' : 'rgba(46,98,113,0.25)'}`,
         position: 'relative', transition: 'background 200ms, border-color 200ms', cursor: 'pointer',
       }}
     >
@@ -330,7 +330,7 @@ export default function SettingsPage() {
                   <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Tilkoblet – gjenstander deles automatisk</p>
                 </div>
               </div>
-              <div className="px-4 py-3" style={{ borderTop: '1px solid rgba(196,103,58,0.12)' }}>
+              <div className="px-4 py-3" style={{ borderTop: '1px solid rgba(46,98,113,0.12)' }}>
                 {!showDisconnectConfirm ? (
                   <button onClick={() => setShowDisconnectConfirm(true)} className="text-sm font-medium text-red-400">
                     Koble fra…
@@ -395,7 +395,7 @@ export default function SettingsPage() {
                         <p className="text-xs truncate" style={{ color: 'var(--terra-mid)' }}>{result.email}</p>
                       </div>
                       {connInviteSentTo === result.id ? (
-                        <span className="text-xs px-3 py-1.5 rounded-full" style={{ background: 'rgba(196,103,58,0.08)', color: 'var(--terra-mid)' }}>Sendt ✓</span>
+                        <span className="text-xs px-3 py-1.5 rounded-full" style={{ background: 'rgba(46,98,113,0.08)', color: 'var(--terra-mid)' }}>Sendt ✓</span>
                       ) : (
                         <button onClick={() => sendConnectionInvite(result.id, result.name)} disabled={connActionLoading} className="btn-primary text-xs px-3 py-1.5 rounded-full disabled:opacity-50">
                           🔗 Koble til
@@ -449,7 +449,7 @@ export default function SettingsPage() {
                     onClick={() => update('privacy_profile', opt.id)}
                     className="flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors text-left"
                     style={{
-                      background: profile?.privacy_profile === opt.id ? 'rgba(196,103,58,0.10)' : 'transparent',
+                      background: profile?.privacy_profile === opt.id ? 'rgba(46,98,113,0.10)' : 'transparent',
                       color: profile?.privacy_profile === opt.id ? 'var(--terra)' : 'var(--terra-dark)',
                       fontWeight: profile?.privacy_profile === opt.id ? 600 : 400,
                     }}
@@ -484,7 +484,7 @@ export default function SettingsPage() {
               <div
                 key={key}
                 className="flex items-center justify-between px-4 py-3"
-                style={i < arr.length - 1 ? { borderBottom: '1px solid rgba(196,103,58,0.10)' } : undefined}
+                style={i < arr.length - 1 ? { borderBottom: '1px solid rgba(46,98,113,0.10)' } : undefined}
               >
                 <p className="text-sm" style={{ color: 'var(--terra-dark)' }}>{label}</p>
                 <Toggle value={!!profile?.[key]} onChange={() => update(key, !profile?.[key])} />

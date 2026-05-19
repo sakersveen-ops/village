@@ -67,7 +67,7 @@ export default function InviteFriendsPage() {
   return (
     <div className="max-w-lg mx-auto pb-24">
 
-      <div style={{ background: '#FAF7F2', borderBottom: '1px solid #E8DDD0' }} className="px-4 pt-6 pb-4">
+      <div style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }} className="px-4 pt-6 pb-4">
         <h1 className="font-display text-xl font-bold" style={{ color: 'var(--terra-dark)' }}>
           Inviter venner
         </h1>
@@ -77,10 +77,10 @@ export default function InviteFriendsPage() {
         <button
           onClick={() => setShowComposer(true)}
           className="mt-4 w-full rounded-2xl p-4 flex items-center gap-3 text-left shadow-sm"
-          style={{ background: '#fff', border: '1.5px solid rgba(196,103,58,0.2)' }}
+          style={{ background: '#fff', border: '1.5px solid rgba(46,98,113,0.2)' }}
         >
           <div className="flex items-center justify-center rounded-2xl flex-shrink-0 text-xl"
-            style={{ width: 44, height: 44, background: 'rgba(196,103,58,0.1)' }}>
+            style={{ width: 44, height: 44, background: 'rgba(46,98,113,0.1)' }}>
             ✉️
           </div>
           <div className="flex-1">
@@ -120,7 +120,7 @@ export default function InviteFriendsPage() {
           friends.map((f: any) => (
             <div key={f.user_b} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
               <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
-                style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
+                style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--glass-border)', color: '#1A3542' }}>
                 {f.profiles?.avatar_url
                   ? <img src={f.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
                   : (f.profiles?.name || f.profiles?.email)?.[0]?.toUpperCase()}

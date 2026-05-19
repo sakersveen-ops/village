@@ -143,9 +143,9 @@ export default function RegisterPage() {
                         ? n === 1
                           ? '#e88c5a'
                           : n === 2
-                          ? '#c4673a'
+                          ? 'var(--terra)'
                           : 'var(--terra-green)'
-                        : 'rgba(196,103,58,0.15)',
+                        : 'rgba(46,98,113,0.15)',
                   }}
                 />
               ))}
@@ -223,11 +223,11 @@ export default function RegisterPage() {
 
         {/* Divider */}
         <div className="flex items-center gap-3">
-          <div className="flex-1 h-px" style={{ background: 'rgba(196,103,58,0.18)' }} />
+          <div className="flex-1 h-px" style={{ background: 'rgba(46,98,113,0.18)' }} />
           <span className="text-xs" style={{ color: 'var(--terra-mid)' }}>
             eller
           </span>
-          <div className="flex-1 h-px" style={{ background: 'rgba(196,103,58,0.18)' }} />
+          <div className="flex-1 h-px" style={{ background: 'rgba(46,98,113,0.18)' }} />
         </div>
 
         {/* Login link */}

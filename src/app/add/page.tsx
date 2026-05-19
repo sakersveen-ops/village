@@ -371,7 +371,7 @@ Returner KUN JSON, ingen annen tekst.` }
               style={book.selected ? { '--tw-ring-color': 'var(--terra)' } as React.CSSProperties : {}}>
               {book.image_url
                 ? <img src={book.image_url} alt={book.title} className="w-12 h-16 object-cover rounded-lg flex-shrink-0" />
-                : <div className="w-12 h-16 rounded-lg flex items-center justify-center text-xl flex-shrink-0" style={{ background: 'rgba(196,103,58,0.12)' }}>📚</div>}
+                : <div className="w-12 h-16 rounded-lg flex items-center justify-center text-xl flex-shrink-0" style={{ background: 'rgba(46,98,113,0.12)' }}>📚</div>}
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm leading-tight" style={{ color: 'var(--terra-dark)' }}>{book.title}</p>
                 {book.author && <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>{book.author}</p>}
@@ -379,7 +379,7 @@ Returner KUN JSON, ingen annen tekst.` }
                 {book.description && <p className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--terra-dark)' }}>{book.description}</p>}
               </div>
               <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center"
-                style={{ background: book.selected ? 'var(--terra)' : 'transparent', border: book.selected ? 'none' : '2px solid rgba(196,103,58,0.25)' }}>
+                style={{ background: book.selected ? 'var(--terra)' : 'transparent', border: book.selected ? 'none' : '2px solid rgba(46,98,113,0.25)' }}>
                 {book.selected && <span className="text-white text-xs">✓</span>}
               </div>
             </div>
@@ -398,7 +398,7 @@ Returner KUN JSON, ingen annen tekst.` }
       <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
         <div className="text-4xl mb-4">📚</div>
         <p className="font-bold mb-2" style={{ fontSize: 18, color: 'var(--terra-dark)' }}>Lagrer bøker…</p>
-        <div className="w-full max-w-xs rounded-full h-2 mt-2" style={{ background: 'rgba(196,103,58,0.15)' }}>
+        <div className="w-full max-w-xs rounded-full h-2 mt-2" style={{ background: 'rgba(46,98,113,0.15)' }}>
           <div className="h-2 rounded-full transition-all" style={{ width: `${shelfProgress}%`, background: 'var(--terra)' }} />
         </div>
         <p className="text-sm mt-2" style={{ color: 'var(--terra-mid)' }}>{shelfProgress}%</p>
@@ -437,7 +437,7 @@ Returner KUN JSON, ingen annen tekst.` }
           <button
             onClick={() => fileInputRef.current?.click()}
             className="glass w-full flex items-center gap-3 text-left"
-            style={{ borderRadius: 14, padding: '13px 16px', border: '0.5px solid rgba(196,103,58,0.2)' }}>
+            style={{ borderRadius: 14, padding: '13px 16px', border: '0.5px solid rgba(46,98,113,0.2)' }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-mid)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
             </svg>
@@ -492,10 +492,10 @@ Returner KUN JSON, ingen annen tekst.` }
                   className="flex flex-col items-center gap-1.5 flex-1 rounded-xl py-3 px-2 transition-all"
                   style={{
                     background: isActive ? 'var(--terra)' : 'white',
-                    border: isActive ? '0.5px solid var(--terra)' : '0.5px solid rgba(196,103,58,0.25)',
+                    border: isActive ? '0.5px solid var(--terra)' : '0.5px solid rgba(46,98,113,0.25)',
                     color: isActive ? 'white' : 'var(--terra-dark)',
                     fontSize: 11,
-                    boxShadow: isActive ? '0 2px 8px rgba(196,103,58,0.25)' : 'none',
+                    boxShadow: isActive ? '0 2px 8px rgba(46,98,113,0.25)' : 'none',
                   }}>
                   <span style={{ color: isActive ? 'var(--terra)' : 'var(--terra-mid)', display: 'flex' }}>
                     {CAT_ICONS[cat.id]}
@@ -541,7 +541,7 @@ Returner KUN JSON, ingen annen tekst.` }
                     style={{
                       background: subcategoryId === sub.id ? 'var(--terra)' : 'white',
                       color: subcategoryId === sub.id ? 'white' : 'var(--terra-dark)',
-                      border: subcategoryId === sub.id ? '0.5px solid var(--terra)' : '0.5px solid rgba(196,103,58,0.3)',
+                      border: subcategoryId === sub.id ? '0.5px solid var(--terra)' : '0.5px solid rgba(46,98,113,0.3)',
                       borderRadius: 999, padding: '6px 12px', fontSize: 13,
                     }}>
                     {sub.label}
@@ -566,7 +566,7 @@ Returner KUN JSON, ingen annen tekst.` }
                       style={{
                         background: ageGroup === ag.id ? 'var(--terra)' : 'white',
                         color: ageGroup === ag.id ? 'white' : 'var(--terra-dark)',
-                        border: ageGroup === ag.id ? '0.5px solid var(--terra)' : '0.5px solid rgba(196,103,58,0.3)',
+                        border: ageGroup === ag.id ? '0.5px solid var(--terra)' : '0.5px solid rgba(46,98,113,0.3)',
                         borderRadius: 999, padding: '6px 12px', fontSize: 13,
                       }}>
                       {ag.label}
@@ -589,7 +589,7 @@ Returner KUN JSON, ingen annen tekst.` }
                         flex: 1,
                         background: gender === g ? 'var(--terra)' : 'white',
                         color: gender === g ? 'white' : 'var(--terra-dark)',
-                        border: gender === g ? '0.5px solid var(--terra)' : '0.5px solid rgba(196,103,58,0.3)',
+                        border: gender === g ? '0.5px solid var(--terra)' : '0.5px solid rgba(46,98,113,0.3)',
                         borderRadius: 10, padding: '8px 14px', fontSize: 13,
                       }}>
                       {g.charAt(0).toUpperCase() + g.slice(1)}
@@ -605,7 +605,7 @@ Returner KUN JSON, ingen annen tekst.` }
                         style={{
                           background: size === s ? 'var(--terra)' : 'white',
                           color: size === s ? 'white' : 'var(--terra-dark)',
-                          border: size === s ? '0.5px solid var(--terra)' : '0.5px solid rgba(196,103,58,0.3)',
+                          border: size === s ? '0.5px solid var(--terra)' : '0.5px solid rgba(46,98,113,0.3)',
                           borderRadius: 999, padding: '6px 12px', fontSize: 13,
                         }}>
                         {s}
@@ -680,7 +680,7 @@ Returner KUN JSON, ingen annen tekst.` }
                     className={`rounded-2xl overflow-hidden border-2 transition-colors ${selectedImageSrc === 'own' ? 'border-[var(--terra)]' : 'border-transparent'}`}>
                     <img src={imagePreviews[0]} className="w-full h-28 object-cover" />
                     <div className="py-2 text-xs font-medium text-center"
-                      style={{ background: selectedImageSrc === 'own' ? 'var(--terra)' : 'rgba(196,103,58,0.08)', color: selectedImageSrc === 'own' ? 'white' : 'var(--terra-dark)' }}>
+                      style={{ background: selectedImageSrc === 'own' ? 'var(--terra)' : 'rgba(46,98,113,0.08)', color: selectedImageSrc === 'own' ? 'white' : 'var(--terra-dark)' }}>
                       {selectedImageSrc === 'own' ? '✓ Ditt bilde' : 'Ditt bilde'}
                     </div>
                   </button>
@@ -688,7 +688,7 @@ Returner KUN JSON, ingen annen tekst.` }
                     className={`rounded-2xl overflow-hidden border-2 transition-colors ${selectedImageSrc === 'suggested' ? 'border-[var(--terra)]' : 'border-transparent'}`}>
                     <img src={suggestedImageUrl} className="w-full h-28 object-cover" onError={() => setSuggestedImageUrl('')} />
                     <div className="py-2 text-xs font-medium text-center"
-                      style={{ background: selectedImageSrc === 'suggested' ? 'var(--terra)' : 'rgba(196,103,58,0.08)', color: selectedImageSrc === 'suggested' ? 'white' : 'var(--terra-dark)' }}>
+                      style={{ background: selectedImageSrc === 'suggested' ? 'var(--terra)' : 'rgba(46,98,113,0.08)', color: selectedImageSrc === 'suggested' ? 'white' : 'var(--terra-dark)' }}>
                       {selectedImageSrc === 'suggested' ? '✓ Produktbilde' : 'Produktbilde'}
                     </div>
                   </button>
@@ -718,7 +718,7 @@ Returner KUN JSON, ingen annen tekst.` }
                       ) : (
                         <label className="cursor-pointer block w-full h-full">
                           <div className="w-full h-full rounded-xl flex flex-col items-center justify-center gap-1.5"
-                            style={{ background: i === 0 ? 'white' : '#F5F0EA', border: i === 0 ? '1px dashed rgba(196,103,58,0.35)' : '0.5px dashed rgba(196,103,58,0.15)' }}>
+                            style={{ background: i === 0 ? 'white' : '#F5F0EA', border: i === 0 ? '1px dashed rgba(46,98,113,0.35)' : '0.5px dashed rgba(46,98,113,0.15)' }}>
                             {i === 0 && (
                               <>
                                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-mid)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

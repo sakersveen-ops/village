@@ -198,7 +198,7 @@ export default function CommunitiesPage() {
       return (
         <Link href={`/community/${community.id}`}>
           <div className="relative overflow-hidden rounded-[20px] aspect-[4/3] cursor-pointer group"
-            style={{ border: '1px solid rgba(196,103,58,0.18)', boxShadow: '0 2px 20px rgba(44,26,14,0.08)' }}>
+            style={{ border: '1px solid rgba(46,98,113,0.18)', boxShadow: '0 2px 20px rgba(44,26,14,0.08)' }}>
             <img src={community.cover_image_url} alt={community.name}
               className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
             <div className="absolute inset-0"
@@ -233,7 +233,7 @@ export default function CommunitiesPage() {
               )}
               {isAdmin && (
                 <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium mt-1.5"
-                  style={{ background: 'rgba(196,103,58,0.85)', color: 'white' }}>
+                  style={{ background: 'rgba(46,98,113,0.85)', color: 'white' }}>
                   🔑 Admin
                 </span>
               )}
@@ -246,7 +246,7 @@ export default function CommunitiesPage() {
     return (
       <Link href={`/community/${community.id}`}>
         <div className="item-card glass-hover rounded-[20px] overflow-hidden cursor-pointer"
-          style={{ border: '1px solid rgba(196,103,58,0.18)', boxShadow: '0 2px 16px rgba(44,26,14,0.06)' }}>
+          style={{ border: '1px solid rgba(46,98,113,0.18)', boxShadow: '0 2px 16px rgba(44,26,14,0.06)' }}>
           <div className="relative flex items-center justify-center"
             style={{ height: '100px', background: 'linear-gradient(135deg, rgba(255,240,230,0.9) 0%, rgba(232,221,208,0.7) 100%)' }}>
             <span style={{ fontSize: '44px' }}>{community.avatar_emoji}</span>
@@ -276,7 +276,7 @@ export default function CommunitiesPage() {
             )}
             {isAdmin && (
               <span className="inline-block text-xs px-2 py-0.5 rounded-full font-medium mt-1.5"
-                style={{ background: 'rgba(196,103,58,0.12)', color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.2)' }}>
+                style={{ background: 'rgba(46,98,113,0.12)', color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.2)' }}>
                 🔑 Admin
               </span>
             )}
@@ -290,7 +290,7 @@ export default function CommunitiesPage() {
     <Link href={`/community/${community.id}`}>
       <div className="glass rounded-2xl px-4 py-3 flex items-center gap-3" style={{ borderRadius: '16px' }}>
         <div className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl flex-shrink-0 overflow-hidden"
-          style={{ background: 'rgba(196,103,58,0.1)', border: '1px solid rgba(196,103,58,0.12)' }}>
+          style={{ background: 'rgba(46,98,113,0.1)', border: '1px solid rgba(46,98,113,0.12)' }}>
           {community.cover_image_url
             ? <img src={community.cover_image_url} alt={community.name} className="w-full h-full object-cover" />
             : community.avatar_emoji}
@@ -322,7 +322,7 @@ export default function CommunitiesPage() {
               minWidth: searchOpen ? '0' : '40px',
               flexShrink: searchOpen ? 1 : 0,
               background: 'rgba(255,248,243,0.7)',
-              border: '1px solid rgba(196,103,58,0.2)',
+              border: '1px solid rgba(46,98,113,0.2)',
               backdropFilter: 'blur(10px)',
             }}>
             <button onClick={searchOpen ? undefined : openSearch}
@@ -350,7 +350,7 @@ export default function CommunitiesPage() {
               className="flex-1 h-9 rounded-full text-xs font-medium transition-all whitespace-nowrap"
               style={{
                 background: filterAdminOnly ? 'var(--terra)' : 'rgba(255,248,243,0.7)',
-                border: `1px solid ${filterAdminOnly ? 'var(--terra)' : 'rgba(196,103,58,0.2)'}`,
+                border: `1px solid ${filterAdminOnly ? 'var(--terra)' : 'rgba(46,98,113,0.2)'}`,
                 backdropFilter: 'blur(10px)',
                 color: filterAdminOnly ? 'white' : 'var(--terra)',
                 letterSpacing: '-0.01em',

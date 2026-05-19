@@ -256,8 +256,8 @@ export default function MessagesPage() {
         style={{
           display: 'flex', alignItems: 'center', gap: 12,
           padding: '11px 13px', borderRadius: 16,
-          background: cardHighlight ? 'rgba(196,103,58,0.05)' : 'rgba(255,248,243,0.55)',
-          border: cardHighlight ? '1.5px solid rgba(196,103,58,0.2)' : '1px solid rgba(196,103,58,0.1)',
+          background: cardHighlight ? 'rgba(46,98,113,0.05)' : 'rgba(255,248,243,0.55)',
+          border: cardHighlight ? '1.5px solid rgba(46,98,113,0.2)' : '1px solid rgba(46,98,113,0.1)',
           cursor: 'pointer', opacity: isDone ? 0.5 : 1,
         }}
       >
@@ -265,7 +265,7 @@ export default function MessagesPage() {
         <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0 }}>
           {t.item_image
             ? <img src={t.item_image} alt="" style={{ width: 52, height: 52, borderRadius: 12, objectFit: 'cover', display: 'block' }} />
-            : <div style={{ width: 52, height: 52, borderRadius: 12, background: 'rgba(196,103,58,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>📦</div>
+            : <div style={{ width: 52, height: 52, borderRadius: 12, background: 'rgba(46,98,113,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>📦</div>
           }
           <div style={{
             position: 'absolute', bottom: -3, right: -3,
@@ -346,7 +346,7 @@ export default function MessagesPage() {
         borderRadius: '0 0 20px 20px',
         position: 'sticky', top: 60, zIndex: 40,
         background: '#FDF5F0',
-        borderBottom: '1px solid rgba(196,103,58,0.12)',
+        borderBottom: '1px solid rgba(46,98,113,0.12)',
         padding: '12px 16px',
         boxShadow: '0 2px 12px rgba(44,26,14,0.06)',
       }}>
@@ -371,8 +371,8 @@ export default function MessagesPage() {
             onClick={() => setUnreadOnly(v => !v)}
             style={{
               flexShrink: 0, padding: '7px 12px', borderRadius: 11, fontSize: 12, fontWeight: 600,
-              border: unreadOnly ? '1.5px solid rgba(196,103,58,0.45)' : '1px solid rgba(196,103,58,0.18)',
-              background: unreadOnly ? 'rgba(196,103,58,0.1)' : 'rgba(255,248,243,0.6)',
+              border: unreadOnly ? '1.5px solid rgba(46,98,113,0.45)' : '1px solid rgba(46,98,113,0.18)',
+              background: unreadOnly ? 'rgba(46,98,113,0.1)' : 'rgba(255,248,243,0.6)',
               color: unreadOnly ? 'var(--terra)' : 'var(--terra-mid)',
               cursor: 'pointer', whiteSpace: 'nowrap',
             }}
@@ -384,7 +384,7 @@ export default function MessagesPage() {
           <div style={{
             flex: 1, display: 'flex', alignItems: 'center', gap: 8,
             borderRadius: 11, padding: '7px 12px',
-            background: 'rgba(255,248,243,0.6)', border: '1px solid rgba(196,103,58,0.15)',
+            background: 'rgba(255,248,243,0.6)', border: '1px solid rgba(46,98,113,0.15)',
           }}>
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--terra-mid)" strokeWidth="2" strokeLinecap="round">
               <circle cx="7" cy="7" r="5"/><line x1="11" y1="11" x2="14" y2="14"/>
@@ -407,7 +407,7 @@ export default function MessagesPage() {
       <div style={{ padding: '8px 14px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} style={{ height: 76, borderRadius: 16, background: 'rgba(196,103,58,0.05)' }} />
+            <div key={i} style={{ height: 76, borderRadius: 16, background: 'rgba(46,98,113,0.05)' }} />
           ))
         ) : threads.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '72px 24px 0', color: 'var(--terra-mid)' }}>

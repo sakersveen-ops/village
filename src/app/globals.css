@@ -397,7 +397,7 @@ input[type="range"]::-moz-range-thumb {
   width: 100%;
 }
 
-.btn-primary:hover  { background: #1F4E5C; box-shadow: 0 6px 20px rgba(46,98,113,0.42); transform: translateY(-1px); }
+.btn-primary:hover  { background: #163d4a; box-shadow: 0 6px 20px rgba(46,98,113,0.42); transform: translateY(-1px); }
 .btn-primary:active { transform: translateY(0); box-shadow: 0 2px 8px rgba(46,98,113,0.25); }
 
 /* ── Proposal card ─────────────────────────────────────────── */

@@ -137,7 +137,7 @@ function ProfileRow({ profile, sent, onAdd }: { profile: any; sent: boolean; onA
     <div className="glass flex items-center justify-between px-4 py-3" style={{ borderRadius: 14 }}>
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-full overflow-hidden flex items-center justify-center text-lg shrink-0"
-          style={{ background: 'rgba(196,103,58,0.15)' }}>
+          style={{ background: 'rgba(46,98,113,0.15)' }}>
           {profile.avatar_url ? <img src={profile.avatar_url} className="w-full h-full object-cover" alt="" /> : '👤'}
         </div>
         <div>
@@ -212,7 +212,7 @@ function ProfileStep({ name, setName, username, setUsername, usernameError, setU
       <div className="flex flex-col items-center gap-2">
         <label className="cursor-pointer">
           <div className="w-24 h-24 rounded-full overflow-hidden flex items-center justify-center"
-            style={{ background: 'rgba(196,103,58,0.1)', border: '2px dashed rgba(196,103,58,0.35)' }}>
+            style={{ background: 'rgba(46,98,113,0.1)', border: '2px dashed rgba(46,98,113,0.35)' }}>
             {avatarPreview ? <img src={avatarPreview} className="w-full h-full object-cover" alt="avatar" /> : <span className="text-4xl">📷</span>}
           </div>
           <input type="file" accept="image/*" onChange={handleAvatar} className="hidden" />
@@ -626,7 +626,7 @@ function OnboardingContent() {
                   <button onClick={() => toggleOwned(item)} className="text-xs px-3 py-1 rounded-full border transition-colors shrink-0"
                     style={ownedItems.has(item)
                       ? { background: 'var(--terra)', borderColor: 'transparent', color: '#fff' }
-                      : { borderColor: 'rgba(196,103,58,0.3)', color: 'var(--terra)' }}>
+                      : { borderColor: 'rgba(46,98,113,0.3)', color: 'var(--terra)' }}>
                     {ownedItems.has(item) ? '✓ Ja' : 'Ja'}
                   </button>
                 </div>
@@ -691,7 +691,7 @@ function OnboardingContent() {
       <div className="flex gap-1.5 mb-8">
         {Array.from({ length: TOTAL_STEPS }, (_, i) => (
           <div key={i} className="h-1 flex-1 rounded-full transition-all"
-            style={{ background: i < step ? 'var(--terra)' : 'rgba(196,103,58,0.15)' }} />
+            style={{ background: i < step ? 'var(--terra)' : 'rgba(46,98,113,0.15)' }} />
         ))}
       </div>
       {steps[step]}

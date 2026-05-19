@@ -7,7 +7,7 @@ export default function FinnImportPage() {
   const router = useRouter()
 
   return (
-    <div style={{ minHeight: '100dvh', background: 'var(--bg, #FFF8F3)', padding: '0 0 24px' }}>
+    <div style={{ minHeight: '100dvh', background: 'var(--bg, var(--glass-bg))', padding: '0 0 24px' }}>
       {/* Page header */}
       <div className="page-header glass" style={{ position: 'sticky', top: 0, zIndex: 40 }}>
         <button

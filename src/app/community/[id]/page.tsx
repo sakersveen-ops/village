@@ -272,19 +272,19 @@ export default function CommunityPage() {
   })
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-screen text-[#9C7B65]">Laster…</div>
+    <div className="flex items-center justify-center min-h-screen text-[var(--terra-mid)]">Laster…</div>
   )
   if (!community) return (
-    <div className="p-8 text-center text-[#9C7B65]">Fant ikke community</div>
+    <div className="p-8 text-center text-[var(--terra-mid)]">Fant ikke community</div>
   )
 
   if (!myRole && membershipStatus === 'pending') return (
     <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
       <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
         <div className="text-5xl mb-4">📬</div>
-        <h1 className="text-xl font-bold text-[#2C1A0E] mb-2">Forespørsel sendt!</h1>
-        <p className="text-[#9C7B65] text-sm mb-6">Venter på godkjenning fra en admin i {community.name}.</p>
-        <button onClick={() => router.push('/')} className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium">
+        <h1 className="text-xl font-bold text-[var(--terra-dark)] mb-2">Forespørsel sendt!</h1>
+        <p className="text-[var(--terra-mid)] text-sm mb-6">Venter på godkjenning fra en admin i {community.name}.</p>
+        <button onClick={() => router.push('/')} className="w-full bg-[var(--terra)] text-white rounded-xl py-3 font-medium">
           Tilbake til feeden
         </button>
       </div>
@@ -295,25 +295,25 @@ export default function CommunityPage() {
     <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
       <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
         <div className="text-5xl mb-3">{community.avatar_emoji}</div>
-        <h1 className="text-xl font-bold text-[#2C1A0E] mb-1">{community.name}</h1>
+        <h1 className="text-xl font-bold text-[var(--terra-dark)] mb-1">{community.name}</h1>
         {community.description && (
-          <p className="text-[#9C7B65] text-sm mb-4">{community.description}</p>
+          <p className="text-[var(--terra-mid)] text-sm mb-4">{community.description}</p>
         )}
         {community.is_public ? (
           <>
-            <p className="text-xs text-[#9C7B65] mb-6">Send en forespørsel – en admin godkjenner deg.</p>
+            <p className="text-xs text-[var(--terra-mid)] mb-6">Send en forespørsel – en admin godkjenner deg.</p>
             <button
               onClick={requestMembership}
               disabled={requesting}
-              className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium disabled:opacity-50"
+              className="w-full bg-[var(--terra)] text-white rounded-xl py-3 font-medium disabled:opacity-50"
             >
               {requesting ? 'Sender…' : 'Be om å bli med'}
             </button>
           </>
         ) : (
-          <p className="text-sm text-[#9C7B65] mt-2">🔒 Denne kretsen er privat. Du trenger en invitasjonslenke.</p>
+          <p className="text-sm text-[var(--terra-mid)] mt-2">🔒 Denne kretsen er privat. Du trenger en invitasjonslenke.</p>
         )}
-        <button onClick={() => router.back()} className="mt-3 text-sm text-[#9C7B65] w-full py-2">← Tilbake</button>
+        <button onClick={() => router.back()} className="mt-3 text-sm text-[var(--terra-mid)] w-full py-2">← Tilbake</button>
       </div>
     </div>
   )
@@ -327,7 +327,7 @@ export default function CommunityPage() {
         <div className="px-4 pt-10 pb-4">
         <button
           onClick={() => editing ? setEditing(false) : router.back()}
-          className="text-[#C4673A] text-sm mb-4 block"
+          className="text-[var(--terra)] text-sm mb-4 block"
         >
           ← {editing ? 'Avbryt redigering' : 'Tilbake'}
         </button>
@@ -337,18 +337,18 @@ export default function CommunityPage() {
             <input
               value={editName}
               onChange={e => setEditName(e.target.value)}
-              className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-2 text-[#2C1A0E] text-xl font-bold outline-none focus:border-[#C4673A]"
+              className="bg-white border border-[var(--glass-border)] rounded-xl px-4 py-2 text-[var(--terra-dark)] text-xl font-bold outline-none focus:border-[var(--terra)]"
             />
             <textarea
               value={editDesc}
               onChange={e => setEditDesc(e.target.value)}
               rows={2}
               placeholder="Legg til en beskrivelse av kretsen…"
-              className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-2 text-[#2C1A0E] text-sm outline-none focus:border-[#C4673A] resize-none"
+              className="bg-white border border-[var(--glass-border)] rounded-xl px-4 py-2 text-[var(--terra-dark)] text-sm outline-none focus:border-[var(--terra)] resize-none"
             />
             <div className="flex gap-2">
-              <button onClick={saveEdits} className="flex-1 bg-[#C4673A] text-white rounded-xl py-2 text-sm font-medium">Lagre</button>
-              <button onClick={() => setEditing(false)} className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-2 text-sm">Avbryt</button>
+              <button onClick={saveEdits} className="flex-1 bg-[var(--terra)] text-white rounded-xl py-2 text-sm font-medium">Lagre</button>
+              <button onClick={() => setEditing(false)} className="flex-1 bg-white border border-[var(--glass-border)] text-[var(--terra-mid)] rounded-xl py-2 text-sm">Avbryt</button>
             </div>
           </div>
         ) : (
@@ -371,7 +371,7 @@ export default function CommunityPage() {
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploadingImage}
-                    className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#C4673A] rounded-full flex items-center justify-center shadow-sm"
+                    className="absolute -bottom-1 -right-1 w-6 h-6 bg-[var(--terra)] rounded-full flex items-center justify-center shadow-sm"
                     title="Bytt bilde"
                   >
                     {uploadingImage
@@ -390,18 +390,18 @@ export default function CommunityPage() {
             </div>
 
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl font-bold text-[#2C1A0E]">{community.name}</h1>
+              <h1 className="text-xl font-bold text-[var(--terra-dark)]">{community.name}</h1>
               {/* Bio / description – always show, with friendly placeholder */}
-              <p className="text-sm text-[#9C7B65] mt-0.5">
+              <p className="text-sm text-[var(--terra-mid)] mt-0.5">
                 {community.description
                   ? community.description
                   : <span className="italic opacity-70">Her kommer det en beskrivelse fra administrator av kretsen snart 🌱</span>}
               </p>
-              <p className="text-xs text-[#9C7B65] mt-1">{members.length} medlemmer</p>
+              <p className="text-xs text-[var(--terra-mid)] mt-1">{members.length} medlemmer</p>
             </div>
 
             {isAdmin && (
-              <button onClick={() => setEditing(true)} className="text-sm text-[#C4673A] flex-shrink-0">Rediger</button>
+              <button onClick={() => setEditing(true)} className="text-sm text-[var(--terra)] flex-shrink-0">Rediger</button>
             )}
           </div>
         )}
@@ -412,7 +412,7 @@ export default function CommunityPage() {
               key={t}
               onClick={() => setTab(t as any)}
               className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors flex-shrink-0 ${
-                tab === t ? 'border-transparent text-white' : 'text-[#6B4226] border-[#E8DDD0]'
+                tab === t ? 'border-transparent text-white' : 'text-[#1A3542] border-[var(--glass-border)]'
               }`}
               style={tab === t ? { background: 'var(--terra)' } : { background: 'rgba(255,248,243,0.6)', backdropFilter: 'blur(8px)' }}
             >
@@ -444,11 +444,11 @@ export default function CommunityPage() {
             {items.length === 0 ? (
               <div className="rounded-3xl p-8 text-center" style={{
                 background: 'linear-gradient(135deg, rgba(255,240,230,0.7) 0%, rgba(250,247,242,0.7) 100%)',
-                border: '1px solid rgba(196,103,58,0.15)',
+                border: '1px solid rgba(46,98,113,0.15)',
               }}>
                 <div className="text-5xl mb-3">🌱</div>
-                <p className="font-semibold text-[#2C1A0E] mb-1" style={{ letterSpacing: '-0.01em' }}>Ingen ting delt ennå</p>
-                <p className="text-sm text-[#9C7B65] mb-5">
+                <p className="font-semibold text-[var(--terra-dark)] mb-1" style={{ letterSpacing: '-0.01em' }}>Ingen ting delt ennå</p>
+                <p className="text-sm text-[var(--terra-mid)] mb-5">
                   Inviter naboer og venner — jo flere som er med, jo mer å låne!
                 </p>
                 <button
@@ -483,7 +483,7 @@ export default function CommunityPage() {
                     <div
                       className="rounded-[20px] overflow-hidden group relative"
                       style={{
-                        border: '1px solid rgba(196,103,58,0.15)',
+                        border: '1px solid rgba(46,98,113,0.15)',
                         boxShadow: '0 2px 16px rgba(44,26,14,0.07)',
                       }}
                     >
@@ -508,14 +508,14 @@ export default function CommunityPage() {
                       )}
                       {/* Info area */}
                       <div className="p-3 glass-card">
-                        <p className="font-display font-semibold text-[#2C1A0E] text-sm truncate" style={{ letterSpacing: '-0.01em' }}>
+                        <p className="font-display font-semibold text-[var(--terra-dark)] text-sm truncate" style={{ letterSpacing: '-0.01em' }}>
                           {item.name}
                         </p>
                         <div className="flex items-center gap-1.5 mt-1">
-                          <div className="w-4 h-4 rounded-full bg-[#E8DDD0] flex items-center justify-center overflow-hidden flex-shrink-0">
+                          <div className="w-4 h-4 rounded-full bg-[var(--glass-border)] flex items-center justify-center overflow-hidden flex-shrink-0">
                             {item.profiles?.avatar_url
                               ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
-                              : <span className="text-[#6B4226] font-bold" style={{ fontSize: '8px' }}>{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>}
+                              : <span className="text-[#1A3542] font-bold" style={{ fontSize: '8px' }}>{(item.profiles?.name || item.profiles?.email)?.[0]?.toUpperCase()}</span>}
                           </div>
                           <p className="text-xs truncate" style={{ color: 'var(--terra-green)' }}>
                             {item.profiles?.name || item.profiles?.email?.split('@')[0]}
@@ -535,22 +535,22 @@ export default function CommunityPage() {
           <div className="flex flex-col gap-2">
             {members.map(m => (
               <div key={m.id} className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
-                <div className="w-9 h-9 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
+                <div className="w-9 h-9 rounded-full bg-[var(--glass-border)] flex items-center justify-center font-bold text-sm text-[#1A3542] overflow-hidden flex-shrink-0">
                   {m.profiles?.avatar_url
                     ? <img src={m.profiles.avatar_url} className="w-full h-full object-cover" />
                     : (m.profiles?.name || m.profiles?.email)?.[0]?.toUpperCase()}
                 </div>
                 <div className="flex-1">
-                  <p className="text-[#2C1A0E] font-medium text-sm">{m.profiles?.name || m.profiles?.email?.split('@')[0]}</p>
-                  {m.role === 'admin' && <span className="text-xs text-[#C4673A] font-medium">🔑 Admin</span>}
+                  <p className="text-[var(--terra-dark)] font-medium text-sm">{m.profiles?.name || m.profiles?.email?.split('@')[0]}</p>
+                  {m.role === 'admin' && <span className="text-xs text-[var(--terra)] font-medium">🔑 Admin</span>}
                 </div>
                 {/* FIX: Admin actions now in members tab too */}
                 {isAdmin && m.user_id !== user?.id && (
                   <div className="flex gap-2">
                     {m.role !== 'admin' && (
-                      <button onClick={() => promoteToAdmin(m.id)} className="text-xs text-[#C4673A] border border-[#C4673A] rounded-full px-2 py-1">Gjør admin</button>
+                      <button onClick={() => promoteToAdmin(m.id)} className="text-xs text-[var(--terra)] border border-[var(--terra)] rounded-full px-2 py-1">Gjør admin</button>
                     )}
-                    <button onClick={() => removeMember(m.id)} className="text-xs text-[#9C7B65] border border-[#E8DDD0] rounded-full px-2 py-1">Fjern</button>
+                    <button onClick={() => removeMember(m.id)} className="text-xs text-[var(--terra-mid)] border border-[var(--glass-border)] rounded-full px-2 py-1">Fjern</button>
                   </div>
                 )}
               </div>
@@ -562,29 +562,29 @@ export default function CommunityPage() {
         {tab === 'admin' && isAdmin && (
           <div className="flex flex-col gap-5">
             <div>
-              <h2 className="font-bold text-[#2C1A0E] mb-3">
-                Ventende forespørsler {pending.length > 0 && <span className="text-[#C4673A]">({pending.length})</span>}
+              <h2 className="font-bold text-[var(--terra-dark)] mb-3">
+                Ventende forespørsler {pending.length > 0 && <span className="text-[var(--terra)]">({pending.length})</span>}
               </h2>
               {pending.length === 0 ? (
-                <div className="bg-white rounded-2xl p-5 text-center text-[#9C7B65] text-sm">Ingen ventende forespørsler</div>
+                <div className="bg-white rounded-2xl p-5 text-center text-[var(--terra-mid)] text-sm">Ingen ventende forespørsler</div>
               ) : (
                 <div className="flex flex-col gap-2">
                   {pending.map(m => (
                     <div key={m.id} className="bg-white rounded-2xl px-4 py-4 shadow-sm">
                       <div className="flex items-center gap-3 mb-3">
-                        <div className="w-9 h-9 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
+                        <div className="w-9 h-9 rounded-full bg-[var(--glass-border)] flex items-center justify-center font-bold text-sm text-[#1A3542] overflow-hidden flex-shrink-0">
                           {m.profiles?.avatar_url
                             ? <img src={m.profiles.avatar_url} className="w-full h-full object-cover" />
                             : (m.profiles?.name || m.profiles?.email)?.[0]?.toUpperCase()}
                         </div>
                         <div className="flex-1">
-                          <p className="font-medium text-[#2C1A0E] text-sm">{m.profiles?.name || m.profiles?.email?.split('@')[0]}</p>
-                          <p className="text-xs text-[#9C7B65]">{formatDate(m.joined_at)}</p>
+                          <p className="font-medium text-[var(--terra-dark)] text-sm">{m.profiles?.name || m.profiles?.email?.split('@')[0]}</p>
+                          <p className="text-xs text-[var(--terra-mid)]">{formatDate(m.joined_at)}</p>
                         </div>
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => approveMember(m.id, m.user_id, true)} className="flex-1 bg-[#4A7C59] text-white rounded-xl py-2 text-sm font-medium">✓ Godta</button>
-                        <button onClick={() => approveMember(m.id, m.user_id, false)} className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-2 text-sm">Avslå</button>
+                        <button onClick={() => approveMember(m.id, m.user_id, false)} className="flex-1 bg-white border border-[var(--glass-border)] text-[var(--terra-mid)] rounded-xl py-2 text-sm">Avslå</button>
                       </div>
                     </div>
                   ))}
@@ -593,26 +593,26 @@ export default function CommunityPage() {
             </div>
 
             <div>
-              <h2 className="font-bold text-[#2C1A0E] mb-3">Medlemslogg</h2>
+              <h2 className="font-bold text-[var(--terra-dark)] mb-3">Medlemslogg</h2>
               {memberLog.length === 0 ? (
-                <div className="bg-white rounded-2xl p-5 text-center text-[#9C7B65] text-sm">Ingen aktivitet ennå</div>
+                <div className="bg-white rounded-2xl p-5 text-center text-[var(--terra-mid)] text-sm">Ingen aktivitet ennå</div>
               ) : (
                 <div className="flex flex-col gap-2">
                   {memberLog.map(log => (
                     <div key={log.id} className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
-                      <div className="w-9 h-9 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-[var(--glass-border)] flex items-center justify-center font-bold text-sm text-[#1A3542] overflow-hidden flex-shrink-0">
                         {log.profiles?.avatar_url
                           ? <img src={log.profiles.avatar_url} className="w-full h-full object-cover" />
                           : (log.profiles?.name || log.profiles?.email)?.[0]?.toUpperCase()}
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm text-[#2C1A0E]">
+                        <p className="text-sm text-[var(--terra-dark)]">
                           <span className="font-medium">{log.profiles?.name || log.profiles?.email?.split('@')[0]}</span>
                           {log.action === 'requested' && ' søkte om medlemskap'}
                           {log.action === 'approved' && ` ble godkjent av ${log.actor?.name || 'admin'}`}
                           {log.action === 'declined' && ` ble avslått av ${log.actor?.name || 'admin'}`}
                         </p>
-                        <p className="text-xs text-[#9C7B65] mt-0.5">{formatDate(log.created_at)}</p>
+                        <p className="text-xs text-[var(--terra-mid)] mt-0.5">{formatDate(log.created_at)}</p>
                       </div>
                       <span className="text-lg flex-shrink-0">
                         {log.action === 'approved' ? '✅' : log.action === 'declined' ? '❌' : '📬'}
@@ -644,13 +644,13 @@ export default function CommunityPage() {
           onClick={() => !deleting && setShowDeleteConfirm(false)}>
           <div className="glass-heavy rounded-t-3xl w-full max-w-lg p-6"
             onClick={e => e.stopPropagation()}>
-            <div className="w-10 h-1 rounded-full bg-[#E8DDD0] mx-auto mb-5" />
+            <div className="w-10 h-1 rounded-full bg-[var(--glass-border)] mx-auto mb-5" />
             <div className="text-4xl mb-3 text-center">⚠️</div>
-            <h2 className="font-display text-xl font-bold text-[#2C1A0E] text-center mb-2"
+            <h2 className="font-display text-xl font-bold text-[var(--terra-dark)] text-center mb-2"
               style={{ letterSpacing: '-0.02em' }}>
               Slette «{community.name}»?
             </h2>
-            <p className="text-sm text-[#9C7B65] text-center mb-6 leading-relaxed">
+            <p className="text-sm text-[var(--terra-mid)] text-center mb-6 leading-relaxed">
               Dette kan ikke angres. Alle {members.length} medlemmer vil få varsel om at kretsen er slettet.
             </p>
             <div className="flex gap-3">
@@ -676,24 +676,24 @@ export default function CommunityPage() {
       {showInviteModal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setShowInviteModal(false)}>
           <div
-            className="bg-[#FAF7F2] rounded-t-3xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-xl"
+            className="bg-[var(--glass-bg-heavy)] rounded-t-3xl w-full max-w-lg max-h-[80vh] flex flex-col shadow-xl"
             onClick={e => e.stopPropagation()}
           >
             {/* Modal header */}
-            <div className="px-5 pt-5 pb-3 border-b border-[#E8DDD0]">
-              <div className="w-10 h-1 rounded-full bg-[#E8DDD0] mx-auto mb-4" />
-              <h2 className="text-lg font-bold text-[#2C1A0E]">Inviter venner</h2>
-              <p className="text-sm text-[#9C7B65] mt-0.5">Velg hvem du vil invitere til {community.name}</p>
+            <div className="px-5 pt-5 pb-3 border-b border-[var(--glass-border)]">
+              <div className="w-10 h-1 rounded-full bg-[var(--glass-border)] mx-auto mb-4" />
+              <h2 className="text-lg font-bold text-[var(--terra-dark)]">Inviter venner</h2>
+              <p className="text-sm text-[var(--terra-mid)] mt-0.5">Velg hvem du vil invitere til {community.name}</p>
 
               {/* Search */}
-              <div className="mt-3 bg-white border border-[#E8DDD0] rounded-xl px-3 py-2 flex items-center gap-2">
-                <span className="text-[#9C7B65]">🔍</span>
+              <div className="mt-3 bg-white border border-[var(--glass-border)] rounded-xl px-3 py-2 flex items-center gap-2">
+                <span className="text-[var(--terra-mid)]">🔍</span>
                 <input
                   type="text"
                   value={friendSearch}
                   onChange={e => setFriendSearch(e.target.value)}
                   placeholder="Søk etter venner…"
-                  className="flex-1 bg-transparent text-sm text-[#2C1A0E] outline-none placeholder:text-[#C4A882]"
+                  className="flex-1 bg-transparent text-sm text-[var(--terra-dark)] outline-none placeholder:text-[#C4A882]"
                 />
               </div>
             </div>
@@ -701,7 +701,7 @@ export default function CommunityPage() {
             {/* Friends list */}
             <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2">
               {filteredFriends.length === 0 ? (
-                <div className="text-center py-10 text-[#9C7B65] text-sm">
+                <div className="text-center py-10 text-[var(--terra-mid)] text-sm">
                   {friends.length === 0 ? 'Du har ingen venner å invitere ennå' : 'Ingen treff'}
                 </div>
               ) : (
@@ -710,23 +710,23 @@ export default function CommunityPage() {
                   const alreadyInvited = invitedIds.has(friend.id)
                   return (
                     <div key={friend.id} className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm">
-                      <div className="w-10 h-10 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-[var(--glass-border)] flex items-center justify-center font-bold text-sm text-[#1A3542] overflow-hidden flex-shrink-0">
                         {friend.avatar_url
                           ? <img src={friend.avatar_url} className="w-full h-full object-cover" />
                           : (friend.name || friend.email)?.[0]?.toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-[#2C1A0E] text-sm truncate">{friend.name || friend.email?.split('@')[0]}</p>
-                        {friend.email && <p className="text-xs text-[#9C7B65] truncate">{friend.email}</p>}
+                        <p className="font-medium text-[var(--terra-dark)] text-sm truncate">{friend.name || friend.email?.split('@')[0]}</p>
+                        {friend.email && <p className="text-xs text-[var(--terra-mid)] truncate">{friend.email}</p>}
                       </div>
                       {alreadyMember ? (
                         <span className="text-xs text-[#4A7C59] font-medium bg-[#E8F4EC] px-3 py-1.5 rounded-full">Medlem</span>
                       ) : alreadyInvited ? (
-                        <span className="text-xs text-[#9C7B65] bg-[#F0EDE8] px-3 py-1.5 rounded-full">✓ Sendt</span>
+                        <span className="text-xs text-[var(--terra-mid)] bg-[#F0EDE8] px-3 py-1.5 rounded-full">✓ Sendt</span>
                       ) : (
                         <button
                           onClick={() => inviteFriend(friend.id)}
-                          className="text-xs text-white bg-[#C4673A] px-3 py-1.5 rounded-full font-medium"
+                          className="text-xs text-white bg-[var(--terra)] px-3 py-1.5 rounded-full font-medium"
                         >
                           Inviter
                         </button>
@@ -738,13 +738,13 @@ export default function CommunityPage() {
             </div>
 
             {/* Copy link row at bottom of modal */}
-            <div className="px-4 py-4 border-t border-[#E8DDD0]">
+            <div className="px-4 py-4 border-t border-[var(--glass-border)]">
               <button
                 onClick={copyInvite}
                 className={`w-full border border-dashed rounded-2xl py-3 text-sm font-medium transition-colors ${
                   copySuccess
                     ? 'border-[#4A7C59] text-[#4A7C59] bg-[#E8F4EC]'
-                    : 'border-[#C4673A] text-[#C4673A] bg-white'
+                    : 'border-[var(--terra)] text-[var(--terra)] bg-white'
                 }`}
               >
                 {copySuccess ? '✓ Invitasjonslenke kopiert!' : '📋 Kopier invitasjonslenke'}

@@ -46,16 +46,16 @@ export default function CloseFriendsPage() {
     }
   }
 
-  if (loading) return <div className="p-8 text-center text-[#9C7B65]">Laster…</div>
+  if (loading) return <div className="p-8 text-center text-[var(--terra-mid)]">Laster…</div>
 
   return (
     <div className="max-w-lg mx-auto pb-24 px-4 pt-10">
-      <button onClick={() => router.back()} className="text-[#C4673A] text-sm mb-4 block">← Tilbake</button>
-      <h1 className="text-2xl font-bold text-[#2C1A0E] mb-1">Nære venner</h1>
-      <p className="text-sm text-[#9C7B65] mb-6">Disse kan se ting du deler kun med nære venner</p>
+      <button onClick={() => router.back()} className="text-[var(--terra)] text-sm mb-4 block">← Tilbake</button>
+      <h1 className="text-2xl font-bold text-[var(--terra-dark)] mb-1">Nære venner</h1>
+      <p className="text-sm text-[var(--terra-mid)] mb-6">Disse kan se ting du deler kun med nære venner</p>
 
       {friends.length === 0 ? (
-        <div className="bg-white rounded-2xl p-6 text-center text-[#9C7B65] text-sm">
+        <div className="bg-white rounded-2xl p-6 text-center text-[var(--terra-mid)] text-sm">
           Du har ingen venner ennå
         </div>
       ) : (
@@ -66,14 +66,14 @@ export default function CloseFriendsPage() {
               <button
                 key={f.user_b}
                 onClick={() => toggle(f.user_b)}
-                className={`flex items-center gap-3 rounded-2xl px-4 py-3 shadow-sm transition-colors ${isClose ? 'bg-[#FFF0E6] border border-[#C4673A]' : 'bg-white border border-transparent'}`}
+                className={`flex items-center gap-3 rounded-2xl px-4 py-3 shadow-sm transition-colors ${isClose ? 'bg-[#FFF0E6] border border-[var(--terra)]' : 'bg-white border border-transparent'}`}
               >
-                <div className="w-10 h-10 rounded-full bg-[#E8DDD0] flex items-center justify-center font-bold text-sm text-[#6B4226] overflow-hidden flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-[var(--glass-border)] flex items-center justify-center font-bold text-sm text-[#1A3542] overflow-hidden flex-shrink-0">
                   {f.profiles?.avatar_url
                     ? <img src={f.profiles.avatar_url} className="w-full h-full object-cover" />
                     : (f.profiles?.name || f.profiles?.email)?.[0]?.toUpperCase()}
                 </div>
-                <p className="flex-1 text-left font-medium text-[#2C1A0E] text-sm">
+                <p className="flex-1 text-left font-medium text-[var(--terra-dark)] text-sm">
                   {f.profiles?.name || f.profiles?.email?.split('@')[0]}
                 </p>
                 <span className={`text-lg ${isClose ? 'opacity-100' : 'opacity-20'}`}>❤️</span>

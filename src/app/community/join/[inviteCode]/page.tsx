@@ -76,28 +76,28 @@ export default function JoinCommunityPage() {
     setStatus('success')
   }
 
-  if (status === 'loading') return <div className="flex items-center justify-center min-h-screen text-[#9C7B65]">Laster…</div>
+  if (status === 'loading') return <div className="flex items-center justify-center min-h-screen text-[var(--terra-mid)]">Laster…</div>
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
       {status === 'error' && (
         <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
           <div className="text-5xl mb-4">😬</div>
-          <h1 className="text-xl font-bold text-[#2C1A0E] mb-2">Ugyldig lenke</h1>
-          <button onClick={() => router.push('/')} className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium mt-4">Tilbake</button>
+          <h1 className="text-xl font-bold text-[var(--terra-dark)] mb-2">Ugyldig lenke</h1>
+          <button onClick={() => router.push('/')} className="w-full bg-[var(--terra)] text-white rounded-xl py-3 font-medium mt-4">Tilbake</button>
         </div>
       )}
 
       {(status === 'preview' || status === 'joining') && community && (
         <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
           <div className="text-5xl mb-3">{community.avatar_emoji}</div>
-          <h1 className="text-xl font-bold text-[#2C1A0E] mb-1">{community.name}</h1>
-          {community.description && <p className="text-[#9C7B65] text-sm mb-4">{community.description}</p>}
-          <p className="text-xs text-[#9C7B65] mb-6">Du sender en forespørsel – en admin godkjenner deg.</p>
+          <h1 className="text-xl font-bold text-[var(--terra-dark)] mb-1">{community.name}</h1>
+          {community.description && <p className="text-[var(--terra-mid)] text-sm mb-4">{community.description}</p>}
+          <p className="text-xs text-[var(--terra-mid)] mb-6">Du sender en forespørsel – en admin godkjenner deg.</p>
           <button
             onClick={join}
             disabled={status === 'joining'}
-            className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium disabled:opacity-50"
+            className="w-full bg-[var(--terra)] text-white rounded-xl py-3 font-medium disabled:opacity-50"
           >
             {status === 'joining' ? 'Sender…' : 'Be om å bli med'}
           </button>
@@ -107,17 +107,17 @@ export default function JoinCommunityPage() {
       {status === 'success' && (
         <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
           <div className="text-5xl mb-4">📬</div>
-          <h1 className="text-xl font-bold text-[#2C1A0E] mb-2">Forespørsel sendt!</h1>
-          <p className="text-[#9C7B65] text-sm mb-6">En admin i {community.name} godkjenner deg snart.</p>
-          <button onClick={() => router.push('/')} className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium">Gå til feeden</button>
+          <h1 className="text-xl font-bold text-[var(--terra-dark)] mb-2">Forespørsel sendt!</h1>
+          <p className="text-[var(--terra-mid)] text-sm mb-6">En admin i {community.name} godkjenner deg snart.</p>
+          <button onClick={() => router.push('/')} className="w-full bg-[var(--terra)] text-white rounded-xl py-3 font-medium">Gå til feeden</button>
         </div>
       )}
 
       {status === 'already' && (
         <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
           <div className="text-5xl mb-4">👋</div>
-          <h1 className="text-xl font-bold text-[#2C1A0E] mb-2">Du er allerede med!</h1>
-          <button onClick={() => router.push(`/community/${community?.id}`)} className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium mt-4">Gå til community</button>
+          <h1 className="text-xl font-bold text-[var(--terra-dark)] mb-2">Du er allerede med!</h1>
+          <button onClick={() => router.push(`/community/${community?.id}`)} className="w-full bg-[var(--terra)] text-white rounded-xl py-3 font-medium mt-4">Gå til community</button>
         </div>
       )}
     </div>

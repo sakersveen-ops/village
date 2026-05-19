@@ -62,14 +62,14 @@ export default function JoinPage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center">
       {status === 'loading' && (
-        <div className="text-[#9C7B65]">Kobler til…</div>
+        <div className="text-[var(--terra-mid)]">Kobler til…</div>
       )}
       {status === 'success' && (
         <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
           <div className="text-5xl mb-4">🎉</div>
-          <h1 className="text-xl font-bold text-[#2C1A0E] mb-2">Dere er nå venner!</h1>
-          <p className="text-[#9C7B65] mb-6">Du og {friendName} kan nå se hverandres ting i Village.</p>
-          <button onClick={() => router.push('/')} className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium">
+          <h1 className="text-xl font-bold text-[var(--terra-dark)] mb-2">Dere er nå venner!</h1>
+          <p className="text-[var(--terra-mid)] mb-6">Du og {friendName} kan nå se hverandres ting i Village.</p>
+          <button onClick={() => router.push('/')} className="w-full bg-[var(--terra)] text-white rounded-xl py-3 font-medium">
             Gå til feeden
           </button>
         </div>
@@ -77,8 +77,8 @@ export default function JoinPage() {
       {status === 'already' && (
         <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
           <div className="text-5xl mb-4">👋</div>
-          <h1 className="text-xl font-bold text-[#2C1A0E] mb-2">Dere er allerede venner!</h1>
-          <button onClick={() => router.push('/')} className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium mt-4">
+          <h1 className="text-xl font-bold text-[var(--terra-dark)] mb-2">Dere er allerede venner!</h1>
+          <button onClick={() => router.push('/')} className="w-full bg-[var(--terra)] text-white rounded-xl py-3 font-medium mt-4">
             Gå til feeden
           </button>
         </div>
@@ -86,9 +86,9 @@ export default function JoinPage() {
       {status === 'error' && (
         <div className="bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full">
           <div className="text-5xl mb-4">😬</div>
-          <h1 className="text-xl font-bold text-[#2C1A0E] mb-2">Noe gikk galt</h1>
-          <p className="text-[#9C7B65] mb-4">Du kan ikke legge deg selv til som venn.</p>
-          <button onClick={() => router.push('/')} className="w-full bg-[#C4673A] text-white rounded-xl py-3 font-medium">
+          <h1 className="text-xl font-bold text-[var(--terra-dark)] mb-2">Noe gikk galt</h1>
+          <p className="text-[var(--terra-mid)] mb-4">Du kan ikke legge deg selv til som venn.</p>
+          <button onClick={() => router.push('/')} className="w-full bg-[var(--terra)] text-white rounded-xl py-3 font-medium">
             Tilbake
           </button>
         </div>

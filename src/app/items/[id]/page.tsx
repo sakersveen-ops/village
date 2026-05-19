@@ -9,11 +9,11 @@ import { track, Events, startTimer } from '@/lib/track'
 import { normalizeCategory, getCategoryById } from '@/lib/categories'
 
 const getCategoryGradient = (category?: string) => {
-  if (!category) return { gradient: 'linear-gradient(135deg, #C4673A 0%, #8B3A1E 100%)', label: 'VILLAGE' }
+  if (!category) return { gradient: 'linear-gradient(135deg, var(--terra) 0%, #8B3A1E 100%)', label: 'VILLAGE' }
   const normalized = normalizeCategory(category)
   const cat = getCategoryById(normalized)
   if (cat) return { gradient: cat.gradient, label: cat.label }
-  return { gradient: 'linear-gradient(135deg, #9C7B65 0%, #6B4226 100%)', label: category }
+  return { gradient: 'linear-gradient(135deg, var(--terra-mid) 0%, #1A3542 100%)', label: category }
 }
 
 // Statuser som regnes som "aktivt" for tilgjengelighetsvisning
@@ -303,7 +303,7 @@ export default function ItemPage() {
 
         {/* Co-owner banner */}
         {isCoOwner && (
-          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, border: '1px solid rgba(196,103,58,0.25)' }}>
+          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, border: '1px solid rgba(46,98,113,0.25)' }}>
             <span style={{ fontSize: 18 }}>🔗</span>
             <p className="text-sm" style={{ color: 'var(--terra-dark)' }}>
               Denne gjenstanden tilhører <strong>{ownerName}</strong> – du administrerer den sammen
@@ -321,7 +321,7 @@ export default function ItemPage() {
             <div className="flex items-center gap-3">
               <Link href={`/profile/${activeLoan.profiles?.id}`}>
                 <div className="rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm"
-                  style={{ width: 36, height: 36, background: 'rgba(196,103,58,0.15)', color: 'var(--terra)' }}>
+                  style={{ width: 36, height: 36, background: 'rgba(46,98,113,0.15)', color: 'var(--terra)' }}>
                   {activeLoan.profiles?.avatar_url
                     ? <img src={activeLoan.profiles.avatar_url} className="w-full h-full object-cover" />
                     : (activeLoan.profiles?.name || activeLoan.profiles?.email)?.[0]?.toUpperCase()}
@@ -365,7 +365,7 @@ export default function ItemPage() {
 
         {/* ── Eier-kort ── */}
         <Link href={`/profile/${item.profiles?.id}`}>
-          <div className="item-card" style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(196,103,58,0.18)' }}>
+          <div className="item-card" style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(46,98,113,0.18)' }}>
             <div className="item-card-body glass-card"
               style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div className="rounded-full overflow-hidden flex items-center justify-center font-bold text-white flex-shrink-0"
@@ -460,7 +460,7 @@ export default function ItemPage() {
                   <div className="flex items-center gap-2 mb-3">
                     <Link href={`/profile/${l.profiles?.id}`}>
                       <div className="rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm"
-                        style={{ width: 36, height: 36, background: 'rgba(196,103,58,0.15)', color: 'var(--terra)' }}>
+                        style={{ width: 36, height: 36, background: 'rgba(46,98,113,0.15)', color: 'var(--terra)' }}>
                         {l.profiles?.avatar_url
                           ? <img src={l.profiles.avatar_url} className="w-full h-full object-cover" />
                           : (l.profiles?.name || l.profiles?.email)?.[0]?.toUpperCase()}
@@ -478,7 +478,7 @@ export default function ItemPage() {
                   </div>
 
                   {l.status === 'change_proposed' ? (
-                    <div className="glass" style={{ borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: 12, border: '1px solid rgba(196,103,58,0.3)' }}>
+                    <div className="glass" style={{ borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: 12, border: '1px solid rgba(46,98,113,0.3)' }}>
                       <div>
                         <p className="text-sm font-semibold" style={{ color: 'var(--terra)' }}>Endringsforslag sendt</p>
                         <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Venter på svar fra låntaker – se meldingstråden</p>
@@ -558,7 +558,7 @@ export default function ItemPage() {
         {/* change_proposed */}
         {!hasOwnerAccess && loan?.status === 'change_proposed' && (
           <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(196,103,58,0.3)' }}>
+            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(46,98,113,0.3)' }}>
               <div>
                 <p className="text-sm font-semibold" style={{ color: 'var(--terra)' }}>Utleier har foreslått endring</p>
                 <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Se meldingstråden og svar på forslaget</p>

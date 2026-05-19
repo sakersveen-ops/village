@@ -91,16 +91,16 @@ export default function WatchesPage() {
 
   return (
     <div className="max-w-lg mx-auto pb-24">
-      <div className="sticky top-0 bg-[#FAF7F2] border-b border-[#E8DDD0] px-4 pt-10 pb-4 z-10">
-        <button onClick={() => router.back()} className="text-[#C4673A] text-sm mb-2 block">← Tilbake</button>
+      <div className="sticky top-0 bg-[var(--glass-bg-heavy)] border-b border-[var(--glass-border)] px-4 pt-10 pb-4 z-10">
+        <button onClick={() => router.back()} className="text-[var(--terra)] text-sm mb-2 block">← Tilbake</button>
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-xl font-bold text-[#2C1A0E]">Søkevarsler</h1>
-            <p className="text-xs text-[#9C7B65] mt-0.5">Få varsel når noen legger ut det du leter etter</p>
+            <h1 className="text-xl font-bold text-[var(--terra-dark)]">Søkevarsler</h1>
+            <p className="text-xs text-[var(--terra-mid)] mt-0.5">Få varsel når noen legger ut det du leter etter</p>
           </div>
           <button
             onClick={() => setShowForm(f => !f)}
-            className="bg-[#C4673A] text-white rounded-full px-4 py-2 text-sm font-medium"
+            className="bg-[var(--terra)] text-white rounded-full px-4 py-2 text-sm font-medium"
           >
             + Nytt
           </button>
@@ -112,24 +112,24 @@ export default function WatchesPage() {
         {/* Skjema */}
         {showForm && (
           <div className="bg-white rounded-2xl p-4 shadow-sm flex flex-col gap-3">
-            <p className="font-semibold text-[#2C1A0E]">Nytt søkevarsel</p>
+            <p className="font-semibold text-[var(--terra-dark)]">Nytt søkevarsel</p>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Søkeord *</label>
+              <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide">Søkeord *</label>
               <input
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder="eks. barnevogn, kjole str 38, drill…"
-                className="bg-[#FAF7F2] border border-[#E8DDD0] rounded-xl px-4 py-3 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
+                className="bg-[var(--glass-bg-heavy)] border border-[var(--glass-border)] rounded-xl px-4 py-3 text-[var(--terra-dark)] outline-none focus:border-[var(--terra)] text-sm"
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Kategori</label>
+              <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide">Kategori</label>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setCategory('')}
-                  className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${!category ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'}`}
+                  className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${!category ? 'bg-[var(--terra)] text-white border-transparent' : 'bg-white text-[#1A3542] border-[var(--glass-border)]'}`}
                 >
                   Alle
                 </button>
@@ -137,7 +137,7 @@ export default function WatchesPage() {
                   <button
                     key={cat.id}
                     onClick={() => setCategory(cat.id === category ? '' : cat.id)}
-                    className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${category === cat.id ? 'bg-[#C4673A] text-white border-transparent' : 'bg-white text-[#6B4226] border-[#E8DDD0]'}`}
+                    className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${category === cat.id ? 'bg-[var(--terra)] text-white border-transparent' : 'bg-white text-[#1A3542] border-[var(--glass-border)]'}`}
                   >
                     {cat.emoji} {cat.label}
                   </button>
@@ -147,45 +147,45 @@ export default function WatchesPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Maks pris (kr)</label>
+                <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide">Maks pris (kr)</label>
                 <input
                   value={maxPrice}
                   onChange={e => setMaxPrice(e.target.value)}
                   type="number"
                   placeholder="La stå for alle"
-                  className="bg-[#FAF7F2] border border-[#E8DDD0] rounded-xl px-3 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
+                  className="bg-[var(--glass-bg-heavy)] border border-[var(--glass-border)] rounded-xl px-3 py-2.5 text-[var(--terra-dark)] outline-none focus:border-[var(--terra)] text-sm"
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Lokasjon</label>
+                <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide">Lokasjon</label>
                 <input
                   value={location}
                   onChange={e => setLocation(e.target.value)}
                   placeholder="eks. Grünerløkka"
-                  className="bg-[#FAF7F2] border border-[#E8DDD0] rounded-xl px-3 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
+                  className="bg-[var(--glass-bg-heavy)] border border-[var(--glass-border)] rounded-xl px-3 py-2.5 text-[var(--terra-dark)] outline-none focus:border-[var(--terra)] text-sm"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Tilgjengelig fra</label>
+                <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide">Tilgjengelig fra</label>
                 <input
                   type="date"
                   value={availableFrom}
                   onChange={e => setAvailableFrom(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
-                  className="bg-[#FAF7F2] border border-[#E8DDD0] rounded-xl px-3 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
+                  className="bg-[var(--glass-bg-heavy)] border border-[var(--glass-border)] rounded-xl px-3 py-2.5 text-[var(--terra-dark)] outline-none focus:border-[var(--terra)] text-sm"
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Tilgjengelig til</label>
+                <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide">Tilgjengelig til</label>
                 <input
                   type="date"
                   value={availableTo}
                   onChange={e => setAvailableTo(e.target.value)}
                   min={availableFrom || new Date().toISOString().split('T')[0]}
-                  className="bg-[#FAF7F2] border border-[#E8DDD0] rounded-xl px-3 py-2.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] text-sm"
+                  className="bg-[var(--glass-bg-heavy)] border border-[var(--glass-border)] rounded-xl px-3 py-2.5 text-[var(--terra-dark)] outline-none focus:border-[var(--terra)] text-sm"
                 />
               </div>
             </div>
@@ -193,14 +193,14 @@ export default function WatchesPage() {
             <div className="flex gap-2 mt-1">
               <button
                 onClick={() => setShowForm(false)}
-                className="flex-1 bg-white border border-[#E8DDD0] text-[#9C7B65] rounded-xl py-2.5 text-sm"
+                className="flex-1 bg-white border border-[var(--glass-border)] text-[var(--terra-mid)] rounded-xl py-2.5 text-sm"
               >
                 Avbryt
               </button>
               <button
                 onClick={save}
                 disabled={saving || !query.trim()}
-                className="flex-1 bg-[#C4673A] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
+                className="flex-1 bg-[var(--terra)] text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-50"
               >
                 {saving ? 'Lagrer…' : 'Lagre varsel'}
               </button>
@@ -214,13 +214,13 @@ export default function WatchesPage() {
             <div key={i} className="bg-white rounded-2xl h-16 animate-pulse" />
           ))
         ) : watches.length === 0 && !showForm ? (
-          <div className="text-center py-16 text-[#9C7B65]">
+          <div className="text-center py-16 text-[var(--terra-mid)]">
             <div className="text-4xl mb-2">🔔</div>
-            <p className="font-medium text-[#2C1A0E] mb-1">Ingen søkevarsler ennå</p>
+            <p className="font-medium text-[var(--terra-dark)] mb-1">Ingen søkevarsler ennå</p>
             <p className="text-sm">Opprett et varsel så får du beskjed når noen legger ut det du leter etter</p>
             <button
               onClick={() => setShowForm(true)}
-              className="mt-4 bg-[#C4673A] text-white rounded-xl px-6 py-2.5 text-sm font-medium"
+              className="mt-4 bg-[var(--terra)] text-white rounded-xl px-6 py-2.5 text-sm font-medium"
             >
               + Opprett varsel
             </button>
@@ -231,15 +231,15 @@ export default function WatchesPage() {
               <div key={w.id} className="bg-white rounded-2xl px-4 py-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-[#2C1A0E] text-sm">🔍 {w.query}</p>
+                    <p className="font-semibold text-[var(--terra-dark)] text-sm">🔍 {w.query}</p>
                     {watchLabel(w) && (
-                      <p className="text-xs text-[#9C7B65] mt-1">{watchLabel(w)}</p>
+                      <p className="text-xs text-[var(--terra-mid)] mt-1">{watchLabel(w)}</p>
                     )}
-                    <p className="text-xs text-[#9C7B65] mt-1">Opprettet {formatDate(w.created_at)}</p>
+                    <p className="text-xs text-[var(--terra-mid)] mt-1">Opprettet {formatDate(w.created_at)}</p>
                   </div>
                   <button
                     onClick={() => deleteWatch(w.id)}
-                    className="text-[#9C7B65] text-lg flex-shrink-0 hover:text-red-400 transition-colors"
+                    className="text-[var(--terra-mid)] text-lg flex-shrink-0 hover:text-red-400 transition-colors"
                   >
                     ✕
                   </button>

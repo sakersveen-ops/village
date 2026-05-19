@@ -71,8 +71,8 @@ export default function NewCommunityPage() {
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-10 pb-28">
-      <button onClick={() => router.back()} className="text-[#C4673A] mb-6 text-sm">← Tilbake</button>
-      <h1 className="font-display text-2xl font-bold text-[#2C1A0E] mb-6" style={{ letterSpacing: '-0.02em' }}>
+      <button onClick={() => router.back()} className="text-[var(--terra)] mb-6 text-sm">← Tilbake</button>
+      <h1 className="font-display text-2xl font-bold text-[var(--terra-dark)] mb-6" style={{ letterSpacing: '-0.02em' }}>
         Opprett krets
       </h1>
 
@@ -80,7 +80,7 @@ export default function NewCommunityPage() {
 
         {/* Emoji */}
         <div>
-          <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide mb-2 block">Ikon</label>
+          <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide mb-2 block">Ikon</label>
           <div className="flex gap-2 flex-wrap">
             {EMOJIS.map(e => (
               <button
@@ -89,8 +89,8 @@ export default function NewCommunityPage() {
                 onClick={() => setEmoji(e)}
                 className="w-11 h-11 rounded-xl text-xl flex items-center justify-center border-2 transition-all active:scale-95"
                 style={{
-                  borderColor: emoji === e ? 'var(--terra)' : 'rgba(196,103,58,0.2)',
-                  background: emoji === e ? 'rgba(196,103,58,0.08)' : 'rgba(255,248,243,0.7)',
+                  borderColor: emoji === e ? 'var(--terra)' : 'rgba(46,98,113,0.2)',
+                  background: emoji === e ? 'rgba(46,98,113,0.08)' : 'rgba(255,248,243,0.7)',
                 }}
               >
                 {e}
@@ -101,33 +101,33 @@ export default function NewCommunityPage() {
 
         {/* Navn */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Navn</label>
+          <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide">Navn</label>
           <input
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="eks. Nabolaget på Grünerløkka"
             required
-            className="glass rounded-xl px-4 py-3 text-[#2C1A0E] outline-none text-sm"
-            style={{ border: '1px solid rgba(196,103,58,0.2)' }}
+            className="glass rounded-xl px-4 py-3 text-[var(--terra-dark)] outline-none text-sm"
+            style={{ border: '1px solid rgba(46,98,113,0.2)' }}
           />
         </div>
 
         {/* Beskrivelse */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide">Beskrivelse</label>
+          <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide">Beskrivelse</label>
           <textarea
             value={description}
             onChange={e => setDescription(e.target.value)}
             placeholder="Hvem er dette for?"
             rows={3}
-            className="glass rounded-xl px-4 py-3 text-[#2C1A0E] outline-none text-sm resize-none"
-            style={{ border: '1px solid rgba(196,103,58,0.2)' }}
+            className="glass rounded-xl px-4 py-3 text-[var(--terra-dark)] outline-none text-sm resize-none"
+            style={{ border: '1px solid rgba(46,98,113,0.2)' }}
           />
         </div>
 
         {/* Synlighet */}
         <div>
-          <label className="text-xs text-[#9C7B65] font-medium uppercase tracking-wide mb-2 block">
+          <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide mb-2 block">
             Synlighet
           </label>
           <div className="flex flex-col gap-2">
@@ -142,7 +142,7 @@ export default function NewCommunityPage() {
                   className="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
                   style={{
                     background: selected ? 'rgba(196,103,58,0.07)' : 'rgba(255,248,243,0.6)',
-                    border: `1.5px solid ${active ? 'var(--terra)' : selected ? 'rgba(196,103,58,0.3)' : 'rgba(196,103,58,0.15)'}`,
+                    border: `1.5px solid ${active ? 'var(--terra)' : selected ? 'rgba(46,98,113,0.3)' : 'rgba(46,98,113,0.15)'}`,
                     backdropFilter: 'blur(10px)',
                   }}
                 >
@@ -150,8 +150,8 @@ export default function NewCommunityPage() {
                   <div
                     className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
                     style={{
-                      background: selected ? 'var(--terra)' : 'rgba(196,103,58,0.12)',
-                      border: `2px solid ${selected ? 'var(--terra)' : 'rgba(196,103,58,0.25)'}`,
+                      background: selected ? 'var(--terra)' : 'rgba(46,98,113,0.12)',
+                      border: `2px solid ${selected ? 'var(--terra)' : 'rgba(46,98,113,0.25)'}`,
                     }}
                   >
                     {selected && (
@@ -162,10 +162,10 @@ export default function NewCommunityPage() {
                   </div>
                   <span className="text-lg flex-shrink-0">{opt.emoji}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#2C1A0E]" style={{ letterSpacing: '-0.01em' }}>
+                    <p className="text-sm font-medium text-[var(--terra-dark)]" style={{ letterSpacing: '-0.01em' }}>
                       {opt.label}
                     </p>
-                    <p className="text-xs text-[#9C7B65] mt-0.5">{opt.desc}</p>
+                    <p className="text-xs text-[var(--terra-mid)] mt-0.5">{opt.desc}</p>
                   </div>
                 </button>
               )
@@ -174,8 +174,8 @@ export default function NewCommunityPage() {
 
           {/* Contextual info */}
           <div className="mt-2 px-3 py-2 rounded-lg"
-            style={{ background: 'rgba(196,103,58,0.06)', border: '1px solid rgba(196,103,58,0.12)' }}>
-            <p className="text-xs text-[#9C7B65]">
+            style={{ background: 'rgba(196,103,58,0.06)', border: '1px solid rgba(46,98,113,0.12)' }}>
+            <p className="text-xs text-[var(--terra-mid)]">
               {visibility === 'friends' && '🔒 Kun venner kan finne kretsen. Nye medlemmer trenger invitasjonslenke eller din godkjenning.'}
               {visibility === 'friends_of_friends' && '🔗 Venners venner kan se kretsen og søke om å bli med. Du godkjenner alle forespørsler.'}
               {visibility === 'public' && '🌍 Alle kan finne kretsen i søk. Venner, venners venner og ukjente kan søke om å bli med.'}

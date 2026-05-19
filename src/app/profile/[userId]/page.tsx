@@ -185,7 +185,7 @@ export default function UserProfilePage() {
   if (!isFriend) {
     return (
       <div className="max-w-lg mx-auto pb-24">
-        <div style={{ background: '#FAF7F2', borderBottom: '1px solid #E8DDD0' }} className="px-4 pt-6 pb-8">
+        <div style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }} className="px-4 pt-6 pb-8">
           <div className="flex flex-col items-center text-center pt-4">
             <div className="flex items-center justify-center text-white font-bold text-3xl overflow-hidden mb-4"
               style={{ width: 88, height: 88, borderRadius: '50%', background: 'var(--terra)' }}>
@@ -221,7 +221,7 @@ export default function UserProfilePage() {
               </button>
             ) : (
               <div className="w-full rounded-xl py-3 text-sm text-center"
-                style={{ background: '#FAF7F2', border: '1px solid #E8DDD0', color: 'var(--terra-mid)' }}>
+                style={{ background: 'var(--glass-bg-heavy)', border: '1px solid var(--glass-border)', color: 'var(--terra-mid)' }}>
                 Forespørsel sendt
               </div>
             )}
@@ -237,7 +237,7 @@ export default function UserProfilePage() {
     <div className="max-w-lg mx-auto pb-24">
 
       {/* Profilhode */}
-      <div style={{ background: '#FAF7F2', borderBottom: '1px solid #E8DDD0' }} className="px-4 pt-6 pb-6">
+      <div style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }} className="px-4 pt-6 pb-6">
         <div className="flex items-start gap-4">
           <div className="flex items-center justify-center text-white font-bold text-2xl overflow-hidden flex-shrink-0"
             style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--terra)' }}>
@@ -262,7 +262,7 @@ export default function UserProfilePage() {
           <div className="flex items-center gap-2 flex-shrink-0 mt-1">
             <Link href={`/messages/${userId}`} aria-label="Send melding"
               className="w-9 h-9 flex items-center justify-center rounded-full"
-              style={{ background: 'rgba(196,103,58,0.10)', border: '1px solid rgba(196,103,58,0.15)', color: 'var(--terra-dark)' }}>
+              style={{ background: 'rgba(46,98,113,0.10)', border: '1px solid rgba(46,98,113,0.15)', color: 'var(--terra-dark)' }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
               </svg>
@@ -283,14 +283,14 @@ export default function UserProfilePage() {
               {mutualFriends.slice(0, 5).map((m: any) => (
                 <Link key={m.id} href={`/profile/${m.id}`}>
                   <div className="flex items-center gap-1.5 rounded-full px-2 py-1"
-                    style={{ background: '#fff', border: '1px solid #E8DDD0' }}>
+                    style={{ background: '#fff', border: '1px solid var(--glass-border)' }}>
                     <div className="flex items-center justify-center text-xs overflow-hidden flex-shrink-0"
-                      style={{ width: 20, height: 20, borderRadius: '50%', background: '#E8DDD0' }}>
+                      style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--glass-border)' }}>
                       {m.avatar_url
                         ? <img src={m.avatar_url} className="w-full h-full object-cover" alt="" />
                         : displayName(m)?.[0]?.toUpperCase()}
                     </div>
-                    <span className="text-xs" style={{ color: '#6B4226' }}>{displayName(m)}</span>
+                    <span className="text-xs" style={{ color: '#1A3542' }}>{displayName(m)}</span>
                   </div>
                 </Link>
               ))}
@@ -309,7 +309,7 @@ export default function UserProfilePage() {
               {sharedCommunities.map((m: any) => (
                 <Link key={m.community_id} href={`/community/${m.community_id}`}>
                   <span className="rounded-full px-3 py-1.5 text-xs shadow-sm"
-                    style={{ background: '#fff', border: '1px solid #E8DDD0', color: '#6B4226' }}>
+                    style={{ background: '#fff', border: '1px solid var(--glass-border)', color: '#1A3542' }}>
                     {m.communities?.avatar_emoji} {m.communities?.name}
                   </span>
                 </Link>
@@ -326,7 +326,7 @@ export default function UserProfilePage() {
               {publicCommunities.map((m: any) => (
                 <Link key={m.community_id} href={`/community/${m.community_id}`}>
                   <span className="rounded-full px-3 py-1.5 text-xs"
-                    style={{ background: '#FAF7F2', border: '1px solid #E8DDD0', color: '#6B4226' }}>
+                    style={{ background: 'var(--glass-bg-heavy)', border: '1px solid var(--glass-border)', color: '#1A3542' }}>
                     {m.communities?.avatar_emoji} {m.communities?.name}
                   </span>
                 </Link>
@@ -337,7 +337,7 @@ export default function UserProfilePage() {
       </div>
 
       {/* Stories */}
-      <div style={{ borderBottom: '1px solid #E8DDD0', background: '#FAF7F2' }}>
+      <div style={{ borderBottom: '1px solid var(--glass-border)', background: 'var(--glass-bg-heavy)' }}>
         <StoryRing
           ownerId={userId as string}
           isOwner={false}
@@ -374,9 +374,9 @@ export default function UserProfilePage() {
               <input value={itemSearch} onChange={e => setItemSearch(e.target.value)}
                 placeholder="Søk i gjenstander…"
                 className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none"
-                style={{ background: '#fff', border: '1px solid #E8DDD0', color: 'var(--terra-dark)' }}
+                style={{ background: '#fff', border: '1px solid var(--glass-border)', color: 'var(--terra-dark)' }}
                 onFocus={e => e.currentTarget.style.borderColor = 'var(--terra)'}
-                onBlur={e => e.currentTarget.style.borderColor = '#E8DDD0'}
+                onBlur={e => e.currentTarget.style.borderColor = 'var(--glass-border)'}
               />
             </div>
           )}
@@ -387,7 +387,7 @@ export default function UserProfilePage() {
                 className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0"
                 style={!itemCategory
                   ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
-                  : { background: '#fff', color: '#6B4226', border: '1px solid #E8DDD0' }
+                  : { background: '#fff', color: '#1A3542', border: '1px solid var(--glass-border)' }
                 }>
                 Alle
               </button>
@@ -396,7 +396,7 @@ export default function UserProfilePage() {
                   className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0"
                   style={itemCategory === cat.id
                     ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
-                    : { background: '#fff', color: '#6B4226', border: '1px solid #E8DDD0' }
+                    : { background: '#fff', color: '#1A3542', border: '1px solid var(--glass-border)' }
                   }>
                   {cat.emoji} {cat.label}
                 </button>
@@ -417,7 +417,7 @@ export default function UserProfilePage() {
                       ? <img src={item.image_url} className="rounded-xl object-cover flex-shrink-0"
                           style={{ width: 48, height: 48 }} alt={item.name} />
                       : <div className="flex items-center justify-center text-xl flex-shrink-0 rounded-xl"
-                          style={{ width: 48, height: 48, background: '#E8DDD0' }}>
+                          style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
                           {CATEGORY_EMOJI[item.category] ?? '📦'}
                         </div>
                     }
@@ -439,7 +439,7 @@ export default function UserProfilePage() {
               {filteredItems.length > 5 && (
                 <Link href={`/profile/${userId}/items`}
                   className="flex items-center justify-center text-sm w-full py-2.5 rounded-xl"
-                  style={{ color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.2)', background: 'rgba(196,103,58,0.04)' }}>
+                  style={{ color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.2)', background: 'rgba(196,103,58,0.04)' }}>
                   Vis alle {filteredItems.length} gjenstander →
                 </Link>
               )}
@@ -458,16 +458,16 @@ export default function UserProfilePage() {
               {friends.slice(0, 10).map((f: any) => (
                 <Link key={f.id} href={`/profile/${f.id}`}>
                   <div className="flex items-center justify-center font-bold text-sm overflow-hidden"
-                    style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #fff' }}>
+                    style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--glass-border)', border: '2px solid #fff' }}>
                     {f.avatar_url
                       ? <img src={f.avatar_url} className="w-full h-full object-cover" alt="" />
-                      : <span className="text-xs" style={{ color: '#6B4226' }}>{displayName(f)?.[0]?.toUpperCase()}</span>}
+                      : <span className="text-xs" style={{ color: '#1A3542' }}>{displayName(f)?.[0]?.toUpperCase()}</span>}
                   </div>
                 </Link>
               ))}
               {friends.length > 10 && (
                 <div className="flex items-center justify-center text-xs font-bold"
-                  style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
+                  style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--glass-border)', color: '#1A3542' }}>
                   +{friends.length - 10}
                 </div>
               )}

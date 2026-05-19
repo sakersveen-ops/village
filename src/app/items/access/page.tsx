@@ -43,7 +43,7 @@ function PriceRow({ price, priceType, onPriceChange, onTypeChange, placeholder }
   placeholder?: string
 }) {
   return (
-    <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(196,103,58,0.12)' }}>
+    <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(46,98,113,0.12)' }}>
       <div className="flex items-center gap-2">
         <input
           type="number"
@@ -310,7 +310,7 @@ function AccessPageInner() {
                 <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
                   style={{
                     background: selected || implicitlySelected ? 'var(--terra)' : 'transparent',
-                    border: selected || implicitlySelected ? 'none' : '2px solid rgba(196,103,58,0.25)',
+                    border: selected || implicitlySelected ? 'none' : '2px solid rgba(46,98,113,0.25)',
                     opacity: implicitlySelected ? 0.5 : 1,
                   }}>
                   {(selected || implicitlySelected) && <span className="text-white text-xs">✓</span>}
@@ -338,7 +338,7 @@ function AccessPageInner() {
               <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Velg hvilke kretser som kan låne</p>
             </div>
             <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
-              style={{ background: communitySelected ? 'var(--terra)' : 'transparent', border: communitySelected ? 'none' : '2px solid rgba(196,103,58,0.25)' }}>
+              style={{ background: communitySelected ? 'var(--terra)' : 'transparent', border: communitySelected ? 'none' : '2px solid rgba(46,98,113,0.25)' }}>
               {communitySelected && <span className="text-white text-xs">✓</span>}
             </div>
           </button>
@@ -347,7 +347,7 @@ function AccessPageInner() {
             <div className="mt-4 flex flex-col gap-3">
               <button onClick={() => setAllCommunities(prev => !prev)} className="flex items-center gap-3 w-full">
                 <div className="w-10 rounded-full flex-shrink-0 transition-colors"
-                  style={{ height: 24, background: allCommunities ? 'var(--terra)' : 'rgba(196,103,58,0.15)', padding: 2, display: 'flex', alignItems: 'center' }}>
+                  style={{ height: 24, background: allCommunities ? 'var(--terra)' : 'rgba(46,98,113,0.15)', padding: 2, display: 'flex', alignItems: 'center' }}>
                   <div className="rounded-full bg-white transition-transform"
                     style={{ width: 20, height: 20, transform: allCommunities ? 'translateX(16px)' : 'translateX(0)', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }} />
                 </div>
@@ -375,7 +375,7 @@ function AccessPageInner() {
                           <span style={{ fontSize: 18 }}>{c.avatar_emoji}</span>
                           <p className="flex-1 font-medium text-sm" style={{ color: 'var(--terra-dark)' }}>{c.name}</p>
                           <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-                            style={{ background: cSelected ? 'var(--terra)' : 'transparent', border: cSelected ? 'none' : '2px solid rgba(196,103,58,0.25)' }}>
+                            style={{ background: cSelected ? 'var(--terra)' : 'transparent', border: cSelected ? 'none' : '2px solid rgba(46,98,113,0.25)' }}>
                             {cSelected && <span className="text-white text-xs">✓</span>}
                           </div>
                         </button>
@@ -415,7 +415,7 @@ function AccessPageInner() {
                   <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>{level.description}</p>
                 </div>
                 <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
-                  style={{ background: selected ? 'var(--terra)' : 'transparent', border: selected ? 'none' : '2px solid rgba(196,103,58,0.25)' }}>
+                  style={{ background: selected ? 'var(--terra)' : 'transparent', border: selected ? 'none' : '2px solid rgba(46,98,113,0.25)' }}>
                   {selected && <span className="text-white text-xs">✓</span>}
                 </div>
               </button>
@@ -443,7 +443,7 @@ function AccessPageInner() {
       <div className="fixed bottom-16 left-0 right-0 px-4 py-4 flex gap-3"
         style={{
           background: 'rgba(250,247,242,0.85)',
-          borderTop: '1px solid rgba(196,103,58,0.12)',
+          borderTop: '1px solid rgba(46,98,113,0.12)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
         }}>

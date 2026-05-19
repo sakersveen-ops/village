@@ -274,7 +274,7 @@ export default function MessagesUserPage() {
     if (url) return <img src={url} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="" />
     const initials = (name ?? '?').split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
     return (
-      <div style={{ width: size, height: size, borderRadius: '50%', background: '#C4673A', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.35, fontWeight: 700, flexShrink: 0 }}>
+      <div style={{ width: size, height: size, borderRadius: '50%', background: 'var(--terra)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.35, fontWeight: 700, flexShrink: 0 }}>
         {initials}
       </div>
     )
@@ -325,7 +325,7 @@ export default function MessagesUserPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#FDF5F0' }}>
-        <p style={{ color: '#9C7B65', fontSize: 13 }}>Laster…</p>
+        <p style={{ color: 'var(--terra-mid)', fontSize: 13 }}>Laster…</p>
       </div>
     )
   }
@@ -382,7 +382,7 @@ export default function MessagesUserPage() {
                 fontSize: 11.5,
                 fontWeight: activeLoanId === t.loan_id ? 600 : 400,
                 color: activeLoanId === t.loan_id ? 'var(--terra)' : 'var(--terra-mid)',
-                border: activeLoanId === t.loan_id ? '1.5px solid rgba(196,103,58,0.4)' : '1px solid rgba(196,103,58,0.15)',
+                border: activeLoanId === t.loan_id ? '1.5px solid rgba(46,98,113,0.4)' : '1px solid rgba(46,98,113,0.15)',
                 background: activeLoanId === t.loan_id ? 'rgba(196,103,58,0.07)' : undefined,
                 textAlign: 'left',
                 minWidth: 120,
@@ -423,7 +423,7 @@ export default function MessagesUserPage() {
       {/* Meldingsliste */}
       <div className="flex-1 overflow-y-auto py-2" style={{ minHeight: 0 }}>
         {!activeThread || activeThread.messages.length === 0 ? (
-          <div style={{ textAlign: 'center', marginTop: 40, color: '#9C7B65', fontSize: 12, padding: '0 32px' }}>
+          <div style={{ textAlign: 'center', marginTop: 40, color: 'var(--terra-mid)', fontSize: 12, padding: '0 32px' }}>
             Ingen meldinger ennå. Si hei! 👋
           </div>
         ) : (
@@ -438,7 +438,7 @@ export default function MessagesUserPage() {
       {activeThread && ['pending', 'active', 'change_proposed'].includes(activeThread.loan_status) ? (
         <div
           className="glass mx-3 mb-3 rounded-2xl flex items-end gap-2 px-3 py-2"
-          style={{ border: '1px solid rgba(196,103,58,0.18)' }}
+          style={{ border: '1px solid rgba(46,98,113,0.18)' }}
         >
           <textarea
             ref={inputRef}
@@ -478,7 +478,7 @@ export default function MessagesUserPage() {
           </button>
         </div>
       ) : activeThread ? (
-        <div className="mx-3 mb-3 text-center" style={{ fontSize: 11.5, color: '#9C7B65', padding: '8px 0' }}>
+        <div className="mx-3 mb-3 text-center" style={{ fontSize: 11.5, color: 'var(--terra-mid)', padding: '8px 0' }}>
           Lånet er {statusLabel(activeThread.loan_status).toLowerCase()} — ingen nye meldinger kan sendes
         </div>
       ) : null}

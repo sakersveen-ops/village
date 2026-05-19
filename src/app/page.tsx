@@ -79,7 +79,7 @@ function HarDetteModal({
           <div className="flex items-center gap-3 py-2">
             {req.image_url
               ? <img src={req.image_url} className="w-14 h-14 rounded-[14px] object-cover flex-shrink-0" alt={req.name} />
-              : <div className="w-14 h-14 rounded-[14px] bg-[#E8DDD0] flex items-center justify-center text-2xl flex-shrink-0">{emoji}</div>
+              : <div className="w-14 h-14 rounded-[14px] bg-[var(--glass-border)] flex items-center justify-center text-2xl flex-shrink-0">{emoji}</div>
             }
             <div className="min-w-0">
               <p className="font-display text-[var(--terra-dark)] font-semibold truncate">{req.name}</p>
@@ -600,10 +600,10 @@ export default function FeedPage() {
                       opacity: !isNew ? 0.55 : 1,
                       transition: 'opacity 300ms ease',
                     }}>
-                      <div className="w-full h-full rounded-full bg-[#FAF7F2] flex items-center justify-center overflow-hidden" style={{ padding: '2px' }}>
+                      <div className="w-full h-full rounded-full bg-[var(--glass-bg-heavy)] flex items-center justify-center overflow-hidden" style={{ padding: '2px' }}>
                         {group.avatar_url
                           ? <img src={group.avatar_url} className="w-full h-full rounded-full object-cover" />
-                          : <div className="w-full h-full rounded-full bg-[#E8DDD0] flex items-center justify-center text-sm font-bold text-[#6B4226]">
+                          : <div className="w-full h-full rounded-full bg-[var(--glass-border)] flex items-center justify-center text-sm font-bold text-[#1A3542]">
                               {group.name[0].toUpperCase()}
                             </div>
                         }
@@ -673,7 +673,7 @@ export default function FeedPage() {
                       'rounded-[16px] px-4 py-3 flex items-center justify-between w-full border transition-all duration-200 active:scale-[0.98]',
                       isActive
                         ? 'bg-[var(--terra)] border-[var(--terra)] shadow-sm'
-                        : 'glass border-[rgba(196,103,58,0.18)]',
+                        : 'glass border-[rgba(46,98,113,0.18)]',
                     ].join(' ')}
                   >
                     <div className="flex items-center gap-2.5">
@@ -712,7 +712,7 @@ export default function FeedPage() {
                         'rounded-[16px] p-3 flex items-center gap-3 border transition-all duration-200',
                         isActive
                           ? 'bg-[var(--terra)] border-[var(--terra)] shadow-sm'
-                          : 'glass border-[rgba(196,103,58,0.18)]',
+                          : 'glass border-[rgba(46,98,113,0.18)]',
                         isCatEmpty ? 'cursor-default' : 'active:scale-95',
                       ].join(' ')}
                     >
@@ -746,11 +746,11 @@ export default function FeedPage() {
               <div className="flex flex-col gap-2">
                 {visibleItems.map(item => (
                   <Link key={item.id} href={`/items/${item.id}`}>
-                    <div className="item-card glass-hover flex items-center gap-3 px-3 py-3" style={{ borderRadius: '16px', border: '1px solid rgba(196,103,58,0.18)' }}>
+                    <div className="item-card glass-hover flex items-center gap-3 px-3 py-3" style={{ borderRadius: '16px', border: '1px solid rgba(46,98,113,0.18)' }}>
                       <div className="relative flex-shrink-0">
                         {item.image_url
                           ? <img src={item.image_url} className="w-14 h-14 rounded-[12px] object-cover" alt={item.name} />
-                          : <div className="w-14 h-14 rounded-[12px] bg-[#E8DDD0] flex items-center justify-center text-2xl">
+                          : <div className="w-14 h-14 rounded-[12px] bg-[var(--glass-border)] flex items-center justify-center text-2xl">
                               {CAT_EMOJI[normalizeCategory(item.category)] ?? '📦'}
                             </div>
                         }

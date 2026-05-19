@@ -19,7 +19,7 @@ function IconBtn({
   children: React.ReactNode
 }) {
   const cls = "w-9 h-9 flex items-center justify-center rounded-full shadow-sm flex-shrink-0"
-  const style = { background: '#fff', border: '1px solid #E8DDD0', color: '#6B4226' }
+  const style = { background: '#fff', border: '1px solid var(--glass-border)', color: '#1A3542' }
   if (href) return (
     <Link href={href} aria-label={label}>
       <span className={cls} style={style}>{children}</span>
@@ -292,7 +292,7 @@ export default function ProfilePage() {
     <div className="max-w-lg mx-auto pb-24">
 
       {/* ── Profilhode ── */}
-      <div style={{ background: '#FAF7F2', borderBottom: '1px solid #E8DDD0' }} className="px-4 pt-6 pb-4">
+      <div style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }} className="px-4 pt-6 pb-4">
         <div className="flex items-center gap-4">
           <label className="relative cursor-pointer flex-shrink-0">
             <div
@@ -305,7 +305,7 @@ export default function ProfilePage() {
             </div>
             <div
               className="absolute bottom-0 right-0 w-5 h-5 rounded-full flex items-center justify-center text-xs"
-              style={{ background: '#fff', border: '1px solid #E8DDD0' }}
+              style={{ background: '#fff', border: '1px solid var(--glass-border)' }}
             >
               {avatarUploading ? '…' : '📷'}
             </div>
@@ -333,7 +333,7 @@ export default function ProfilePage() {
                 <button onClick={saveCity} className="text-xs px-2 py-0.5 rounded-lg font-medium"
                   style={{ background: 'var(--terra)', color: '#fff' }}>Lagre</button>
                 <button onClick={() => setEditingCity(false)} className="text-xs px-2 py-0.5 rounded-lg"
-                  style={{ color: 'var(--terra-mid)', border: '1px solid #E8DDD0' }}>✕</button>
+                  style={{ color: 'var(--terra-mid)', border: '1px solid var(--glass-border)' }}>✕</button>
               </div>
             ) : (
               <button
@@ -379,7 +379,7 @@ export default function ProfilePage() {
 
       {/* Stories */}
       {user && (
-        <div style={{ borderBottom: '1px solid #E8DDD0', background: '#FAF7F2' }}>
+        <div style={{ borderBottom: '1px solid var(--glass-border)', background: 'var(--glass-bg-heavy)' }}>
           <StoryRing
             key={storyRefreshKey}
             ownerId={user.id}
@@ -434,9 +434,9 @@ export default function ProfilePage() {
               <input autoFocus value={itemSearch} onChange={e => setItemSearch(e.target.value)}
                 placeholder="Søk i gjenstander…"
                 className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none"
-                style={{ background: '#fff', border: '1px solid #E8DDD0', color: 'var(--terra-dark)' }}
+                style={{ background: '#fff', border: '1px solid var(--glass-border)', color: 'var(--terra-dark)' }}
                 onFocus={e => e.currentTarget.style.borderColor = 'var(--terra)'}
-                onBlur={e => e.currentTarget.style.borderColor = '#E8DDD0'}
+                onBlur={e => e.currentTarget.style.borderColor = 'var(--glass-border)'}
               />
             </div>
           )}
@@ -451,7 +451,7 @@ export default function ProfilePage() {
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0 transition-colors"
                     style={activeCategory === cat.id
                       ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
-                      : { background: '#fff', color: '#6B4226', border: '1px solid #E8DDD0' }
+                      : { background: '#fff', color: '#1A3542', border: '1px solid var(--glass-border)' }
                     }>
                     {cat.emoji && <span>{cat.emoji}</span>}
                     <span>{cat.label}</span>
@@ -476,7 +476,7 @@ export default function ProfilePage() {
                         ? <img src={item.image_url} className="rounded-xl object-cover flex-shrink-0"
                             style={{ width: 48, height: 48 }} alt={item.name} />
                         : <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                            style={{ width: 48, height: 48, background: '#E8DDD0' }}>
+                            style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
                             {CATEGORY_EMOJI[item.category] ?? '📦'}
                           </div>
                       }
@@ -493,7 +493,7 @@ export default function ProfilePage() {
                             )}
                           </p>
                           <span className="text-xs flex items-center gap-0.5 px-1.5 py-0.5 rounded-full"
-                            style={{ background: '#F5F0EB', color: '#7A5540', lineHeight: 1.2 }}>
+                            style={{ background: 'var(--glass-bg)', color: '#7A5540', lineHeight: 1.2 }}>
                             <span>{access.icon}</span>
                             <span>{access.label}</span>
                           </span>
@@ -512,7 +512,7 @@ export default function ProfilePage() {
               {filteredItems.length > 5 && (
                 <Link href="/items/manage"
                   className="flex items-center justify-center text-sm w-full py-2.5 rounded-xl"
-                  style={{ color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.2)', background: 'rgba(196,103,58,0.04)' }}>
+                  style={{ color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.2)', background: 'rgba(196,103,58,0.04)' }}>
                   Vis alle {filteredItems.length} gjenstander →
                 </Link>
               )}
@@ -532,7 +532,7 @@ export default function ProfilePage() {
                 {pendingRequests.map(req => (
                   <div key={req.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
                     <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
-                      style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
+                      style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--glass-border)', color: '#1A3542' }}>
                       {req.profiles?.avatar_url
                         ? <img src={req.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
                         : (req.profiles?.name || req.profiles?.email)?.[0]?.toUpperCase()}
@@ -547,7 +547,7 @@ export default function ProfilePage() {
                     </button>
                     <button onClick={() => respondToFriendRequest(req.id, req.from_id, false)}
                       className="text-xs rounded-full px-3 py-1.5"
-                      style={{ border: '1px solid #E8DDD0', color: 'var(--terra-mid)' }}>
+                      style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-mid)' }}>
                       Avslå
                     </button>
                   </div>
@@ -560,9 +560,9 @@ export default function ProfilePage() {
             <div className="flex flex-col gap-2 mb-4">
               {sentRequests.map(req => (
                 <div key={req.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm"
-                  style={{ background: '#FAF7F2', border: '1px solid #E8DDD0' }}>
+                  style={{ background: 'var(--glass-bg-heavy)', border: '1px solid var(--glass-border)' }}>
                   <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
-                    style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
+                    style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--glass-border)', color: '#1A3542' }}>
                     {req.profiles?.avatar_url
                       ? <img src={req.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
                       : (req.profiles?.name || req.profiles?.email)?.[0]?.toUpperCase()}
@@ -575,7 +575,7 @@ export default function ProfilePage() {
                   </div>
                   <button onClick={() => cancelFriendRequest(req.id)}
                     className="text-xs rounded-full px-3 py-1.5"
-                    style={{ border: '1px solid #E8DDD0', color: 'var(--terra-mid)' }}>
+                    style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-mid)' }}>
                     Trekk tilbake
                   </button>
                 </div>
@@ -619,9 +619,9 @@ export default function ProfilePage() {
                 <input autoFocus value={friendSearch} onChange={e => searchUsers(e.target.value)}
                   placeholder="Navn eller e-post…"
                   className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none"
-                  style={{ background: '#fff', border: '1px solid #E8DDD0', color: 'var(--terra-dark)' }}
+                  style={{ background: '#fff', border: '1px solid var(--glass-border)', color: 'var(--terra-dark)' }}
                   onFocus={e => e.currentTarget.style.borderColor = 'var(--terra)'}
-                  onBlur={e => e.currentTarget.style.borderColor = '#E8DDD0'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'var(--glass-border)'}
                 />
               </div>
               {searchResults.length > 0 && (
@@ -629,7 +629,7 @@ export default function ProfilePage() {
                   {searchResults.map(result => (
                     <div key={result.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
                       <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
-                        style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', color: '#6B4226' }}>
+                        style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--glass-border)', color: '#1A3542' }}>
                         {result.avatar_url
                           ? <img src={result.avatar_url} className="w-full h-full object-cover" alt="" />
                           : (result.name || result.email)?.[0]?.toUpperCase()}
@@ -648,7 +648,7 @@ export default function ProfilePage() {
                           <div className="flex flex-wrap gap-1 mt-1">
                             {mutualMap[result.id].map((m: any) => (
                               <span key={m.id} className="text-xs px-2 py-0.5 rounded-full"
-                                style={{ background: '#FAF7F2', color: '#6B4226' }}>
+                                style={{ background: 'var(--glass-bg-heavy)', color: '#1A3542' }}>
                                 {m.name || m.email?.split('@')[0]}
                               </span>
                             ))}
@@ -660,7 +660,7 @@ export default function ProfilePage() {
                           style={{ background: '#EEF4F0', color: 'var(--terra-green)' }}>Venn ✓</span>
                       ) : result.requestSent ? (
                         <span className="text-xs px-3 py-1.5 rounded-full"
-                          style={{ background: '#FAF7F2', color: 'var(--terra-mid)' }}>Sendt</span>
+                          style={{ background: 'var(--glass-bg-heavy)', color: 'var(--terra-mid)' }}>Sendt</span>
                       ) : (
                         <button onClick={() => sendFriendRequest(result.id)}
                           className="text-xs px-3 py-1.5 rounded-full font-medium"
@@ -692,10 +692,10 @@ export default function ProfilePage() {
                 .map((f: any) => (
                   <Link key={f.user_b} href={`/profile/${f.user_b}`} className="relative block">
                     <div className="flex items-center justify-center font-bold text-sm overflow-hidden"
-                      style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #fff' }}>
+                      style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--glass-border)', border: '2px solid #fff' }}>
                       {f.profiles?.avatar_url
                         ? <img src={f.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
-                        : <span className="text-xs" style={{ color: '#6B4226' }}>
+                        : <span className="text-xs" style={{ color: '#1A3542' }}>
                             {(f.profiles?.name || f.profiles?.email)?.[0]?.toUpperCase()}
                           </span>
                       }
@@ -708,7 +708,7 @@ export default function ProfilePage() {
               {friends.length > 8 && (
                 <Link href="/friends"
                   className="flex items-center justify-center text-xs font-bold"
-                  style={{ width: 40, height: 40, borderRadius: '50%', background: '#E8DDD0', border: '2px solid #fff', color: '#6B4226' }}>
+                  style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--glass-border)', border: '2px solid #fff', color: '#1A3542' }}>
                   +{friends.length - 8}
                 </Link>
               )}
@@ -720,7 +720,7 @@ export default function ProfilePage() {
         <button
           onClick={() => setShowInviteComposer(true)}
           className="flex items-center justify-center gap-1.5 text-sm w-full py-2.5 rounded-xl mb-4"
-          style={{ color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.25)', background: 'rgba(196,103,58,0.04)' }}>
+          style={{ color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.25)', background: 'rgba(196,103,58,0.04)' }}>
           <span>👥</span>
           <span>Inviter venner til Village</span>
         </button>

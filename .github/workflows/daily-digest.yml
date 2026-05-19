@@ -28,6 +28,6 @@ jobs:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          REPORT_EMAIL_TO: ${{ vars.REPORT_EMAIL_TO }}
-          REPORT_EMAIL_FROM: ${{ vars.REPORT_EMAIL_FROM }}
-        run: node .github/scripts/daily-digest.mjs
+          REPORT_EMAIL_TO: ${{ secrets.REPORT_EMAIL_TO }}
+          REPORT_EMAIL_FROM: ${{ secrets.REPORT_EMAIL_FROM }}
+        run: node .github/scripts/daily-digest.mjsgi

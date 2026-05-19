@@ -176,7 +176,7 @@ export default function FeedbackButton() {
               <div>
                 <h2
                   className="font-display"
-                  style={{ fontSize: 22, fontWeight: 700, color: 'var(--terra-dark, #2C1A0E)', letterSpacing: '-0.025em', margin: 0 }}
+                  style={{ fontSize: 22, fontWeight: 700, color: 'var(--terra-dark, #0e2c23)', letterSpacing: '-0.025em', margin: 0 }}
                 >
                   Gi tilbakemelding
                 </h2>
@@ -193,7 +193,7 @@ export default function FeedbackButton() {
                   width: 32, height: 32,
                   cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: 'var(--terra-mid, #9C7B65)',
+                  color: 'var(--terra-mid, #5c918c)',
                   fontSize: 18,
                   flexShrink: 0,
                 }}
@@ -213,7 +213,7 @@ export default function FeedbackButton() {
                     borderRadius: 14,
                     padding: '10px 4px',
                     border: type === t.value
-                      ? '1.5px solid rgba(196,103,58,0.5)'
+                      ? '1.5px solid rgba(46,98,113,0.40)'
                       : '1.5px solid rgba(196,103,58,0.15)',
                     background: type === t.value
                       ? 'rgba(196,103,58,0.10)'
@@ -239,7 +239,7 @@ export default function FeedbackButton() {
             </div>
 
             {/* Type description */}
-            <p style={{ fontSize: 12, color: 'var(--terra-mid, #9C7B65)', marginBottom: 12 }}>
+            <p style={{ fontSize: 12, color: 'var(--terra-mid, rgba(46,98,113,0.40))', marginBottom: 12 }}>
               {TYPES.find(t => t.value === type)?.desc}
             </p>
 
@@ -259,18 +259,18 @@ export default function FeedbackButton() {
                 width: '100%',
                 borderRadius: 14,
                 border: '1.5px solid rgba(196,103,58,0.20)',
-                background: 'rgba(255,248,243,0.7)',
+                background: 'rgba(243, 255, 254, 0.7)',
                 padding: '12px 14px',
                 fontSize: 15,
-                color: 'var(--terra-dark, #2C1A0E)',
+                color: 'var(--terra-dark, #0e2c23)',
                 resize: 'none',
                 outline: 'none',
                 fontFamily: 'inherit',
                 boxSizing: 'border-box',
                 lineHeight: 1.5,
               }}
-              onFocus={e => (e.currentTarget.style.borderColor = 'rgba(196,103,58,0.50)')}
-              onBlur={e => (e.currentTarget.style.borderColor = 'rgba(196,103,58,0.20)')}
+              onFocus={e => (e.currentTarget.style.borderColor = 'rgba(58, 196, 191, 0.5)')}
+              onBlur={e => (e.currentTarget.style.borderColor = 'rgba(58, 196, 171, 0.2)')}
             />
 
             <button
@@ -297,11 +297,11 @@ export default function FeedbackButton() {
             <div style={{ fontSize: 48, marginBottom: 16 }}>🙏</div>
             <h2
               className="font-display"
-              style={{ fontSize: 22, fontWeight: 700, color: 'var(--terra-dark, #2C1A0E)', letterSpacing: '-0.025em', marginBottom: 8 }}
+              style={{ fontSize: 22, fontWeight: 700, color: 'var(--terra-dark, #0e2c26)', letterSpacing: '-0.025em', marginBottom: 8 }}
             >
               Takk for hjelpen!
             </h2>
-            <p style={{ fontSize: 14, color: 'var(--terra-mid, #9C7B65)', lineHeight: 1.5, marginBottom: 24 }}>
+            <p style={{ fontSize: 14, color: 'var(--terra-mid, rgba(46,98,113,0.40))', lineHeight: 1.5, marginBottom: 24 }}>
               Tilbakemeldingen din er registrert og hjelper oss å gjøre Village bedre.
             </p>
             <button

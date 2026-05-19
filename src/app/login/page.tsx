@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 const scenarios = [
   { emoji: '👗', name: 'Mia', text: 'Lånte kjole til bryllupet – sparte 3000 kr!' },
   { emoji: '🏕️', name: 'Jonas', text: 'Lånte telt og soveposer av fetteren min. Sommerferien er i boks!' },
-  { emoji: '🏡', name: 'Lena', text: 'Familien vår deler hytta via Village – endelig oversikt over hvem som har den når.' },
   { emoji: '⛵', name: 'Erik', text: 'Båten brukes av tre familier. Village styrer hvem som har tilgang og når.' },
   { emoji: '🔧', name: 'Sara', text: 'Naboene deler verktøy. Ingen trenger å eie alt selv lenger.' },
 ]
@@ -90,7 +89,7 @@ export default function LoginPage() {
             >
               Village
             </h1>
-            <p className="text-white/80 text-lg font-medium">Tingene du eier kan glede venner og familie!</p>
+            <p className="text-white/80 text-lg font-medium">Tenk om tingene dine kunne gledet venner og familie?</p>
           </div>
 
           {/* Origin story */}
@@ -132,14 +131,7 @@ export default function LoginPage() {
             ))}
           </div>
 
-          {/* Mock app screens – decorative */}
-          <div className="flex gap-3 w-full max-w-sm lg:max-w-none pb-2">
-            <MockScreen emoji="👗" label="Lån nå" />
-            <MockScreen emoji="🏡" label="Hytteoversikt" />
-            <MockScreen emoji="⛵" label="Del tilgang" />
-            <MockScreen emoji="🔧" label="Lån bort" />
-          </div>
-        </div>
+          
 
         {/* ── Right / Bottom: Login card ── */}
         <div

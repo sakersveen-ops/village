@@ -15,7 +15,7 @@ const fraunces = Fraunces({
 
 export const metadata: Metadata = {
   title: 'Village',
-  description: 'Del og lån med naboer, venner og kretsen din.',
+  description: 'Del og lån med naboer, venner og resten av kretsen din!',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -26,8 +26,8 @@ export const metadata: Metadata = {
     apple: '/apple-touch-icon.png',
   },
   openGraph: {
-    title: 'Village – del og lån med naboer',
-    description: 'Lån ting av naboer, venner og kretsen din.',
+    title: 'Village',
+    description: 'Del og lån med naboer, venner og resten av kretsen din!',
     images: [{ url: '/og-image.png', width: 1200, height: 630 }],
     siteName: 'Village',
     locale: 'nb_NO',

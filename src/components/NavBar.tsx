@@ -33,7 +33,7 @@ function isRootPath(pathname: string) {
 
 function BellIcon({ size = 18 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,#2C1A0E)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
@@ -43,15 +43,36 @@ function BellIcon({ size = 18 }: { size?: number }) {
 const iconBtnStyle = (active = false): React.CSSProperties => ({
   width: 36, height: 36, borderRadius: 12,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  background: active ? 'rgba(196,103,58,0.18)' : 'rgba(196,103,58,0.10)',
-  border: '1px solid rgba(196,103,58,0.15)',
+  background: active ? 'rgba(46,98,113,0.18)' : 'rgba(46,98,113,0.10)',
+  border: '1px solid rgba(46,98,113,0.15)',
   flexShrink: 0, textDecoration: 'none', cursor: 'pointer',
-  color: 'var(--terra-dark, #2C1A0E)',
+  color: 'var(--terra-dark)',
 })
 
-// Shared event so NotificationsPage can trigger a re-fetch of unread count
 export const notifRefreshEvent =
   typeof window !== 'undefined' ? new EventTarget() : null
+
+function VillageLogo({ size = 28 }: { size?: number }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+      <div style={{
+        width: size, height: size, borderRadius: Math.round(size * 0.28),
+        background: '#E1F5EE', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <span style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: Math.round(size * 0.62),
+          color: 'var(--terra)',
+          lineHeight: 1,
+          letterSpacing: '-0.04em',
+          fontOpticalSizing: 'auto',
+        }}>V</span>
+      </div>
+      <span className="page-header-title font-display" style={{ margin: 0 }}>Village</span>
+    </div>
+  )
+}
 
 export default function NavBar() {
   const [unread, setUnread] = useState(0)
@@ -63,6 +84,7 @@ export default function NavBar() {
 
   const showBack = !isRootPath(pathname)
   const isNotificationsPage = pathname === '/notifications'
+  const isHome = pathname === '/'
 
   const loadUnread = useCallback(async () => {
     const supabase = createClient()
@@ -101,7 +123,6 @@ export default function NavBar() {
         .subscribe()
     })
 
-    // Listen for mark-all events from the notifications page
     const handler = () => loadUnread()
     notifRefreshEvent?.addEventListener('refresh', handler)
 
@@ -127,7 +148,6 @@ export default function NavBar() {
         .eq('user_id', user.id)
         .eq('read', false)
       setUnread(0)
-      // Tell the notifications page to re-render its list
       notifRefreshEvent?.dispatchEvent(new Event('marked-all-read'))
     }
     setMarkingAll(false)
@@ -162,25 +182,28 @@ export default function NavBar() {
         {/* Left: back or search */}
         {showBack ? (
           <button onClick={() => router.back()} aria-label="Tilbake" style={iconBtnStyle()}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,#2C1A0E)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
           </button>
         ) : (
           <Link href="/search" aria-label="Søk" style={iconBtnStyle()}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,#2C1A0E)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
           </Link>
         )}
 
-        {/* Centre: title */}
-        <h1 className="page-header-title font-display">{title}</h1>
+        {/* Centre: logo on home, title elsewhere */}
+        {isHome ? (
+          <VillageLogo size={28} />
+        ) : (
+          <h1 className="page-header-title font-display">{title}</h1>
+        )}
 
         {/* Right: context-aware actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
 
-          {/* On notifications page: show "Merk alle som lest" button instead of bell */}
           {isNotificationsPage ? (
             unread > 0 ? (
               <button
@@ -199,7 +222,6 @@ export default function NavBar() {
                 {markingAll ? '…' : 'Merk alle som lest'}
               </button>
             ) : (
-              // Empty placeholder so title stays centred
               <div style={{ width: 36 }} />
             )
           ) : (
@@ -209,12 +231,12 @@ export default function NavBar() {
               {unread > 0 && (
                 <span style={{
                   position: 'absolute', top: 4, right: 4,
-                  background: 'var(--terra, #C4673A)', color: 'white',
+                  background: 'var(--terra)', color: 'white',
                   fontSize: 9, fontWeight: 700,
                   minWidth: 14, height: 14, borderRadius: 7,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   padding: '0 3px', lineHeight: 1,
-                  boxShadow: '0 0 0 2px rgba(250,247,242,0.9)',
+                  boxShadow: '0 0 0 2px rgba(252,254,255,0.9)',
                 }}>
                   {unread > 9 ? '9+' : unread}
                 </span>
@@ -225,7 +247,7 @@ export default function NavBar() {
           {/* Meldinger */}
           <Link href="/messages" aria-label="Meldinger" data-tour="messages"
             style={iconBtnStyle(pathname === '/messages')}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark,#2C1A0E)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
           </Link>
@@ -243,19 +265,19 @@ export default function NavBar() {
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
                 <div className="absolute right-0 top-11 z-50 rounded-2xl shadow-lg overflow-hidden w-44"
-                  style={{ background: '#fff', border: '1px solid #E8DDD0' }}>
+                  style={{ background: 'var(--glass-bg-heavy)', border: '1px solid var(--glass-border)' }}>
                   <Link href="/profile" onClick={() => setShowMenu(false)}>
                     <div className="px-4 py-3 flex items-center gap-2 text-sm" style={{ color: 'var(--terra-dark)' }}>
                       👤 Min profil
                     </div>
                   </Link>
                   <Link href="/settings" onClick={() => setShowMenu(false)}>
-                    <div className="px-4 py-3 flex items-center gap-2 text-sm" style={{ color: 'var(--terra-dark)', borderTop: '1px solid #E8DDD0' }}>
+                    <div className="px-4 py-3 flex items-center gap-2 text-sm" style={{ color: 'var(--terra-dark)', borderTop: '1px solid var(--glass-border)' }}>
                       ⚙️ Innstillinger
                     </div>
                   </Link>
                   <button onClick={signOut} className="w-full px-4 py-3 flex items-center gap-2 text-sm"
-                    style={{ color: 'var(--terra)', borderTop: '1px solid #E8DDD0' }}>
+                    style={{ color: 'var(--terra)', borderTop: '1px solid var(--glass-border)' }}>
                     🚪 Logg ut
                   </button>
                 </div>
@@ -277,11 +299,11 @@ export default function NavBar() {
                 style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, textDecoration: 'none' }}>
                 <div style={{
                   width: 44, height: 44, borderRadius: '50%',
-                  background: 'var(--terra, #C4673A)',
+                  background: 'var(--terra)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   marginTop: -20,
-                  boxShadow: '0 4px 12px rgba(196,103,58,0.45)',
-                  border: '3px solid rgba(250,247,242,0.9)',
+                  boxShadow: '0 4px 12px rgba(46,98,113,0.40)',
+                  border: '3px solid rgba(252,254,255,0.9)',
                 }}>
                   <span style={{ color: 'white', fontSize: 22, fontWeight: 700, lineHeight: 1, marginTop: -1 }}>+</span>
                 </div>

@@ -400,6 +400,14 @@ export default function ItemPage() {
         {hasOwnerAccess && item.available && pendingLoans.length === 0 && !activeLoan && (
           <div className="flex gap-2">
             {isOwner && (
+              <Link href={`/items/${item.id}/edit`} className="flex-1">
+                <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
+                  <p className="text-sm">✏️</p>
+                  <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Rediger</p>
+                </div>
+              </Link>
+            )}
+            {isOwner && (
               <Link href={`/items/access?item=${item.id}`} className="flex-1">
                 <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
                   <p className="text-sm">🔒</p>

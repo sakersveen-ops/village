@@ -10,28 +10,6 @@ const scenarios = [
   { emoji: '🔧', name: 'Sara', text: 'Naboene deler verktøy. Ingen trenger å eie alt selv lenger.' },
 ]
 
-const MockScreen = ({ emoji, label }: { emoji: string; label: string }) => (
-  <div
-    className="rounded-2xl overflow-hidden flex-shrink-0 w-32"
-    style={{
-      background: 'rgba(252,254,255,0.12)',
-      border: '1px solid rgba(252,254,255,0.20)',
-      backdropFilter: 'blur(12px)',
-    }}
-  >
-    <div className="h-20 flex items-center justify-center text-4xl" style={{ background: 'rgba(46,98,113,0.25)' }}>
-      {emoji}
-    </div>
-    <div className="px-2 py-2">
-      <div className="h-2 rounded-full mb-1.5" style={{ background: 'rgba(255,255,255,0.45)', width: '80%' }} />
-      <div className="h-2 rounded-full mb-1.5" style={{ background: 'rgba(255,255,255,0.25)', width: '60%' }} />
-      <div className="mt-2 rounded-lg py-1 px-2 text-center" style={{ background: 'rgba(46,98,113,0.65)' }}>
-        <span className="text-white text-xs font-medium">{label}</span>
-      </div>
-    </div>
-  </div>
-)
-
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -78,12 +56,39 @@ export default function LoginPage() {
 
         {/* ── Left / Top: Branding + social proof ── */}
         <div className="flex flex-col items-center lg:items-start px-6 pt-14 pb-6 lg:pt-0 lg:pb-0 lg:max-w-lg lg:flex-1">
+
           {/* Logo */}
           <div className="mb-5 lg:mb-6">
-            <div className="text-5xl mb-3 lg:text-6xl">🏘️</div>
-            <h1 className="text-5xl lg:text-6xl font-bold text-white mb-1 font-display">
-              Village
-            </h1>
+            <div className="flex items-center gap-3 mb-3">
+              {/* Village logo mark */}
+              <div style={{
+                width: 56, height: 56, borderRadius: 16, flexShrink: 0,
+                background: '#E1F5EE',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 34,
+                  color: 'var(--terra)',
+                  lineHeight: 1,
+                  letterSpacing: '-0.04em',
+                  fontOpticalSizing: 'auto',
+                }}>V</span>
+              </div>
+              <h1
+                className="font-display"
+                style={{
+                  fontSize: 'clamp(40px, 10vw, 56px)',
+                  color: 'white',
+                  letterSpacing: '-0.025em',
+                  fontOpticalSizing: 'auto',
+                  margin: 0,
+                  lineHeight: 1,
+                }}
+              >
+                Village
+              </h1>
+            </div>
             <p className="text-white/80 text-lg font-medium">Tenk om tingene dine kunne gledet venner og familie?</p>
           </div>
 

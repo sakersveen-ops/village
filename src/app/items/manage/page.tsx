@@ -14,7 +14,18 @@ const SORT_OPTIONS: { id: SortKey; label: string }[] = [
 ]
 
 const CAT_EMOJI: Record<string, string> = {
-  barn: '🧸', kjole: '👗', verktøy: '🔧', bok: '📚', annet: '📦',
+  'hjem-og-hage': '🏠',
+  'baby-og-barn': '🧸',
+  'fest-og-arrangement': '🎉',
+  'friluft-og-sport': '⛺',
+  'klar-og-mote': '👗',
+  'boker': '📚',
+}
+
+const AGE_LABEL: Record<string, string> = {
+  '0-3mnd': '0–3 mnd', '3-6mnd': '3–6 mnd', '6-12mnd': '6–12 mnd',
+  '1-2ar': '1–2 år', '2-3ar': '2–3 år', '3-5ar': '3–5 år',
+  '5-8ar': '5–8 år', '8-12ar': '8–12 år',
 }
 
 export default function ManageItemsPage() {
@@ -115,64 +126,85 @@ export default function ManageItemsPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {sorted.map(item => (
-              <div key={item.id}>
-                <div className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
-                  {item.image_url
-                    ? <img src={item.image_url} alt={item.name}
-                        className="rounded-xl object-cover flex-shrink-0" style={{ width: 48, height: 48 }} />
-                    : <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                        style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
-                        {CAT_EMOJI[item.category] ?? '📦'}
+            {sorted.map(item => {
+              const ages: string[] = item.age_ranges ?? []
+              const isBaby = item.category === 'baby-og-barn'
+              return (
+                <div key={item.id}>
+                  <div className="rounded-2xl px-4 py-3 shadow-sm" style={{ background: '#fff' }}>
+                    <div className="flex items-center gap-3">
+                      {item.image_url
+                        ? <img src={item.image_url} alt={item.name}
+                            className="rounded-xl object-cover flex-shrink-0" style={{ width: 48, height: 48 }} />
+                        : <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                            style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
+                            {CAT_EMOJI[item.category] ?? '📦'}
+                          </div>
+                      }
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
+                        <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--terra-mid)' }}>
+                          {item.category?.replace(/-/g, ' ')}
+                        </p>
                       </div>
-                  }
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
-                    <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--terra-mid)' }}>{item.category}</p>
-                  </div>
-                  <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
-                    style={item.available
-                      ? { background: '#EEF4F0', color: 'var(--terra-green)' }
-                      : { background: 'var(--glass-bg)', color: 'var(--terra)' }
-                    }>
-                    {item.available ? 'Ledig' : 'Utlånt'}
-                  </span>
-                  {/* Rediger */}
-                  <Link href={`/items/${item.id}/edit`} aria-label="Rediger"
-                    className="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 text-sm"
-                    style={{ background: 'var(--glass-bg-heavy)', border: '1px solid var(--glass-border)', color: '#1A3542' }}>
-                    ✏️
-                  </Link>
-                  {/* Slett */}
-                  <button onClick={() => setConfirmDelete(item.id)} aria-label="Slett"
-                    className="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 text-sm"
-                    style={{ background: 'var(--glass-bg)', border: '1px solid rgba(46,98,113,0.2)', color: 'var(--terra)' }}>
-                    🗑
-                  </button>
-                </div>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
+                        style={item.available
+                          ? { background: '#EEF4F0', color: 'var(--terra-green)' }
+                          : { background: 'var(--glass-bg)', color: 'var(--terra)' }
+                        }>
+                        {item.available ? 'Ledig' : 'Utlånt'}
+                      </span>
+                      {/* Rediger */}
+                      <Link href={`/items/${item.id}/edit`} aria-label="Rediger"
+                        className="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 text-sm"
+                        style={{ background: 'var(--glass-bg-heavy)', border: '1px solid var(--glass-border)', color: '#1A3542' }}>
+                        ✏️
+                      </Link>
+                      {/* Slett */}
+                      <button onClick={() => setConfirmDelete(item.id)} aria-label="Slett"
+                        className="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 text-sm"
+                        style={{ background: 'var(--glass-bg)', border: '1px solid rgba(46,98,113,0.2)', color: 'var(--terra)' }}>
+                        🗑
+                      </button>
+                    </div>
 
-                {/* Bekreft-sletting — inline under kortet */}
-                {confirmDelete === item.id && (
-                  <div className="rounded-2xl px-4 py-3 mt-1 flex items-center justify-between gap-3"
-                    style={{ background: 'var(--glass-bg)', border: '1px solid rgba(46,98,113,0.2)' }}>
-                    <p className="text-sm flex-1" style={{ color: 'var(--terra-dark)' }}>
-                      Slette «{item.name}»?
-                    </p>
-                    <button onClick={() => setConfirmDelete(null)}
-                      className="text-xs px-3 py-1.5 rounded-full"
-                      style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-mid)', background: '#fff' }}>
-                      Avbryt
-                    </button>
-                    <button onClick={() => deleteItem(item.id)}
-                      disabled={deletingId === item.id}
-                      className="text-xs px-3 py-1.5 rounded-full font-medium"
-                      style={{ background: 'var(--terra)', color: '#fff' }}>
-                      {deletingId === item.id ? '…' : 'Slett'}
-                    </button>
+                    {/* Aldersmerker — kun baby-og-barn med valgte aldere */}
+                    {isBaby && ages.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2 ml-[60px]">
+                        {ages.map(id => (
+                          <span key={id}
+                            className="text-xs px-2 py-0.5 rounded-full"
+                            style={{ background: 'var(--glass-bg)', color: 'var(--terra-mid)', border: '1px solid var(--glass-border)' }}>
+                            {AGE_LABEL[id] ?? id}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {/* Bekreft-sletting — inline under kortet */}
+                  {confirmDelete === item.id && (
+                    <div className="rounded-2xl px-4 py-3 mt-1 flex items-center justify-between gap-3"
+                      style={{ background: 'var(--glass-bg)', border: '1px solid rgba(46,98,113,0.2)' }}>
+                      <p className="text-sm flex-1" style={{ color: 'var(--terra-dark)' }}>
+                        Slette «{item.name}»?
+                      </p>
+                      <button onClick={() => setConfirmDelete(null)}
+                        className="text-xs px-3 py-1.5 rounded-full"
+                        style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-mid)', background: '#fff' }}>
+                        Avbryt
+                      </button>
+                      <button onClick={() => deleteItem(item.id)}
+                        disabled={deletingId === item.id}
+                        className="text-xs px-3 py-1.5 rounded-full font-medium"
+                        style={{ background: 'var(--terra)', color: '#fff' }}>
+                        {deletingId === item.id ? '…' : 'Slett'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </div>

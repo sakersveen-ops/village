@@ -10,23 +10,22 @@ const scenarios = [
   { emoji: '🔧', name: 'Sara', text: 'Naboene deler verktøy. Ingen trenger å eie alt selv lenger.' },
 ]
 
-// Mock "screenshots" as illustrated UI cards
 const MockScreen = ({ emoji, label }: { emoji: string; label: string }) => (
   <div
     className="rounded-2xl overflow-hidden flex-shrink-0 w-32"
     style={{
-      background: 'rgba(255,248,243,0.18)',
-      border: '1px solid rgba(255,248,243,0.25)',
+      background: 'rgba(252,254,255,0.12)',
+      border: '1px solid rgba(252,254,255,0.20)',
       backdropFilter: 'blur(12px)',
     }}
   >
-    <div className="h-20 flex items-center justify-center text-4xl" style={{ background: 'rgba(196,103,58,0.2)' }}>
+    <div className="h-20 flex items-center justify-center text-4xl" style={{ background: 'rgba(46,98,113,0.25)' }}>
       {emoji}
     </div>
     <div className="px-2 py-2">
-      <div className="h-2 rounded-full mb-1.5" style={{ background: 'rgba(255,255,255,0.5)', width: '80%' }} />
-      <div className="h-2 rounded-full mb-1.5" style={{ background: 'rgba(255,255,255,0.3)', width: '60%' }} />
-      <div className="mt-2 rounded-lg py-1 px-2 text-center" style={{ background: 'rgba(196,103,58,0.7)' }}>
+      <div className="h-2 rounded-full mb-1.5" style={{ background: 'rgba(255,255,255,0.45)', width: '80%' }} />
+      <div className="h-2 rounded-full mb-1.5" style={{ background: 'rgba(255,255,255,0.25)', width: '60%' }} />
+      <div className="mt-2 rounded-lg py-1 px-2 text-center" style={{ background: 'rgba(46,98,113,0.65)' }}>
         <span className="text-white text-xs font-medium">{label}</span>
       </div>
     </div>
@@ -73,9 +72,8 @@ export default function LoginPage() {
   return (
     <div
       className="min-h-screen flex flex-col"
-      style={{ background: 'linear-gradient(160deg, #2C1A0E 0%, #6B4226 55%, #C4673A 100%)' }}
+      style={{ background: 'linear-gradient(160deg, #0D1E25 0%, #1A3542 50%, #2E6271 100%)' }}
     >
-      {/* ── Desktop layout: two-column ── */}
       <div className="flex-1 flex flex-col lg:flex-row lg:items-center lg:justify-center lg:gap-16 lg:px-12 lg:py-12">
 
         {/* ── Left / Top: Branding + social proof ── */}
@@ -83,10 +81,7 @@ export default function LoginPage() {
           {/* Logo */}
           <div className="mb-5 lg:mb-6">
             <div className="text-5xl mb-3 lg:text-6xl">🏘️</div>
-            <h1
-              className="text-5xl lg:text-6xl font-bold text-white mb-1"
-              style={{ fontFamily: 'var(--font-display, Georgia)', letterSpacing: '-0.03em' }}
-            >
+            <h1 className="text-5xl lg:text-6xl font-bold text-white mb-1 font-display">
               Village
             </h1>
             <p className="text-white/80 text-lg font-medium">Tenk om tingene dine kunne gledet venner og familie?</p>
@@ -94,7 +89,7 @@ export default function LoginPage() {
 
           {/* Origin story */}
           <p
-            className="text-white/55 text-sm leading-relaxed mb-6 max-w-sm lg:max-w-none"
+            className="text-white/50 text-sm leading-relaxed mb-6 max-w-sm lg:max-w-none"
             style={{ fontStyle: 'italic' }}
           >
             For oss småbarnsforeldre og mange andre er det helt nødvendig å kunne låne utstyr av venner og bekjente. Det er derfor vi har laget Village – og nå bruker vi det også til å dele verktøy med naboer, legge hyttekabal med familien og få oversikt over hvem vi har lånt hva av.
@@ -108,23 +103,21 @@ export default function LoginPage() {
                 className="flex items-start gap-3"
                 style={{ opacity: 0.95 - i * 0.06 }}
               >
-                {/* Avatar */}
                 <div
                   className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm"
-                  style={{ background: 'rgba(196,103,58,0.5)', border: '1.5px solid rgba(255,255,255,0.25)' }}
+                  style={{ background: 'rgba(46,98,113,0.55)', border: '1.5px solid rgba(255,255,255,0.20)' }}
                 >
                   {s.emoji}
                 </div>
-                {/* Bubble */}
                 <div
                   className="rounded-2xl rounded-tl-sm px-3 py-2 text-sm text-white/90 max-w-xs"
                   style={{
-                    background: 'rgba(255,248,243,0.12)',
-                    border: '1px solid rgba(255,255,255,0.15)',
+                    background: 'rgba(252,254,255,0.10)',
+                    border: '1px solid rgba(255,255,255,0.12)',
                     backdropFilter: 'blur(8px)',
                   }}
                 >
-                  <span className="font-semibold text-white/70 text-xs block mb-0.5">{s.name}</span>
+                  <span className="font-semibold text-white/60 text-xs block mb-0.5">{s.name}</span>
                   {s.text}
                 </div>
               </div>
@@ -134,18 +127,17 @@ export default function LoginPage() {
 
         {/* ── Right / Bottom: Login card ── */}
         <div
-          className="rounded-t-3xl lg:rounded-3xl px-6 pt-8 pb-10 lg:w-[400px] lg:flex-shrink-0 lg:self-center"
-          style={{ background: '#FAF7F2' }}
+          className="rounded-t-3xl lg:rounded-3xl px-6 pt-8 pb-10 lg:w-[400px] lg:flex-shrink-0 lg:self-center glass-heavy"
         >
           <h2
-            className="text-2xl font-bold text-[#2C1A0E] mb-1"
-            style={{ fontFamily: 'var(--font-display, Georgia)', letterSpacing: '-0.02em' }}
+            className="text-2xl font-bold mb-1 font-display"
+            style={{ color: 'var(--terra-dark)' }}
           >
             Logg inn
           </h2>
-          <p className="text-sm text-[#9C7B65] mb-6">
+          <p className="text-sm mb-6" style={{ color: 'var(--terra-mid)' }}>
             Ny her?{' '}
-            <a href="/register" className="text-[#C4673A] font-medium underline underline-offset-2">
+            <a href="/register" className="font-medium underline underline-offset-2" style={{ color: 'var(--terra)' }}>
               Opprett konto
             </a>
           </p>
@@ -157,7 +149,10 @@ export default function LoginPage() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] transition-colors"
+              className="bg-white rounded-xl px-4 py-3.5 outline-none transition-colors"
+              style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-dark)' }}
+              onFocus={e => (e.target.style.borderColor = 'var(--terra)')}
+              onBlur={e => (e.target.style.borderColor = 'var(--glass-border)')}
             />
             <input
               type="password"
@@ -165,7 +160,10 @@ export default function LoginPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
-              className="bg-white border border-[#E8DDD0] rounded-xl px-4 py-3.5 text-[#2C1A0E] outline-none focus:border-[#C4673A] transition-colors"
+              className="bg-white rounded-xl px-4 py-3.5 outline-none transition-colors"
+              style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-dark)' }}
+              onFocus={e => (e.target.style.borderColor = 'var(--terra)')}
+              onBlur={e => (e.target.style.borderColor = 'var(--glass-border)')}
             />
 
             {error && (
@@ -177,7 +175,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading || !email || !password}
-              className="btn-primary rounded-xl py-3.5 font-semibold disabled:opacity-50 mt-1 transition-opacity"
+              className="btn-primary mt-1"
             >
               {loading ? '…' : 'Logg inn'}
             </button>
@@ -185,21 +183,23 @@ export default function LoginPage() {
 
           <div className="mt-4 relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-[#E8DDD0]" />
+              <div className="w-full border-t" style={{ borderColor: 'var(--glass-border)' }} />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="bg-[#FAF7F2] px-3 text-[#9C7B65]">eller</span>
+              <span className="px-3" style={{ background: 'var(--glass-bg-heavy)', color: 'var(--terra-mid)' }}>
+                eller
+              </span>
             </div>
           </div>
 
           <a
             href="/register"
-            className="mt-4 flex items-center justify-center gap-2 rounded-xl py-3.5 font-semibold text-[#2C1A0E] transition-colors border border-[#E8DDD0] hover:border-[#C4673A] hover:text-[#C4673A]"
+            className="mt-4 flex items-center justify-center gap-2 rounded-xl py-3.5 font-semibold btn-glass"
           >
             Opprett konto gratis
           </a>
 
-          <p className="text-xs text-center text-[#9C7B65] mt-5">
+          <p className="text-xs text-center mt-5" style={{ color: 'var(--terra-mid)' }}>
             Ved å logge inn godtar du våre{' '}
             <a href="/terms" className="underline">vilkår</a> og{' '}
             <a href="/privacy" className="underline">personvernpolicy</a>.

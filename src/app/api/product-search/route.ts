@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Proxy for Open Food Facts (gratis, ingen nøkkel nødvendig)
-// + UPC Item DB fallback (krever UPCITEMDB_KEY i .env.local)
-// Brukes av /items/new for å søke opp barneprodukt via navn eller strekkode
+// Produktsøk for barn-kategorien.
+// Bruker Claude + web_search for å finne babyutstyr — gir god dekning for
+// Stokke, BABYBJÖRN, Chicco, Graco, norske merker osv.
+// Barcode-oppslag bruker Open Food Facts som før (gratis, ingen nøkkel).
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const query = searchParams.get('q')?.trim()
+  const query   = searchParams.get('q')?.trim()
   const barcode = searchParams.get('barcode')?.trim()
 
   if (!query && !barcode) {
@@ -14,9 +15,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    if (barcode) {
-      return await lookupBarcode(barcode)
-    }
+    if (barcode) return await lookupBarcode(barcode)
     return await searchByName(query!)
   } catch (err) {
     console.error('[product-search]', err)
@@ -24,72 +23,124 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ── Strekkode-oppslag ─────────────────────────────────────────────────────────
+// ── Navnesøk via Claude + web search ─────────────────────────────────────────
+
+async function searchByName(query: string) {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    return NextResponse.json({ error: 'ANTHROPIC_API_KEY ikke satt' }, { status: 500 })
+  }
+
+  const prompt = `Søk etter babyprodukt eller barneprodukt: "${query}"
+
+Finn de 4 mest relevante produktene. Returner KUN et JSON-array — ingen annen tekst, ingen markdown:
+[
+  {
+    "name": "Fullt produktnavn",
+    "brand": "Merkenavn",
+    "description": "1 setning om produktet på norsk",
+    "imageUrl": "https://... (direkte bilde-URL til produktet, helst hvit bakgrunn)"
+  }
+]
+
+Prioriter kjente babymerker: Stokke, BABYBJÖRN, Chicco, Graco, Maxi-Cosi, Bugaboo, UPPAbaby, Phil&Teds, BabyTrend, Nuna, norske og skandinaviske merker. Om query er på norsk, svar med norske produktnavn.`
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.text()
+    console.error('[product-search] Claude API error:', err)
+    return NextResponse.json({ error: 'Claude API feilet' }, { status: 500 })
+  }
+
+  const data = await res.json()
+
+  // Finn tekst-blokken i responsen (kan komme etter tool_use-blokker)
+  const textBlock = data.content?.find((b: ContentBlock) => b.type === 'text')
+  if (!textBlock?.text) {
+    return NextResponse.json({ results: [] })
+  }
+
+  try {
+    const clean = textBlock.text.replace(/```json|```/g, '').trim()
+    // Finn JSON-array i teksten selv om Claude la til litt tekst rundt
+    const match = clean.match(/\[[\s\S]*\]/)
+    if (!match) return NextResponse.json({ results: [] })
+
+    const raw: RawProduct[] = JSON.parse(match[0])
+    const results: ProductResult[] = raw
+      .filter(p => p.name && p.name.trim().length > 0)
+      .slice(0, 5)
+      .map((p, i) => ({
+        id: `claude-${Date.now()}-${i}`,
+        name: p.name?.trim() ?? '',
+        brand: p.brand?.trim() ?? '',
+        description: p.description?.trim() ?? '',
+        imageUrl: isValidImageUrl(p.imageUrl) ? p.imageUrl : null,
+        category: 'barn',
+        barcode: null,
+      }))
+
+    return NextResponse.json({ source: 'claude', results })
+  } catch (e) {
+    console.error('[product-search] JSON parse error:', e, textBlock.text)
+    return NextResponse.json({ results: [] })
+  }
+}
+
+// ── Barcode-oppslag via Open Food Facts ───────────────────────────────────────
+// Beholdes for strekkode-scan — gratis og rask for produkter med EAN
 
 async function lookupBarcode(barcode: string) {
-  // 1. Prøv Open Food Facts / Open Products (gratis)
-  const offRes = await fetch(
+  const res = await fetch(
     `https://world.openfoodfacts.org/api/v2/product/${barcode}.json`,
     { next: { revalidate: 86400 } }
   )
-  if (offRes.ok) {
-    const data = await offRes.json()
+
+  if (res.ok) {
+    const data = await res.json()
     if (data.status === 1 && data.product) {
       const p = data.product
-      return NextResponse.json({
-        source: 'openfoodfacts',
-        results: [normalizeOFF(p)],
-      })
-    }
-  }
-
-  // 2. Fallback: UPC Item DB
-  const upcKey = process.env.UPCITEMDB_KEY
-  if (upcKey) {
-    const upcRes = await fetch(
-      `https://api.upcitemdb.com/prod/trial/lookup?upc=${barcode}`,
-      {
-        headers: { 'user_key': upcKey, 'key_type': '3scale' },
-        next: { revalidate: 86400 },
+      const result: ProductResult = {
+        id: p._id ?? barcode,
+        name: p.product_name ?? '',
+        brand: p.brands ?? '',
+        description: p.quantity ? `Innhold: ${p.quantity}` : '',
+        imageUrl: p.image_front_small_url ?? null,
+        category: 'barn',
+        barcode,
       }
-    )
-    if (upcRes.ok) {
-      const data = await upcRes.json()
-      const items: UPCItem[] = data.items ?? []
-      if (items.length > 0) {
-        return NextResponse.json({
-          source: 'upcitemdb',
-          results: items.map(normalizeUPC),
-        })
+      if (result.name) {
+        return NextResponse.json({ source: 'openfoodfacts', results: [result] })
       }
     }
   }
 
-  return NextResponse.json({ results: [] })
+  // Barcode ikke funnet i Open Food Facts — fall tilbake til Claude-søk med EAN
+  return searchByName(barcode)
 }
 
-// ── Navnesøk via Open Food Facts ─────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-async function searchByName(query: string) {
-  const encoded = encodeURIComponent(query)
-  const res = await fetch(
-    `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encoded}&search_simple=1&action=process&json=1&page_size=8&fields=product_name,brands,image_front_small_url,categories_tags,quantity,_id`,
-    { next: { revalidate: 3600 } }
-  )
-  if (!res.ok) return NextResponse.json({ results: [] })
-
-  const data = await res.json()
-  const products: OFFProduct[] = (data.products ?? []).filter(
-    (p: OFFProduct) => p.product_name && p.product_name.trim().length > 0
-  )
-
-  return NextResponse.json({
-    source: 'openfoodfacts',
-    results: products.map(normalizeOFF),
-  })
+function isValidImageUrl(url: unknown): url is string {
+  if (typeof url !== 'string' || !url.startsWith('http')) return false
+  return /\.(jpg|jpeg|png|webp|avif|gif)(\?.*)?$/i.test(url) || url.includes('cdn') || url.includes('image')
 }
 
-// ── Normalisering ─────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface ProductResult {
   id: string
@@ -101,51 +152,14 @@ export interface ProductResult {
   barcode: string | null
 }
 
-interface OFFProduct {
-  _id?: string
-  product_name?: string
-  brands?: string
-  image_front_small_url?: string
-  categories_tags?: string[]
-  quantity?: string
-}
-
-interface UPCItem {
-  ean?: string
-  title?: string
+interface RawProduct {
+  name?: string
   brand?: string
   description?: string
-  images?: string[]
-  category?: string
-  color?: string
+  imageUrl?: string
 }
 
-function normalizeOFF(p: OFFProduct): ProductResult {
-  const cats = (p.categories_tags ?? [])
-    .filter((c: string) => !c.startsWith('en:'))
-    .map((c: string) => c.replace(/^[a-z]{2}:/, ''))
-    .slice(0, 2)
-    .join(', ')
-
-  return {
-    id: p._id ?? Math.random().toString(36).slice(2),
-    name: p.product_name ?? '',
-    brand: p.brands ?? '',
-    description: p.quantity ? `Innhold: ${p.quantity}` : '',
-    imageUrl: p.image_front_small_url ?? null,
-    category: cats,
-    barcode: p._id ?? null,
-  }
-}
-
-function normalizeUPC(p: UPCItem): ProductResult {
-  return {
-    id: p.ean ?? Math.random().toString(36).slice(2),
-    name: p.title ?? '',
-    brand: p.brand ?? '',
-    description: p.description ?? '',
-    imageUrl: p.images?.[0] ?? null,
-    category: p.category ?? '',
-    barcode: p.ean ?? null,
-  }
+interface ContentBlock {
+  type: string
+  text?: string
 }

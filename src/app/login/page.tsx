@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation'
 
 const scenarios = [
   { emoji: '👗', name: 'Mia', text: 'Lånte kjole til bryllupet – sparte 3000 kr!' },
-  { emoji: '🍼', name: 'Jonas', text: 'Fikk låne bæresele av naboen. Perfekt!' },
-  { emoji: '🔧', name: 'Lena', text: 'Bor bored? Noen lånte meg en Festool!' },
-  { emoji: '📚', name: 'Erik', text: 'Delte bøker med hele kretsen vår.' },
-  { emoji: '⛺', name: 'Sara', text: 'Lånte telt til Rondane i helga.' },
+  { emoji: '🏕️', name: 'Jonas', text: 'Lånte telt og soveposer av fetteren min. Sommerferien er i boks!' },
+  { emoji: '🏡', name: 'Lena', text: 'Familien vår deler hytta via Village – endelig oversikt over hvem som har den når.' },
+  { emoji: '⛵', name: 'Erik', text: 'Båten brukes av tre familier. Village styrer hvem som har tilgang og når.' },
+  { emoji: '🔧', name: 'Sara', text: 'Naboene deler verktøy. Ingen trenger å eie alt selv lenger.' },
 ]
 
 // Mock "screenshots" as illustrated UI cards
@@ -80,9 +80,9 @@ export default function LoginPage() {
       <div className="flex-1 flex flex-col lg:flex-row lg:items-center lg:justify-center lg:gap-16 lg:px-12 lg:py-12">
 
         {/* ── Left / Top: Branding + social proof ── */}
-        <div className="flex flex-col items-center lg:items-start px-6 pt-14 pb-6 lg:pt-0 lg:pb-0 lg:max-w-md lg:flex-1">
+        <div className="flex flex-col items-center lg:items-start px-6 pt-14 pb-6 lg:pt-0 lg:pb-0 lg:max-w-lg lg:flex-1">
           {/* Logo */}
-          <div className="mb-6 lg:mb-8">
+          <div className="mb-5 lg:mb-6">
             <div className="text-5xl mb-3 lg:text-6xl">🏘️</div>
             <h1
               className="text-5xl lg:text-6xl font-bold text-white mb-1"
@@ -90,8 +90,16 @@ export default function LoginPage() {
             >
               Village
             </h1>
-            <p className="text-white/60 text-lg">Lån og lån bort i kretsen din</p>
+            <p className="text-white/80 text-lg font-medium">Tingene du eier kan glede venner og familie!</p>
           </div>
+
+          {/* Origin story */}
+          <p
+            className="text-white/55 text-sm leading-relaxed mb-6 max-w-sm lg:max-w-none"
+            style={{ fontStyle: 'italic' }}
+          >
+            For oss småbarnsforeldre og mange andre er det helt nødvendig å kunne låne utstyr av venner og bekjente. Det er derfor vi har laget Village – og nå bruker vi det også til å dele verktøy med naboer, legge hyttekabal med familien og få oversikt over hvem vi har lånt hva av.
+          </p>
 
           {/* Speech bubbles */}
           <div className="flex flex-col gap-3 w-full max-w-sm mb-8">
@@ -125,11 +133,11 @@ export default function LoginPage() {
           </div>
 
           {/* Mock app screens – decorative */}
-          <div className="flex gap-3 overflow-x-auto pb-2 w-full max-w-sm lg:max-w-none scrollbar-hide">
+          <div className="flex gap-3 w-full max-w-sm lg:max-w-none pb-2">
             <MockScreen emoji="👗" label="Lån nå" />
-            <MockScreen emoji="🔧" label="Tilgjengelig" />
-            <MockScreen emoji="⛺" label="Lån bort" />
-            <MockScreen emoji="📚" label="Se kretsene" />
+            <MockScreen emoji="🏡" label="Hytteoversikt" />
+            <MockScreen emoji="⛵" label="Del tilgang" />
+            <MockScreen emoji="🔧" label="Lån bort" />
           </div>
         </div>
 

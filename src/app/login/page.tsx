@@ -130,8 +130,7 @@ export default function LoginPage() {
               </div>
             ))}
           </div>
-
-          
+        </div>{/* ── End Left column ── */}
 
         {/* ── Right / Bottom: Login card ── */}
         <div
@@ -205,7 +204,8 @@ export default function LoginPage() {
             <a href="/terms" className="underline">vilkår</a> og{' '}
             <a href="/privacy" className="underline">personvernpolicy</a>.
           </p>
-        </div>
+        </div>{/* ── End Right column ── */}
+
       </div>
     </div>
   )

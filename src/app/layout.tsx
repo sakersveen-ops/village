@@ -14,10 +14,29 @@ const fraunces = Fraunces({
 })
 
 export const metadata: Metadata = {
-  title: 'It takes a VILLAGE',
-  description: 'Lån og lån bort i kretsen din',
+  title: 'Village',
+  description: 'Del og lån med naboer, venner og kretsen din.',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    title: 'Village',
+    statusBarStyle: 'default',
+  },
+  icons: {
+    apple: '/apple-touch-icon.png',
+  },
+  openGraph: {
+    title: 'Village – del og lån med naboer',
+    description: 'Lån ting av naboer, venner og kretsen din.',
+    images: [{ url: '/og-image.png', width: 1200, height: 630 }],
+    siteName: 'Village',
+    locale: 'nb_NO',
+  },
 }
 
+export const viewport = {
+  themeColor: '#C4673A',
+}
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="no">
@@ -34,3 +53,4 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   )
 }
+

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { track, Events } from '@/lib/track'
-import { notifRefreshEvent } from '@/components/NavBar'
+import { notifRefreshEvent } from '@/lib/events'
 
 // Types that require explicit action — never auto-read
 const ACTION_TYPES = new Set([

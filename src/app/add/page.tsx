@@ -519,7 +519,7 @@ Returner KUN JSON, ingen annen tekst.` }
                     setSubcategoryIds(prev => prev.includes('') ? prev.filter(x => x !== '') : [...prev, ''])
                     setGender('')
                     setSize('')
-                    setAgeGroup('')
+                    setAgeRanges([])
                   }}
                   className="flex flex-col items-center gap-1.5 flex-1 rounded-xl py-3 px-2 transition-all"
                   style={{
@@ -568,12 +568,12 @@ Returner KUN JSON, ingen annen tekst.` }
                 {selectedCat.subcategories.map(sub => (
                   <button
                     key={sub.id}
-                    onClick={() => setSubcategoryIds(prev => prev.includes(sub.id === subcategoryId ? '' : sub.id) ? prev.filter(x => x !== sub.id === subcategoryId ? '' : sub.id) : [...prev, sub.id === subcategoryId ? '' : sub.id])}
+                    onClick={() => setSubcategoryIds(prev => prev.includes(sub.id) ? prev.filter(x => x !== sub.id) : [...prev, sub.id])}
                     className="pill"
                     style={{
-                      background: subcategoryId === sub.id ? 'var(--terra)' : 'white',
-                      color: subcategoryId === sub.id ? 'white' : 'var(--terra-dark)',
-                      border: subcategoryId === sub.id ? '0.5px solid var(--terra)' : '0.5px solid rgba(46,98,113,0.3)',
+                      background: subcategoryIds.includes(sub.id) ? 'var(--terra)' : 'white',
+                      color: subcategoryIds.includes(sub.id) ? 'white' : 'var(--terra-dark)',
+                      border: subcategoryIds.includes(sub.id) ? '0.5px solid var(--terra)' : '0.5px solid rgba(46,98,113,0.3)',
                       borderRadius: 999, padding: '6px 12px', fontSize: 13,
                     }}>
                     {sub.label}

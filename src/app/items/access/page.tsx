@@ -163,7 +163,7 @@ function AccessPageInner() {
         const namedExisting = prev.filter(l => !l.community_id)
         const newEntries    = toAdd
           .filter(id => !namedExisting.some(l => l.access_type === id))
-          .map(id => ({ access_type: id, price_type: 'per_day' as const, price: suggestedPrice?.price }))
+          .map(id => ({ access_type: id, price_type: 'per_day' as const }))
         return [...namedExisting, ...newEntries, ...existing]
       })
     }
@@ -266,18 +266,18 @@ function AccessPageInner() {
   return (
     <div className="max-w-lg mx-auto pb-48">
 
-      <div className="page-header glass sticky top-0 z-40 px-4 pb-4"
-        style={{ borderRadius: '0 0 20px 20px', paddingTop: 0 }}>
+      <div className="page-header glass sticky top-0 z-40 px-4 pt-3 pb-4"
+        style={{ borderRadius: '0 0 20px 20px', flexDirection: 'column', alignItems: 'flex-start' }}>
         <button onClick={() => router.back()}
-          className="btn-glass flex items-center gap-1.5 text-sm mb-3"
-          style={{ marginTop: 12, color: 'var(--terra)' }}>
+          className="btn-glass flex items-center gap-1.5 text-sm"
+          style={{ color: 'var(--terra)' }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 5l-7 7 7 7" />
           </svg>
           Tilbake
         </button>
-        <h1 className="font-display font-bold"
-          style={{ fontSize: 22, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+        <h1 className="font-display font-bold mt-2"
+          style={{ fontSize: 20, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
           {itemName ? `Hvem kan låne ${itemName}?` : 'Hvem kan låne dette?'}
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>

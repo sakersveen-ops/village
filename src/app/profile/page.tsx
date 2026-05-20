@@ -219,11 +219,21 @@ export default function ProfilePage() {
   }
 
   const cancelFriendRequest = async (requestId: string) => {
+    // Optimistic update first
+    setSentRequests(prev => prev.filter(r => r.id !== requestId))
     const supabase = createClient()
     const { error } = await supabase
       .from('friend_requests').delete()
       .eq('id', requestId).eq('from_id', user.id)
-    if (!error) setSentRequests(prev => prev.filter(r => r.id !== requestId))
+    if (error) {
+      // Revert on failure
+      console.error('cancelFriendRequest error:', error)
+      const { data: sent } = await supabase
+        .from('friend_requests')
+        .select('*, profiles!friend_requests_to_id_fkey(id, name, email, avatar_url)')
+        .eq('from_id', user.id).eq('status', 'pending')
+      setSentRequests(sent || [])
+    }
   }
 
   const searchUsers = async (q: string) => {

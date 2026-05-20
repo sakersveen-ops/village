@@ -124,7 +124,7 @@ export default function FeedbackButton() {
             position: 'absolute',
             top: -4,
             right: -4,
-            background: '#2C1A0E',
+            background: '#0e2c29',
             color: 'white',
             fontSize: 8,
             fontWeight: 700,
@@ -165,7 +165,7 @@ export default function FeedbackButton() {
         {/* Handle */}
         <div style={{
           width: 36, height: 4, borderRadius: 2,
-          background: 'rgba(196,103,58,0.25)',
+          background: 'rgba(58, 196, 185, 0.25)',
           margin: '0 auto 20px',
         }} />
 
@@ -214,10 +214,10 @@ export default function FeedbackButton() {
                     padding: '10px 4px',
                     border: type === t.value
                       ? '1.5px solid rgba(46,98,113,0.40)'
-                      : '1.5px solid rgba(196,103,58,0.15)',
+                      : '1.5px solid rgba(58, 191, 196, 0.15)',
                     background: type === t.value
                       ? 'rgba(196,103,58,0.10)'
-                      : 'rgba(255,248,243,0.4)',
+                      : 'rgba(243, 255, 253, 0.4)',
                     cursor: 'pointer',
                     transition: 'all 150ms ease',
                     display: 'flex',

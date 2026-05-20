@@ -184,7 +184,7 @@ export default function SearchPage() {
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <div style={{ flex: 1, margin: '0 10px', position: 'relative' }}>
+        <div style={{ flex: 1, marginLeft: 8, position: 'relative' }}>
           <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
@@ -216,33 +216,29 @@ export default function SearchPage() {
             >×</button>
           )}
         </div>
+        {/* Tabs — inside header so they stay sticky on scroll */}
+        <div style={{ maxWidth: 480, margin: '8px auto 0', padding: '0 4px' }}>
+          <div className="glass" style={{ display: 'flex', borderRadius: 14, padding: 3, gap: 3 }}>
+            {(['gjenstander', 'kretser', 'personer'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                style={{
+                  flex: 1, padding: '7px 0', borderRadius: 11, border: 'none', fontSize: 13,
+                  fontWeight: tab === t ? 600 : 400, cursor: 'pointer', transition: 'all 200ms ease',
+                  background: tab === t ? 'white' : 'transparent',
+                  color: tab === t ? 'var(--terra-dark)' : 'var(--terra-mid)',
+                  boxShadow: tab === t ? '0 1px 8px rgba(26,37,48,0.08), inset 0 1px 0 rgba(255,255,255,0.9)' : 'none',
+                }}
+              >
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
       </header>
 
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '12px 16px 0' }}>
-        {/* Tabs */}
-        <div className="glass" style={{ display: 'flex', borderRadius: 16, padding: 4, gap: 4, marginBottom: 14 }}>
-          {(['gjenstander', 'kretser', 'personer'] as const).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              style={{
-                flex: 1,
-                padding: '8px 0',
-                borderRadius: 12,
-                border: 'none',
-                fontSize: 13,
-                fontWeight: tab === t ? 600 : 400,
-                cursor: 'pointer',
-                transition: 'all 200ms ease',
-                background: tab === t ? 'white' : 'transparent',
-                color: tab === t ? 'var(--terra-dark)' : 'var(--terra-mid)',
-                boxShadow: tab === t ? '0 1px 8px rgba(26,37,48,0.08), inset 0 1px 0 rgba(255,255,255,0.9)' : 'none',
-              }}
-            >
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
 
         {/* Date filter */}
         {tab === 'gjenstander' && (

@@ -131,56 +131,61 @@ export default function ManageItemsPage() {
               const isBaby = item.category === 'baby-og-barn'
               return (
                 <div key={item.id}>
-                  <div className="rounded-2xl px-4 py-3 shadow-sm" style={{ background: '#fff' }}>
-                    <div className="flex items-center gap-3">
-                      {item.image_url
-                        ? <img src={item.image_url} alt={item.name}
-                            className="rounded-xl object-cover flex-shrink-0" style={{ width: 48, height: 48 }} />
-                        : <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                            style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
-                            {CAT_EMOJI[item.category] ?? '📦'}
-                          </div>
-                      }
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
-                        <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--terra-mid)' }}>
-                          {item.category?.replace(/-/g, ' ')}
-                        </p>
+                  {/* FIX: Wrap card in Link so items are tappable, except action buttons */}
+                  <Link href={`/items/${item.id}`} className="block">
+                    <div className="rounded-2xl px-4 py-3 shadow-sm" style={{ background: '#fff' }}>
+                      <div className="flex items-center gap-3">
+                        {item.image_url
+                          ? <img src={item.image_url} alt={item.name}
+                              className="rounded-xl object-cover flex-shrink-0" style={{ width: 48, height: 48 }} />
+                          : <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                              style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
+                              {CAT_EMOJI[item.category] ?? '📦'}
+                            </div>
+                        }
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
+                          <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--terra-mid)' }}>
+                            {item.category?.replace(/-/g, ' ')}
+                          </p>
+                        </div>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
+                          style={item.available
+                            ? { background: '#EEF4F0', color: 'var(--terra-green)' }
+                            : { background: 'var(--glass-bg)', color: 'var(--terra)' }
+                          }>
+                          {item.available ? 'Ledig' : 'Utlånt'}
+                        </span>
+                        {/* FIX: Rediger links to /items/[id]/edit */}
+                        <Link href={`/items/${item.id}/edit`} aria-label="Rediger"
+                          onClick={e => e.stopPropagation()}
+                          className="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 text-sm"
+                          style={{ background: 'var(--glass-bg-heavy)', border: '1px solid var(--glass-border)', color: '#1A3542' }}>
+                          ✏️
+                        </Link>
+                        {/* Slett */}
+                        <button onClick={e => { e.preventDefault(); e.stopPropagation(); setConfirmDelete(item.id) }}
+                          aria-label="Slett"
+                          className="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 text-sm"
+                          style={{ background: 'var(--glass-bg)', border: '1px solid rgba(46,98,113,0.2)', color: 'var(--terra)' }}>
+                          🗑
+                        </button>
                       </div>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
-                        style={item.available
-                          ? { background: '#EEF4F0', color: 'var(--terra-green)' }
-                          : { background: 'var(--glass-bg)', color: 'var(--terra)' }
-                        }>
-                        {item.available ? 'Ledig' : 'Utlånt'}
-                      </span>
-                      {/* Rediger */}
-                      <Link href={`/items/${item.id}/edit`} aria-label="Rediger"
-                        className="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 text-sm"
-                        style={{ background: 'var(--glass-bg-heavy)', border: '1px solid var(--glass-border)', color: '#1A3542' }}>
-                        ✏️
-                      </Link>
-                      {/* Slett */}
-                      <button onClick={() => setConfirmDelete(item.id)} aria-label="Slett"
-                        className="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 text-sm"
-                        style={{ background: 'var(--glass-bg)', border: '1px solid rgba(46,98,113,0.2)', color: 'var(--terra)' }}>
-                        🗑
-                      </button>
-                    </div>
 
-                    {/* Aldersmerker — kun baby-og-barn med valgte aldere */}
-                    {isBaby && ages.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2 ml-[60px]">
-                        {ages.map(id => (
-                          <span key={id}
-                            className="text-xs px-2 py-0.5 rounded-full"
-                            style={{ background: 'var(--glass-bg)', color: 'var(--terra-mid)', border: '1px solid var(--glass-border)' }}>
-                            {AGE_LABEL[id] ?? id}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                      {/* Aldersmerker — kun baby-og-barn med valgte aldere */}
+                      {isBaby && ages.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2 ml-[60px]">
+                          {ages.map(id => (
+                            <span key={id}
+                              className="text-xs px-2 py-0.5 rounded-full"
+                              style={{ background: 'var(--glass-bg)', color: 'var(--terra-mid)', border: '1px solid var(--glass-border)' }}>
+                              {AGE_LABEL[id] ?? id}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </Link>
 
                   {/* Bekreft-sletting — inline under kortet */}
                   {confirmDelete === item.id && (

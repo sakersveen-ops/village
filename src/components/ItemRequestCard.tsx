@@ -24,6 +24,12 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
 }
 
+// FIX: check if a wish is expired (loan_to is in the past)
+function isExpired(req: ItemRequest): boolean {
+  if (!req.loan_to) return false
+  return new Date(req.loan_to) < new Date(new Date().toDateString())
+}
+
 function DateChip({ from, to }: { from: string | null; to: string | null }) {
   if (!from && !to) return null
   return (
@@ -139,7 +145,7 @@ function RequestViewer({
   )
 }
 
-// ── Creator / Editor — alltid ny hvis existing=null, rediger hvis existing satt ──
+// ── Creator / Editor ──
 function RequestCreator({
   existing, userId, onClose, onSaved, onDeleted,
 }: {
@@ -159,6 +165,7 @@ function RequestCreator({
   const [imagePreview, setImagePreview] = useState<string | null>(existing?.image_url ?? null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)  // FIX: confirm before delete
   const fileRef = useRef<HTMLInputElement>(null)
 
   const pickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -206,14 +213,27 @@ function RequestCreator({
     if (result) onSaved(result)
   }
 
+  // FIX: proper delete with error handling and optimistic update
   const deleteRequest = async () => {
     if (!existing) return
     setDeleting(true)
     const supabase = createClient()
-    await supabase.from('item_requests').delete().eq('id', existing.id)
+    const { error } = await supabase
+      .from('item_requests')
+      .delete()
+      .eq('id', existing.id)
+      .eq('user_id', userId)  // extra safety check
+
     setDeleting(false)
-    onDeleted?.()
-    onClose()
+    if (!error) {
+      onDeleted?.()
+      onClose()
+    } else {
+      console.error('Delete wish error:', error)
+      setConfirmDelete(false)
+      // Show error briefly
+      alert('Kunne ikke slette. Prøv igjen.')
+    }
   }
 
   const inputStyle = { background: '#fff', border: '1px solid #E8DDD0', color: 'var(--terra-dark)' }
@@ -329,12 +349,32 @@ function RequestCreator({
             {saving ? 'Lagrer…' : existing ? 'Oppdater' : 'Legg ut ønskeliste'}
           </button>
 
-          {existing && (
-            <button onClick={deleteRequest} disabled={deleting}
+          {existing && !confirmDelete && (
+            <button
+              onClick={() => setConfirmDelete(true)}
               className="w-full py-2.5 rounded-2xl text-sm"
               style={{ color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.25)' }}>
-              {deleting ? '…' : 'Fjern ønskeliste'}
+              Fjern ønskeliste
             </button>
+          )}
+
+          {/* FIX: two-step confirmation */}
+          {existing && confirmDelete && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="flex-1 py-2.5 rounded-2xl text-sm"
+                style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-mid)', background: '#fff' }}>
+                Avbryt
+              </button>
+              <button
+                onClick={deleteRequest}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-2xl text-sm font-semibold"
+                style={{ background: 'var(--terra)', color: '#fff' }}>
+                {deleting ? '…' : 'Bekreft slett'}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -372,12 +412,14 @@ export default function ItemRequestCard({
 
   if (loading) return null
 
-  // Andres profil: skjul hvis ingen requests eller ingen post_to_friends
-  const visibleRequests = isOwner
-    ? requests
-    : requests.filter(r => r.post_to_friends)
+  const today = new Date().toDateString()
 
-  if (!isOwner && visibleRequests.length === 0) return null
+  // FIX: For owner — all requests, expired shown greyed. For others — only non-expired post_to_friends.
+  const allVisible = isOwner
+    ? requests
+    : requests.filter(r => r.post_to_friends && !isExpired(r))
+
+  if (!isOwner && allVisible.length === 0) return null
 
   return (
     <>
@@ -389,9 +431,9 @@ export default function ItemRequestCard({
           style={{ background: 'linear-gradient(135deg, rgba(196,103,58,0.08) 0%, rgba(74,124,89,0.06) 100%)' }}>
           <p className="text-xs font-semibold" style={{ color: 'var(--terra)' }}>
             {isOwner ? 'Min ønskeliste' : `${ownerName} ønsker å låne`}
-            {visibleRequests.length > 0 && (
+            {allVisible.length > 0 && (
               <span className="ml-1.5 font-normal" style={{ color: 'var(--terra-mid)' }}>
-                ({visibleRequests.length})
+                ({isOwner ? allVisible.length : allVisible.length})
               </span>
             )}
           </p>
@@ -406,8 +448,8 @@ export default function ItemRequestCard({
           )}
         </div>
 
-        {/* Liste over requests */}
-        {visibleRequests.length === 0 ? (
+        {/* Liste */}
+        {allVisible.length === 0 && isOwner ? (
           <button onClick={() => setShowNewCreator(true)}
             className="w-full px-4 py-4 flex items-center gap-3 text-left"
             style={{ background: 'rgba(196,103,58,0.03)' }}>
@@ -421,39 +463,46 @@ export default function ItemRequestCard({
           </button>
         ) : (
           <div>
-            {visibleRequests.map((req, idx) => (
-              <button
-                key={req.id}
-                onClick={() => setViewingRequest(req)}
-                className="w-full px-4 py-3 flex items-center gap-3 text-left"
-                style={{
-                  background: '#fff',
-                  borderTop: idx === 0 ? '1px solid rgba(196,103,58,0.1)' : '1px solid #F0EAE4',
-                }}
-              >
-                {req.image_url ? (
-                  <img src={req.image_url} alt={req.name}
-                    className="rounded-xl object-cover flex-shrink-0" style={{ width: 44, height: 44 }} />
-                ) : (
-                  <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                    style={{ width: 44, height: 44, background: '#E8DDD0' }}>
-                    {CAT_EMOJI[req.category ?? ''] ?? '🔍'}
+            {allVisible.map((req, idx) => {
+              const expired = isExpired(req)
+              return (
+                <button
+                  key={req.id}
+                  onClick={() => setViewingRequest(req)}
+                  className="w-full px-4 py-3 flex items-center gap-3 text-left"
+                  style={{
+                    background: '#fff',
+                    borderTop: idx === 0 ? '1px solid rgba(196,103,58,0.1)' : '1px solid #F0EAE4',
+                    // FIX: grey out expired wishes for owner
+                    opacity: expired ? 0.45 : 1,
+                  }}
+                >
+                  {req.image_url ? (
+                    <img src={req.image_url} alt={req.name}
+                      className="rounded-xl object-cover flex-shrink-0" style={{ width: 44, height: 44 }} />
+                  ) : (
+                    <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                      style={{ width: 44, height: 44, background: '#E8DDD0' }}>
+                      {CAT_EMOJI[req.category ?? ''] ?? '🔍'}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate" style={{ color: expired ? 'var(--terra-mid)' : 'var(--terra-dark)' }}>
+                      {req.name}
+                      {expired && isOwner && (
+                        <span className="ml-1.5 text-xs font-normal" style={{ color: 'var(--terra-mid)' }}>· utløpt</span>
+                      )}
+                    </p>
+                    <DateChip from={req.loan_from} to={req.loan_to} />
                   </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>
-                    {req.name}
-                  </p>
-                  <DateChip from={req.loan_from} to={req.loan_to} />
-                </div>
-                <span className="text-lg flex-shrink-0">{isOwner ? '✏️' : '→'}</span>
-              </button>
-            ))}
+                  <span className="text-lg flex-shrink-0">{isOwner ? '✏️' : '→'}</span>
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
 
-      {/* Viewer */}
       {viewingRequest && (
         <RequestViewer
           request={viewingRequest}
@@ -464,7 +513,6 @@ export default function ItemRequestCard({
         />
       )}
 
-      {/* Rediger eksisterende */}
       {editingRequest && (
         <RequestCreator
           existing={editingRequest}
@@ -475,13 +523,12 @@ export default function ItemRequestCard({
             setEditingRequest(null)
           }}
           onDeleted={() => {
-            setRequests(prev => prev.filter(r => r.id !== editingRequest.id))
+            setRequests(prev => prev.filter(r => r.id !== editingRequest!.id))
             setEditingRequest(null)
           }}
         />
       )}
 
-      {/* Opprett ny */}
       {showNewCreator && (
         <RequestCreator
           existing={null}

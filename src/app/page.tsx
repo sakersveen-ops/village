@@ -109,11 +109,15 @@ function HarDetteModal({
               </button>
 
               <button
-                onClick={async () => { await sendNotification(); onSent() }}
+                onClick={async () => {
+                  await sendNotification()
+                  setDone(true)
+                  setTimeout(() => onSent(), 800)
+                }}
                 disabled={sending}
                 className="btn-glass w-full py-3 text-sm"
               >
-                Bare send melding (uten å legge ut)
+                Send melding (uten å legge ut)
               </button>
             </>
           )}
@@ -135,8 +139,11 @@ function RequestStoryViewer({
   onHarDette: (req: any) => void
   onUpdateProgress: (userId: string, lastSeenIdx: number) => void
 }) {
-  const startIdx = Math.min(group.lastSeenIdx + 1, group.requests.length - 1)
-  const [idx, setIdx] = useState(startIdx < 0 ? 0 : startIdx)
+  // If all seen → replay from 0; otherwise start at first unseen
+  const startIdx = group.lastSeenIdx >= group.requests.length - 1
+    ? 0
+    : Math.max(0, group.lastSeenIdx + 1)
+  const [idx, setIdx] = useState(startIdx)
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)
   const [activeReq, setActiveReq] = useState<any | null>(null)

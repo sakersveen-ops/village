@@ -36,6 +36,7 @@ function todayStart() {
   return d.toISOString()
 }
 
+
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString('nb-NO', {
     day: 'numeric', month: 'long', year: 'numeric'
@@ -107,6 +108,26 @@ async function fetchStats() {
     countSince('notifications', since24h),
     countSince('friend_requests', since24h),
     countSince('profile_connections', since24h),
+    
+    countSince('feedback', since24h),
+    countSince('beta_feedback', since24h),
+    count('feedback'),
+    count('beta_feedback'),
+
+    // Siste 5 feedback-meldinger
+    supabase
+      .from('feedback')
+      .select('type, message, page_title, created_at')
+      .order('created_at', { ascending: false })
+      .limit(5)
+      .then(r => r.data ?? []),
+
+    supabase
+      .from('beta_feedback')
+      .select('type, message, page_title, created_at')
+      .order('created_at', { ascending: false })
+      .limit(5)
+      .then(r => r.data ?? []),
   ])
 
   // Lån per status siste 24t

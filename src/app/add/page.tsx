@@ -44,13 +44,13 @@ export default function AddPage() {
 
   // ── Core state ──
   const [categoryId, setCategoryId]       = useState('')
-  const [subcategoryId, setSubcategoryId] = useState('')
+  const [subcategoryIds, setSubcategoryIds] = useState<string[]>([])
   const [name, setName]                   = useState('')
   const [description, setDescription]    = useState('')
   const [location, setLocation]           = useState('')
   const [gender, setGender]               = useState<Gender | ''>('')
   const [size, setSize]                   = useState('')
-  const [ageGroup, setAgeGroup]           = useState('')
+  const [ageRanges, setAgeRanges]         = useState<string[]>([])
   const [color, setColor]                 = useState('')
   const [images, setImages]               = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
@@ -76,8 +76,32 @@ export default function AddPage() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data: prof } = await supabase.from('profiles').select('location').eq('id', user.id).single()
-      if (prof?.location) setLocation(prof.location)
+
+      // ── Restore draft from sessionStorage (user came back from access page) ──
+      const draft = sessionStorage.getItem('village_add_draft')
+      if (draft) {
+        try {
+          const d = JSON.parse(draft)
+          if (d.categoryId)    setCategoryId(d.categoryId)
+          if (d.subcategoryIds) setSubcategoryIds(d.subcategoryIds)
+          if (d.ageRanges)      setAgeRanges(d.ageRanges)
+          if (d.name)          setName(d.name)
+          if (d.description)   setDescription(d.description)
+          if (d.location)      setLocation(d.location)
+          if (d.gender)        setGender(d.gender)
+          if (d.size)          setSize(d.size)
+          if (d.color)         setColor(d.color)
+          if (d.suggestedImageUrl) setSuggestedImageUrl(d.suggestedImageUrl)
+          if (d.selectedImageSrc)  setSelectedImageSrc(d.selectedImageSrc)
+          if (d.imagePreviews) setImagePreviews(d.imagePreviews)
+          // Note: File objects can't be stored — previews shown, user re-uploads if needed
+        } catch {}
+        sessionStorage.removeItem('village_add_draft')
+      } else {
+        // Only load profile location if no draft (draft has its own location)
+        const { data: prof } = await supabase.from('profiles').select('location').eq('id', user.id).single()
+        if (prof?.location) setLocation(prof.location)
+      }
     }
     load()
   }, [])
@@ -173,10 +197,10 @@ Returner KUN JSON, ingen annen tekst.` }
         return
       }
 
-      if (parsed.name)        setName(parsed.name)
-      if (parsed.description) setDescription(parsed.description)
+      if (parsed.name && !name.trim())        setName(parsed.name)
+      if (parsed.description && !description.trim()) setDescription(parsed.description)
       if (parsed.category)    setCategoryId(parsed.category)
-      if (parsed.subcategory) setSubcategoryId(parsed.subcategory)
+      if (parsed.subcategory) setSubcategoryIds(prev => prev.includes(parsed.subcategory) ? prev.filter(x => x !== parsed.subcategory) : [...prev, parsed.subcategory])
 
       // Step 2: Fetch product image
       if (parsed.searchQuery) {
@@ -268,10 +292,10 @@ Returner KUN JSON, ingen annen tekst.` }
       const data = await res.json()
       const text = data.content?.[0]?.text || ''
       const parsed = JSON.parse(text.replace(/```json|```/g, '').trim())
-      if (parsed.name)        setName(parsed.name)
-      if (parsed.description) setDescription(parsed.description)
+      if (parsed.name && !name.trim())        setName(parsed.name)
+      if (parsed.description && !description.trim()) setDescription(parsed.description)
       if (parsed.category)    setCategoryId(parsed.category)
-      if (parsed.subcategory) setSubcategoryId(parsed.subcategory)
+      if (parsed.subcategory) setSubcategoryIds(prev => prev.includes(parsed.subcategory) ? prev.filter(x => x !== parsed.subcategory) : [...prev, parsed.subcategory])
       if (parsed.imageUrl) {
         setSuggestedImageUrl(parsed.imageUrl)
         setSelectedImageSrc('suggested')
@@ -285,7 +309,7 @@ Returner KUN JSON, ingen annen tekst.` }
   const validate = () => {
     const errs: Record<string, string> = {}
     if (!categoryId)   errs.category    = 'Velg en kategori'
-    if (!subcategoryId) errs.subcategory = 'Velg underkategori'
+    if (subcategoryIds.length === 0) errs.subcategory = 'Velg minst én underkategori'
     if (!name.trim())  errs.name        = 'Tittel er påkrevd'
     if (!location.trim()) errs.location = 'Postnummer er påkrevd'
     const hasImage = images.length > 0 || selectedImageSrc === 'suggested'
@@ -319,13 +343,14 @@ Returner KUN JSON, ingen annen tekst.` }
       name,
       description,
       category: categoryId,
-      subcategory: subcategoryId,
+      subcategory: subcategoryIds[0] || null,
+      subcategories: subcategoryIds,
       image_url: image_url || null,
       available: true,
       location: location || null,
       color: color || null,
       size: size || null,
-      age_group: ageGroup || null,
+      age_ranges: ageRanges,
     }).select().single()
 
     if (error || !item?.id) {
@@ -333,6 +358,13 @@ Returner KUN JSON, ingen annen tekst.` }
       setSaving(false)
       return
     }
+
+    // ── Save draft so user can come back without losing their info ──
+    sessionStorage.setItem('village_add_draft', JSON.stringify({
+      categoryId, subcategoryIds, name, description, location,
+      gender, size, ageRanges, color,
+      suggestedImageUrl, selectedImageSrc, imagePreviews,
+    }))
 
     router.push(`/items/access?item=${item.id}&name=${encodeURIComponent(name)}`)
   }
@@ -484,7 +516,7 @@ Returner KUN JSON, ingen annen tekst.` }
                   key={cat.id}
                   onClick={() => {
                     setCategoryId(cat.id)
-                    setSubcategoryId('')
+                    setSubcategoryIds(prev => prev.includes('') ? prev.filter(x => x !== '') : [...prev, ''])
                     setGender('')
                     setSize('')
                     setAgeGroup('')
@@ -536,7 +568,7 @@ Returner KUN JSON, ingen annen tekst.` }
                 {selectedCat.subcategories.map(sub => (
                   <button
                     key={sub.id}
-                    onClick={() => setSubcategoryId(sub.id === subcategoryId ? '' : sub.id)}
+                    onClick={() => setSubcategoryIds(prev => prev.includes(sub.id === subcategoryId ? '' : sub.id) ? prev.filter(x => x !== sub.id === subcategoryId ? '' : sub.id) : [...prev, sub.id === subcategoryId ? '' : sub.id])}
                     className="pill"
                     style={{
                       background: subcategoryId === sub.id ? 'var(--terra)' : 'white',
@@ -555,18 +587,18 @@ Returner KUN JSON, ingen annen tekst.` }
             </div>
 
             {/* ALDER (baby-og-barn, ikke gravid) */}
-            {selectedCat.hasAge && subcategoryId !== 'gravid' && (
+            {selectedCat.hasAge && !subcategoryIds.includes('gravid') && (
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Alder</p>
                 <div className="flex flex-wrap gap-2">
                   {AGE_GROUPS.map(ag => (
                     <button
                       key={ag.id}
-                      onClick={() => setAgeGroup(ag.id === ageGroup ? '' : ag.id)}
+                      onClick={() => setAgeRanges(prev => prev.includes(ag.id) ? prev.filter(x => x !== ag.id) : [...prev, ag.id])}
                       style={{
-                        background: ageGroup === ag.id ? 'var(--terra)' : 'white',
-                        color: ageGroup === ag.id ? 'white' : 'var(--terra-dark)',
-                        border: ageGroup === ag.id ? '0.5px solid var(--terra)' : '0.5px solid rgba(46,98,113,0.3)',
+                        background: ageRanges.includes(ag.id) ? 'var(--terra)' : 'white',
+                        color: ageRanges.includes(ag.id) ? 'white' : 'var(--terra-dark)',
+                        border: ageRanges.includes(ag.id) ? '0.5px solid var(--terra)' : '0.5px solid rgba(46,98,113,0.3)',
                         borderRadius: 999, padding: '6px 12px', fontSize: 13,
                       }}>
                       {ag.label}

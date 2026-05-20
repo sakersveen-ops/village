@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -24,10 +24,12 @@ export default function ItemPage() {
   const [user, setUser]                     = useState<any>(null)
   const [userProfile, setUserProfile]       = useState<any>(null)
   const [loan, setLoan]                     = useState<any>(null)
+  const [carouselIdx, setCarouselIdx]       = useState(0)
   const [allLoans, setAllLoans]             = useState<any[]>([])
   const [pendingLoans, setPendingLoans]     = useState<any[]>([])
   const [proposalLoanId, setProposalLoanId] = useState<string | null>(null)
   const [blockedDates, setBlockedDates]     = useState<string[]>([])
+  const [blockRangeStart, setBlockRangeStart] = useState<string | null>(null)
   const [message, setMessage]               = useState('')
   const [startDate, setStartDate]           = useState('')
   const [dueDate, setDueDate]               = useState('')
@@ -85,15 +87,34 @@ export default function ItemPage() {
     load()
   }, [id])
 
+  // Owner blocking: first tap sets range start, second tap blocks the full range
   const toggleBlock = async (dateStr: string) => {
-    const supabase = createClient()
-    if (blockedDates.includes(dateStr)) {
-      await supabase.from('item_blocked_dates').delete().eq('item_id', id).eq('date', dateStr)
-      setBlockedDates(prev => prev.filter(d => d !== dateStr))
-    } else {
-      await supabase.from('item_blocked_dates').insert({ item_id: id, date: dateStr })
-      setBlockedDates(prev => [...prev, dateStr])
+    if (!blockRangeStart) {
+      // First tap — if date is already blocked, unblock it immediately; otherwise start a range
+      if (blockedDates.includes(dateStr)) {
+        const supabase = createClient()
+        await supabase.from('item_blocked_dates').delete().eq('item_id', id).eq('date', dateStr)
+        setBlockedDates(prev => prev.filter(d => d !== dateStr))
+      } else {
+        setBlockRangeStart(dateStr)
+      }
+      return
     }
+    // Second tap — block all dates in range
+    const [a, b] = [blockRangeStart, dateStr].sort()
+    const dates: string[] = []
+    const cur = new Date(a)
+    const end = new Date(b)
+    while (cur <= end) {
+      dates.push(cur.toISOString().split('T')[0])
+      cur.setDate(cur.getDate() + 1)
+    }
+    setBlockRangeStart(null)
+    const newDates = dates.filter(d => !blockedDates.includes(d))
+    if (newDates.length === 0) return
+    const supabase = createClient()
+    await supabase.from('item_blocked_dates').insert(newDates.map(date => ({ item_id: id, date })))
+    setBlockedDates(prev => [...prev, ...newDates])
   }
 
   const handleSelectRange = (start: string, end: string) => {
@@ -267,20 +288,64 @@ export default function ItemPage() {
           style={{ width: 36, height: 36, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           ←
         </button>
-        {item.image_url ? (
-          <div className="w-full overflow-hidden" style={{ height: 256 }}>
-            <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
-          </div>
-        ) : (
-          <div className="w-full flex flex-col items-center justify-center gap-2"
-            style={{ height: 256, background: categoryGfx.gradient }}>
-            <span className="font-display text-white/90 font-semibold"
-              style={{ fontSize: 20, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              {categoryGfx.label}
-            </span>
-            <span className="text-white/60 text-sm">{item.name}</span>
-          </div>
-        )}
+        {(() => {
+          // Build ordered image list: primary first, then extras
+          const allImages: string[] = [
+            ...(item.image_url ? [item.image_url] : []),
+            ...(Array.isArray(item.extra_images) ? item.extra_images : []),
+          ]
+          if (allImages.length === 0) return (
+            <div className="w-full flex flex-col items-center justify-center gap-2"
+              style={{ height: 256, background: categoryGfx.gradient }}>
+              <span className="font-display text-white/90 font-semibold"
+                style={{ fontSize: 20, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                {categoryGfx.label}
+              </span>
+              <span className="text-white/60 text-sm">{item.name}</span>
+            </div>
+          )
+          return (
+            <div className="relative w-full overflow-hidden" style={{ height: 256 }}>
+              {/* Images */}
+              <div
+                className="flex h-full transition-transform"
+                style={{ transform: `translateX(-${carouselIdx * 100}%)`, transition: 'transform 0.3s ease' }}
+              >
+                {allImages.map((src, i) => (
+                  <img key={i} src={src} alt={item.name}
+                    className="flex-shrink-0 w-full h-full object-cover"
+                    style={{ minWidth: '100%' }} />
+                ))}
+              </div>
+              {/* Prev/Next buttons — only when multiple images */}
+              {allImages.length > 1 && (
+                <>
+                  <button
+                    onClick={() => setCarouselIdx(i => Math.max(0, i - 1))}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center"
+                    style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: 18, opacity: carouselIdx === 0 ? 0.3 : 1 }}
+                    aria-label="Forrige bilde"
+                  >‹</button>
+                  <button
+                    onClick={() => setCarouselIdx(i => Math.min(allImages.length - 1, i + 1))}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center"
+                    style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: 18, opacity: carouselIdx === allImages.length - 1 ? 0.3 : 1 }}
+                    aria-label="Neste bilde"
+                  >›</button>
+                  {/* Dots */}
+                  <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+                    {allImages.map((_, i) => (
+                      <button key={i} onClick={() => setCarouselIdx(i)}
+                        style={{ width: 6, height: 6, borderRadius: '50%', background: i === carouselIdx ? '#fff' : 'rgba(255,255,255,0.45)', padding: 0, border: 'none' }}
+                        aria-label={`Bilde ${i + 1}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )
+        })()}
         {!item.available && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
             <span className="text-white font-bold tracking-widest" style={{ fontSize: 18 }}>UTLÅNT</span>
@@ -386,6 +451,13 @@ export default function ItemPage() {
         </Link>
 
         {/* ── Kalender ── */}
+        {hasOwnerAccess && (
+          <p className="text-xs px-1 mb-1" style={{ color: 'var(--terra-mid)' }}>
+            {blockRangeStart
+              ? `Fra ${blockRangeStart} — trykk på sluttdato for å blokkere perioden`
+              : 'Trykk én dag for å blokkere den, eller trykk to dager for å blokkere en periode'}
+          </p>
+        )}
         <ItemCalendar
           loans={allLoans}
           blockedDates={blockedDates}

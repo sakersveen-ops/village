@@ -1,27 +1,13 @@
 // .github/scripts/daily-digest.mjs
-// Kjøres av GitHub Actions kl 07:00 hver morgen.
-// Henter statistikk fra Supabase og sender e-post via Resend.
-//
-// Secrets som må settes i GitHub repo → Settings → Secrets:
-//   SUPABASE_URL              — f.eks. https://xyzxyz.supabase.co
-//   SUPABASE_SERVICE_ROLE_KEY — service_role nøkkel (ikke anon!) fra Supabase dashboard
-//   RESEND_API_KEY            — fra resend.com (gratis plan holder)
-//   REPORT_EMAIL_TO           — din e-post (kan være kommaseparert liste)
-//   REPORT_EMAIL_FROM         — f.eks. rapport@village.no (må være verifisert domene i Resend)
-
 import { createClient } from '@supabase/supabase-js'
 import { Resend } from 'resend'
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // service_role omgår RLS
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-
-// -------------------------------------------------------------------
-// Hjelpefunksjoner
-// -------------------------------------------------------------------
 
 function yesterday() {
   const d = new Date()
@@ -29,13 +15,6 @@ function yesterday() {
   d.setHours(0, 0, 0, 0)
   return d.toISOString()
 }
-
-function todayStart() {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d.toISOString()
-}
-
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString('nb-NO', {
@@ -66,15 +45,10 @@ async function countSince(table, since, extra = {}) {
   return n ?? 0
 }
 
-// -------------------------------------------------------------------
-// Hent all statistikk
-// -------------------------------------------------------------------
-
 async function fetchStats() {
   const since24h = yesterday()
 
   const [
-    // Totaltall
     totalUsers,
     totalItems,
     totalLoans,
@@ -82,8 +56,6 @@ async function fetchStats() {
     totalReturnedLoans,
     totalCommunities,
     totalFriendships,
-
-    // Siste 24 timer
     newUsers24h,
     newItems24h,
     newLoans24h,
@@ -91,6 +63,12 @@ async function fetchStats() {
     newNotifications24h,
     newFriendRequests24h,
     newConnectionRequests24h,
+    newFeedback24h,
+    newBetaFeedback24h,
+    totalFeedback,
+    totalBetaFeedback,
+    recentFeedback,
+    recentBetaFeedback,
   ] = await Promise.all([
     count('profiles'),
     count('items'),
@@ -98,9 +76,7 @@ async function fetchStats() {
     count('loans', { status: 'active' }),
     count('loans', { status: 'returned' }),
     count('communities'),
-    // friendships lagres begge veier — del på 2
     supabase.from('friendships').select('*', { count: 'exact', head: true }).then(r => Math.floor((r.count ?? 0) / 2)),
-
     countSince('profiles', since24h),
     countSince('items', since24h),
     countSince('loans', since24h),
@@ -108,29 +84,14 @@ async function fetchStats() {
     countSince('notifications', since24h),
     countSince('friend_requests', since24h),
     countSince('profile_connections', since24h),
-    
     countSince('feedback', since24h),
     countSince('beta_feedback', since24h),
     count('feedback'),
     count('beta_feedback'),
-
-    // Siste 5 feedback-meldinger
-    supabase
-      .from('feedback')
-      .select('type, message, page_title, created_at')
-      .order('created_at', { ascending: false })
-      .limit(5)
-      .then(r => r.data ?? []),
-
-    supabase
-      .from('beta_feedback')
-      .select('type, message, page_title, created_at')
-      .order('created_at', { ascending: false })
-      .limit(5)
-      .then(r => r.data ?? []),
+    supabase.from('feedback').select('type, message, page_title, created_at').order('created_at', { ascending: false }).limit(5).then(r => r.data ?? []),
+    supabase.from('beta_feedback').select('type, message, page_title, created_at').order('created_at', { ascending: false }).limit(5).then(r => r.data ?? []),
   ])
 
-  // Lån per status siste 24t
   const loanStatusCounts = await Promise.all(
     ['pending', 'active', 'returned', 'declined', 'change_proposed'].map(async status => {
       const n = await countSince('loans', since24h, { status })
@@ -138,7 +99,6 @@ async function fetchStats() {
     })
   )
 
-  // Analytics events siste 24t (topp 5 events)
   const { data: topEvents } = await supabase
     .from('analytics_events')
     .select('event')
@@ -159,14 +119,38 @@ async function fetchStats() {
     newUsers24h, newItems24h, newLoans24h,
     newMessages24h, newNotifications24h,
     newFriendRequests24h, newConnectionRequests24h,
-    loanStatusCounts,
-    topEventsSorted,
+    newFeedback24h, newBetaFeedback24h,
+    totalFeedback, totalBetaFeedback,
+    recentFeedback, recentBetaFeedback,
+    loanStatusCounts, topEventsSorted,
   }
 }
 
-// -------------------------------------------------------------------
-// Bygg HTML-e-post
-// -------------------------------------------------------------------
+function metricCard(emoji, label, value, bg = '#FEF9F5') {
+  return `
+    <div style="background:${bg};border-radius:10px;padding:14px 16px;">
+      <div style="font-size:20px;margin-bottom:6px;">${emoji}</div>
+      <div style="font-size:22px;font-weight:700;color:#2C1A0E;line-height:1;">${value}</div>
+      <div style="font-size:12px;color:#9C7B65;margin-top:4px;">${label}</div>
+    </div>`
+}
+
+function feedbackRows(items) {
+  if (!items || items.length === 0) {
+    return '<tr><td colspan="3" style="color:#9C7B65;padding:4px 0;">Ingen feedback</td></tr>'
+  }
+  return items.map(f => {
+    const date = new Date(f.created_at).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })
+    const type = f.type ?? '–'
+    const msg = (f.message ?? '').slice(0, 120) + (f.message?.length > 120 ? '…' : '')
+    const page = f.page_title ? `<span style="color:#9C7B65;font-size:11px;"> · ${f.page_title}</span>` : ''
+    return `<tr>
+      <td style="padding:6px 10px 6px 0;font-size:12px;color:#9C7B65;white-space:nowrap;">${date}</td>
+      <td style="padding:6px 10px 6px 0;font-size:12px;font-weight:600;white-space:nowrap;">${type}</td>
+      <td style="padding:6px 0;font-size:13px;">${msg}${page}</td>
+    </tr>`
+  }).join('')
+}
 
 function buildEmailHtml(stats, reportDate) {
   const {
@@ -175,6 +159,9 @@ function buildEmailHtml(stats, reportDate) {
     totalCommunities, totalFriendships,
     newUsers24h, newItems24h, newLoans24h,
     newMessages24h, newFriendRequests24h, newConnectionRequests24h,
+    newFeedback24h, newBetaFeedback24h,
+    totalFeedback, totalBetaFeedback,
+    recentFeedback, recentBetaFeedback,
     loanStatusCounts, topEventsSorted,
   } = stats
 
@@ -186,6 +173,11 @@ function buildEmailHtml(stats, reportDate) {
   const topEventsRows = topEventsSorted.length > 0
     ? topEventsSorted.map(([e, n]) => `<tr><td style="padding:4px 12px 4px 0;color:#9C7B65;font-family:monospace;font-size:13px;">${e}</td><td style="padding:4px 0;font-weight:600;">${n}</td></tr>`).join('')
     : '<tr><td colspan="2" style="color:#9C7B65;">Ingen events i går</td></tr>'
+
+  const allRecentFeedback = [
+    ...recentFeedback.map(f => ({ ...f, _source: 'feedback' })),
+    ...recentBetaFeedback.map(f => ({ ...f, _source: 'beta' })),
+  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 8)
 
   return `
 <!DOCTYPE html>
@@ -204,7 +196,6 @@ function buildEmailHtml(stats, reportDate) {
   <!-- Siste 24 timer -->
   <div style="padding:28px 32px 0;">
     <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:#9C7B65;text-transform:uppercase;margin-bottom:16px;">Siste 24 timer</div>
-
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
       ${metricCard('👤', 'Nye brukere', newUsers24h)}
       ${metricCard('📦', 'Nye gjenstander', newItems24h)}
@@ -212,6 +203,7 @@ function buildEmailHtml(stats, reportDate) {
       ${metricCard('💬', 'Meldinger', newMessages24h)}
       ${metricCard('👥', 'Venneforespørsler', newFriendRequests24h)}
       ${metricCard('🔗', 'Tilkoblinger', newConnectionRequests24h)}
+      ${metricCard('📝', 'Ny feedback', newFeedback24h + newBetaFeedback24h)}
     </div>
   </div>
 
@@ -230,7 +222,6 @@ function buildEmailHtml(stats, reportDate) {
   <!-- Totaltall -->
   <div style="padding:24px 32px 0;">
     <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:#9C7B65;text-transform:uppercase;margin-bottom:16px;">Totalt i databasen</div>
-
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
       ${metricCard('👥', 'Brukere totalt', totalUsers, '#F7F0EA')}
       ${metricCard('📦', 'Gjenstander totalt', totalItems, '#F7F0EA')}
@@ -239,7 +230,16 @@ function buildEmailHtml(stats, reportDate) {
       ${metricCard('↩️', 'Returnerte lån', totalReturnedLoans, '#F7F0EA')}
       ${metricCard('👫', 'Vennskap', totalFriendships, '#F7F0EA')}
       ${metricCard('🏘️', 'Communities', totalCommunities, '#F7F0EA')}
+      ${metricCard('📝', 'Feedback totalt', totalFeedback + totalBetaFeedback, '#F7F0EA')}
     </div>
+  </div>
+
+  <!-- Feedback -->
+  <div style="padding:24px 32px 0;">
+    <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:#9C7B65;text-transform:uppercase;margin-bottom:12px;">Siste feedback (begge tabeller)</div>
+    <table style="border-collapse:collapse;width:100%;">
+      ${feedbackRows(allRecentFeedback)}
+    </table>
   </div>
 
   <!-- Analytics events -->
@@ -262,17 +262,19 @@ function buildEmailHtml(stats, reportDate) {
 </html>`
 }
 
-function metricCard(emoji, label, value, bg = '#FEF9F5') {
-  return `
-    <div style="background:${bg};border-radius:10px;padding:14px 16px;">
-      <div style="font-size:20px;margin-bottom:6px;">${emoji}</div>
-      <div style="font-size:22px;font-weight:700;color:#2C1A0E;line-height:1;">${value}</div>
-      <div style="font-size:12px;color:#9C7B65;margin-top:4px;">${label}</div>
-    </div>`
-}
-
 function buildEmailText(stats, reportDate) {
   const s = stats
+  const allFeedback = [...s.recentFeedback, ...s.recentBetaFeedback]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 8)
+
+  const feedbackLines = allFeedback.length > 0
+    ? allFeedback.map(f => {
+        const date = new Date(f.created_at).toLocaleDateString('nb-NO')
+        return `[${date}] (${f.type ?? '–'}) ${f.message ?? ''}`
+      }).join('\n')
+    : 'Ingen feedback'
+
   return `Village – Morgenrapport ${reportDate}
 
 SISTE 24 TIMER
@@ -283,6 +285,7 @@ Nye lån:           ${s.newLoans24h}
 Meldinger:         ${s.newMessages24h}
 Venneforespørsler: ${s.newFriendRequests24h}
 Tilkoblinger:      ${s.newConnectionRequests24h}
+Ny feedback:       ${s.newFeedback24h + s.newBetaFeedback24h}
 
 TOTALT I DATABASEN
 ──────────────────
@@ -293,6 +296,11 @@ Lån totalt:        ${s.totalLoans}
   – returnerte:    ${s.totalReturnedLoans}
 Vennskap:          ${s.totalFriendships}
 Communities:       ${s.totalCommunities}
+Feedback totalt:   ${s.totalFeedback + s.totalBetaFeedback}
+
+SISTE FEEDBACK
+──────────────
+${feedbackLines}
 
 TOPP EVENTS I GÅR
 ─────────────────
@@ -301,10 +309,6 @@ ${s.topEventsSorted.length > 0
   : 'Ingen events'}
 `
 }
-
-// -------------------------------------------------------------------
-// Hovedlogikk
-// -------------------------------------------------------------------
 
 async function main() {
   console.log('📊 Henter Village-statistikk...')
@@ -318,7 +322,7 @@ async function main() {
   const from = process.env.REPORT_EMAIL_FROM ?? 'Village <rapport@village.no>'
 
   if (to.length === 0) {
-    console.warn('⚠️  Ingen mottaker satt (REPORT_EMAIL_TO). Printer rapport til console.')
+    console.warn('⚠️  Ingen mottaker satt. Printer til console.')
     console.log(buildEmailText(stats, reportDate))
     return
   }

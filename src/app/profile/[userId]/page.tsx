@@ -202,6 +202,9 @@ export default function UserProfilePage() {
             {profile.city && (
               <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>📍 {profile.city}</p>
             )}
+            {profile.bio && (
+              <p className="text-sm mt-3 px-2" style={{ color: 'var(--terra-dark)', lineHeight: 1.5 }}>{profile.bio}</p>
+            )}
             <p className="text-xs mt-2" style={{ color: 'var(--terra-mid)' }}>
               {accessLevel === 'friend_of_friend'
                 ? `${mutualFriends.length > 0 ? mutualFriends.length : ''} felles ${mutualFriends.length === 1 ? 'venn' : 'venner'}`
@@ -255,6 +258,9 @@ export default function UserProfilePage() {
             )}
             {profile.city && (
               <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>📍 {profile.city}</p>
+            )}
+            {profile.bio && (
+              <p className="text-sm mt-1.5" style={{ color: 'var(--terra-dark)', lineHeight: 1.5 }}>{profile.bio}</p>
             )}
             <p className="text-xs mt-1" style={{ color: 'var(--terra-mid)' }}>👥 Dere er venner</p>
           </div>

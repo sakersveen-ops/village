@@ -452,10 +452,10 @@ export default function ItemPage() {
 
         {/* ── Kalender ── */}
         {hasOwnerAccess && (
-          <p className="text-xs px-1 mb-1" style={{ color: 'var(--terra-mid)' }}>
+          <p className="text-xs px-1 mb-1" style={{ color: blockRangeStart ? 'var(--terra)' : 'var(--terra-mid)', fontWeight: blockRangeStart ? 500 : 400 }}>
             {blockRangeStart
-              ? `Fra ${blockRangeStart} — trykk på sluttdato for å blokkere perioden`
-              : 'Trykk én dag for å blokkere den, eller trykk to dager for å blokkere en periode'}
+              ? `Fra ${fd(blockRangeStart)} valgt — trykk på sluttdatoen for å blokkere perioden`
+              : 'Trykk én dag for å blokkere/fjerne den, eller velg to dager for å blokkere en periode'}
           </p>
         )}
         <ItemCalendar
@@ -467,27 +467,58 @@ export default function ItemPage() {
           isOwner={hasOwnerAccess}
         />
 
+        {/* ── Kalender-forklaring ── */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-1" style={{ marginTop: -4 }}>
+          {(allLoans.some(l => ['confirmed', 'active', 'pending_return', 'overdue'].includes(l.status))) && (
+            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FEE2E2', display: 'inline-block', flexShrink: 0 }} />
+              Aktivt lån
+            </span>
+          )}
+          {(allLoans.some(l => ['pending', 'change_proposed'].includes(l.status))) && (
+            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FDE68A', display: 'inline-block', flexShrink: 0 }} />
+              Forespørsel
+            </span>
+          )}
+          {blockedDates.length > 0 && (
+            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#E8DDD0', display: 'inline-block', flexShrink: 0 }} />
+              Blokkert
+            </span>
+          )}
+          {sentRange && (
+            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FDE68A', display: 'inline-block', flexShrink: 0 }} />
+              Din forespørsel
+            </span>
+          )}
+          {!hasOwnerAccess && !loan && item.available && (
+            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--terra)', display: 'inline-block', flexShrink: 0 }} />
+              Valgt periode
+            </span>
+          )}
+        </div>
+
         {/* ══ EIER / CO-EIER VISNINGER ══ */}
 
-        {hasOwnerAccess && item.available && pendingLoans.length === 0 && !activeLoan && (
+        {/* ── Eier-handlinger: Rediger + Endre tilgang alltid synlig for isOwner ── */}
+        {isOwner && (
           <div className="flex gap-2">
-            {isOwner && (
-              <Link href={`/items/${item.id}/edit`} className="flex-1">
-                <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-                  <p className="text-sm">✏️</p>
-                  <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Rediger</p>
-                </div>
-              </Link>
-            )}
-            {isOwner && (
-              <Link href={`/items/access?item=${item.id}`} className="flex-1">
-                <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-                  <p className="text-sm">🔒</p>
-                  <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Endre tilgang</p>
-                </div>
-              </Link>
-            )}
-            {isOwner && (
+            <Link href={`/items/${item.id}/edit`} className="flex-1">
+              <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
+                <p className="text-sm">✏️</p>
+                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Rediger</p>
+              </div>
+            </Link>
+            <Link href={`/items/access?item=${item.id}`} className="flex-1">
+              <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
+                <p className="text-sm">🔒</p>
+                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Endre tilgang</p>
+              </div>
+            </Link>
+            {item.available && pendingLoans.length === 0 && !activeLoan && (
               <button
                 onClick={async () => {
                   if (!confirm('Er du sikker på at du vil slette denne gjenstanden?')) return
@@ -501,12 +532,12 @@ export default function ItemPage() {
                 <p className="text-xs mt-1 font-medium" style={{ color: '#ef4444' }}>Slett gjenstand</p>
               </button>
             )}
-            {isCoOwner && (
-              <div className="flex-1 glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-                <p className="text-sm">🔗</p>
-                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Delt gjenstand</p>
-              </div>
-            )}
+          </div>
+        )}
+        {isCoOwner && !isOwner && (
+          <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
+            <p className="text-sm">🔗</p>
+            <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Delt gjenstand</p>
           </div>
         )}
 

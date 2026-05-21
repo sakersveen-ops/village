@@ -174,21 +174,44 @@ function AccessPageInner() {
     if (exists) {
       setSelectedLevels(prev => prev.filter(l => l.community_id !== communityId))
     } else {
-      // Ny community-entry starter uten pris — brukeren fyller inn selv
+      // Ny community-entry: foreslå pris fra suggestedPrice om den finnes
       setSelectedLevels(prev => [...prev, {
         access_type: 'community',
         community_id: communityId,
         price_type: suggestedPrice?.price_type || 'per_day',
-        // NB: price kopieres IKKE hit — kun price_type som hint
+        price: suggestedPrice?.price,
       }])
     }
   }
 
   const updatePrice = (levelId: string, communityId: string | undefined, val: string) => {
-    setSelectedLevels(prev => prev.map(l => {
-      const match = communityId ? l.community_id === communityId : l.access_type === levelId && !l.community_id
-      return match ? { ...l, price: val ? parseInt(val) : undefined } : l
-    }))
+    const newPrice = val ? parseInt(val) : undefined
+    setSelectedLevels(prev => {
+      const updated = prev.map(l => {
+        const match = communityId ? l.community_id === communityId : l.access_type === levelId && !l.community_id
+        return match ? { ...l, price: newPrice } : l
+      })
+      // Foreslå pris nedover til alle valgte nivåer og kretser som ikke allerede har pris
+      if (!communityId && newPrice) {
+        const levelIdx = LEVEL_ORDER.indexOf(levelId)
+        return updated.map(l => {
+          // Kun spre til lavere nivåer (høyere indeks = bredere tilgang) uten pris
+          if (!l.community_id) {
+            const lIdx = LEVEL_ORDER.indexOf(l.access_type)
+            if (lIdx > levelIdx && !l.price) return { ...l, price: newPrice, price_type: updated.find(u => u.access_type === levelId && !u.community_id)?.price_type || l.price_type }
+          } else {
+            // Kretser: foreslå om de ikke har pris
+            if (!l.price) return { ...l, price: newPrice }
+          }
+          return l
+        })
+      }
+      // Pris satt på krets: spre til andre kretser uten pris
+      if (communityId && newPrice) {
+        return updated.map(l => l.community_id && !l.price ? { ...l, price: newPrice } : l)
+      }
+      return updated
+    })
   }
 
   const updatePriceType = (levelId: string, communityId: string | undefined, val: string) => {
@@ -304,8 +327,8 @@ function AccessPageInner() {
   }
 
   const goBack = () => {
-    // Draft er intakt i sessionStorage — brukeren kommer tilbake til utfylt skjema
-    router.push('/add')
+    // Draft er intakt i sessionStorage — router.back() bevarer history og aktiverer iOS swipe-back
+    router.back()
   }
 
   if (loading) return (
@@ -320,22 +343,22 @@ function AccessPageInner() {
   return (
     <div className="max-w-lg mx-auto pb-48">
 
-      <div className="page-header glass sticky top-0 z-40 px-4 pt-3 pb-4"
-        style={{ borderRadius: '0 0 20px 20px', flexDirection: 'column', alignItems: 'flex-start' }}>
+      <div className="glass sticky top-0 z-40 px-4 pb-4"
+        style={{ borderRadius: '0 0 20px 20px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
         <button
           onClick={goBack}
-          className="btn-glass flex items-center gap-1.5 text-sm"
+          className="btn-glass flex items-center gap-1.5 text-sm mt-3"
           style={{ color: 'var(--terra)' }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 5l-7 7 7 7" />
           </svg>
           Tilbake
         </button>
-        <h1 className="font-display font-bold mt-2"
+        <h1 className="font-display font-bold mt-1"
           style={{ fontSize: 20, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
           {draftName ? `Hvem kan låne ${draftName}?` : 'Hvem kan låne dette?'}
         </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
+        <p className="text-sm mt-0.5" style={{ color: 'var(--terra-mid)' }}>
           Velg én eller flere grupper og sett pris per gruppe
         </p>
       </div>

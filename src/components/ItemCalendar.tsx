@@ -24,9 +24,11 @@ export default function ItemCalendar({ loans, blockedDates, requestedRange, onTo
   const toDateStr = (d: Date) => d.toISOString().split('T')[0]
   const today     = toDateStr(new Date())
 
+  const ACTIVE_LOAN_STATUSES = ['confirmed', 'active', 'pending_return', 'overdue']
+
   const isActiveLoan = (dateStr: string) =>
     loans.some(loan => {
-      if (!loan.start_date || loan.status !== 'active') return false
+      if (!loan.start_date || !ACTIVE_LOAN_STATUSES.includes(loan.status)) return false
       const end = loan.due_date || loan.start_date
       return dateStr >= loan.start_date && dateStr <= end
     })
@@ -142,27 +144,30 @@ export default function ItemCalendar({ loans, blockedDates, requestedRange, onTo
         })}
       </div>
 
-      {/* Legend — 12px filled circles, 12px text, jevnt spacing */}
+      {/* Legend — farger speiler nøyaktig cal-day CSS-klassene i globals.css */}
       <div className="flex gap-4 mt-4 flex-wrap">
         <div className="flex items-center gap-1.5">
-          <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: 'rgba(239,68,68,0.25)' }} />
+          {/* cal-day active-loan → bg-red-100 = rgb(254,226,226) */}
+          <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: 'rgb(254,226,226)' }} />
           <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>Utlånt</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: 'rgba(245,158,11,0.3)' }} />
-          <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>Venter bekreftelse</span>
+          {/* cal-day pending-loan → bg-amber-100 = rgb(254,243,199) */}
+          <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: 'rgb(254,243,199)' }} />
+          <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>Forespørsel</span>
         </div>
         {requestedRange && (
           <div className="flex items-center gap-1.5">
+            {/* cal-day requested → #FDE68A */}
             <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: '#FDE68A' }} />
-            <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>Forespurt</span>
+            <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>Din forespørsel</span>
           </div>
         )}
         <div className="flex items-center gap-1.5">
-          <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: 'rgba(196,103,58,0.2)' }} />
+          {/* cal-day blocked → #E8DDD0 */}
+          <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: '#E8DDD0' }} />
           <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>Blokkert</span>
         </div>
-        {/* "Trykk for å blokkere/åpne" kun for eier */}
         {isOwner && (
           <p className="ml-auto" style={{ fontSize: 12, color: 'var(--terra-mid)' }}>Trykk for å blokkere/åpne</p>
         )}

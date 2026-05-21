@@ -85,6 +85,8 @@ export default function ProfilePage() {
   const [onboardingOwnedItems, setOnboardingOwnedItems] = useState<string[]>([])
   const [editingCity, setEditingCity] = useState(false)
   const [cityInput, setCityInput] = useState('')
+  const [editingBio, setEditingBio] = useState(false)
+  const [bioInput, setBioInput] = useState('')
   const router = useRouter()
 
   useEffect(() => {
@@ -98,6 +100,7 @@ export default function ProfilePage() {
         .from('profiles').select('*').eq('id', user.id).single()
       setProfile(profile)
       setCityInput(profile?.city || '')
+      setBioInput(profile?.bio || '')
 
       const { data: ownItems } = await supabase
         .from('items')
@@ -202,6 +205,14 @@ export default function ProfilePage() {
     setEditingCity(false)
   }
 
+  const saveBio = async () => {
+    if (!user) return
+    const supabase = createClient()
+    await supabase.from('profiles').update({ bio: bioInput.trim() || null }).eq('id', user.id)
+    setProfile((p: any) => ({ ...p, bio: bioInput.trim() || null }))
+    setEditingBio(false)
+  }
+
   const respondToFriendRequest = async (requestId: string, fromId: string, accept: boolean) => {
     const supabase = createClient()
     await supabase.from('friend_requests')
@@ -218,9 +229,12 @@ export default function ProfilePage() {
     track('friend_request_handled', { accepted: accept })
   }
 
-  const cancelFriendRequest = async (requestId: string) => {
+  const cancelFriendRequest = async (requestId: string, toId?: string) => {
     // Optimistic update first
     setSentRequests(prev => prev.filter(r => r.id !== requestId))
+    if (toId) {
+      setSearchResults(prev => prev.map(r => r.id === toId ? { ...r, requestSent: false } : r))
+    }
     const supabase = createClient()
     const { error } = await supabase
       .from('friend_requests').delete()
@@ -233,6 +247,9 @@ export default function ProfilePage() {
         .select('*, profiles!friend_requests_to_id_fkey(id, name, email, avatar_url)')
         .eq('from_id', user.id).eq('status', 'pending')
       setSentRequests(sent || [])
+      if (toId) {
+        setSearchResults(prev => prev.map(r => r.id === toId ? { ...r, requestSent: true } : r))
+      }
     }
   }
 
@@ -327,6 +344,39 @@ export default function ProfilePage() {
             </h2>
             <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>{user?.email}</p>
 
+            {/* Bio — redigerbar med blyantikon */}
+            {editingBio ? (
+              <div className="mt-2">
+                <textarea
+                  autoFocus
+                  value={bioInput}
+                  onChange={e => setBioInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') setEditingBio(false) }}
+                  placeholder="Si noe om deg selv…"
+                  rows={3}
+                  className="w-full rounded-lg px-2 py-1 text-xs outline-none resize-none"
+                  style={{ border: '1px solid var(--terra)', color: 'var(--terra-dark)', background: '#fff', minWidth: 0 }}
+                />
+                <div className="flex gap-1.5 mt-1">
+                  <button onClick={saveBio} className="text-xs px-2 py-0.5 rounded-lg font-medium"
+                    style={{ background: 'var(--terra)', color: '#fff' }}>Lagre</button>
+                  <button onClick={() => { setEditingBio(false); setBioInput(profile?.bio || '') }} className="text-xs px-2 py-0.5 rounded-lg"
+                    style={{ color: 'var(--terra-mid)', border: '1px solid var(--glass-border)' }}>✕</button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setEditingBio(true)}
+                className="flex items-start gap-0.5 mt-1 text-xs text-left"
+                style={{ color: profile?.bio ? 'var(--terra-dark)' : 'var(--terra)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', maxWidth: '100%' }}
+              >
+                {profile?.bio
+                  ? <><span style={{ flex: 1 }}>{profile.bio}</span><span style={{ opacity: 0.45, marginLeft: 4, flexShrink: 0 }}>✏️</span></>
+                  : <span style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}>+ Legg til bio</span>
+                }
+              </button>
+            )}
+
             {/* Lokasjonsfelt — inline redigerbart */}
             {editingCity ? (
               <div className="flex items-center gap-1.5 mt-1">
@@ -367,8 +417,8 @@ export default function ProfilePage() {
               <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>
                 {myItems.filter(i => i.owner_id === user?.id).length}
               </p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
-                {lentOut > 0 ? `${lentOut} utlånt` : 'gjenstander'}
+          <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
+                gjenstander{lentOut > 0 && <span> ({lentOut} utlånt)</span>}
               </p>
             </div>
           </Link>
@@ -583,7 +633,7 @@ export default function ProfilePage() {
                     </p>
                     <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Forespørsel sendt</p>
                   </div>
-                  <button onClick={() => cancelFriendRequest(req.id)}
+                  <button onClick={() => cancelFriendRequest(req.id, req.to_id)}
                     className="text-xs rounded-full px-3 py-1.5"
                     style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-mid)' }}>
                     Trekk tilbake

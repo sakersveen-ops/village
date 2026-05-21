@@ -166,7 +166,12 @@ export default function AddPage() {
       
       const ext = file.name.split('.').pop()
       const path = `items/${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-      const { error } = await supabase.storage.from('item-images').upload(path, file)
+      const { error } = await supabase.storage
+        .from('item-images')
+        .upload(path, file, {
+          contentType: file.type || 'image/jpeg',  // ← dette manglet
+          upsert: false,
+        })
       if (error) throw error
       
       const { data } = supabase.storage.from('item-images').getPublicUrl(path)

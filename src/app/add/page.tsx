@@ -76,8 +76,7 @@ export default function AddPage() {
   const [size, setSize]                     = useState('')
   const [ageRanges, setAgeRanges]           = useState<string[]>([])
   const [color, setColor]                   = useState('')
-  // images: kun File-objekter for opplasting – kan ikke serialiseres til sessionStorage
-  const [images, setImages]                 = useState<File[]>([])
+  // imagePreviews: Storage URLs (persistent across navigation)
   const [imagePreviews, setImagePreviews]   = useState<string[]>([])
   const [suggestedImageUrl, setSuggestedImageUrl] = useState('')
   const [selectedImageSrc, setSelectedImageSrc]   = useState<'own' | 'suggested'>('own')
@@ -100,8 +99,7 @@ export default function AddPage() {
   const [urlLoading, setUrlLoading] = useState(false)
 
   // ─── Løpende lagring av draft til sessionStorage ──────────────────────────
-  // Kjøres hver gang relevant state endres. File-objekter kan ikke serialiseres,
-  // men image-previews (blob-URLer) lagres slik at UI viser bilder ved tilbakenavigering.
+  // Kjøres hver gang relevant state endres. imagePreviews er nå Storage URLs (persistent).
   useEffect(() => {
     const draft: Draft = {
       categoryId, subcategoryIds, name, description, location,
@@ -137,9 +135,7 @@ export default function AddPage() {
           if (d.selectedImageSrc)  setSelectedImageSrc(d.selectedImageSrc)
           if (d.imagePreviews?.length) {
             setImagePreviews(d.imagePreviews)
-            // File-objekter er borte etter navigering — bruker ser preview men
-            // må laste opp bilde på nytt om de vil bruke eget bilde.
-            // suggestedImageUrl brukes direkte uten re-upload.
+            // imagePreviews er nå Storage URLs — fungerer etter navigering
           }
           return // Ikke overskriv med profil-location om draft finnes
         } catch { /* ugyldig draft – ignorer */ }
@@ -153,6 +149,26 @@ export default function AddPage() {
     load()
   }, [])
 
+  // ─── Last opp bilde til Supabase Storage (persistent URL) ────────────────
+  const uploadImageToStorage = async (file: File): Promise<string | null> => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return null
+      
+      const ext = file.name.split('.').pop()
+      const path = `items/${user.id}/${Date.now()}.${ext}`
+      const { error } = await supabase.storage.from('item-images').upload(path, file)
+      if (error) throw error
+      
+      const { data } = supabase.storage.from('item-images').getPublicUrl(path)
+      return data.publicUrl
+    } catch (e) {
+      console.error('Upload failed:', e)
+      return null
+    }
+  }
+
   // ─── Bildeanalyse — kun kamera-knappen øverst ────────────────────────────
   // Ekstra bildeslots bruker addExtraImage() og trigger IKKE analyse.
   const handleAnalyzeImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -161,9 +177,15 @@ export default function AddPage() {
     // Reset input slik at samme fil kan velges på nytt
     e.target.value = ''
 
-    // Legg til som første bilde (eller erstatt slot 0 om det allerede er ett)
-    setImages(prev => [file, ...prev.slice(1)].slice(0, 4))
-    setImagePreviews(prev => [URL.createObjectURL(file), ...prev.slice(1)].slice(0, 4))
+    // Last opp til Storage med en gang → får persistent URL
+    const uploadedUrl = await uploadImageToStorage(file)
+    if (!uploadedUrl) {
+      alert('Kunne ikke laste opp bildet')
+      return
+    }
+
+    // Legg til URL i imagePreviews (persistent, ikke blob-URL)
+    setImagePreviews(prev => [uploadedUrl, ...prev.slice(1)].slice(0, 4))
 
     setImageAnalyzing(true)
     setImageAnalyzed(false)
@@ -293,25 +315,25 @@ Returner KUN JSON, ingen annen tekst.` }
   }
 
   // ─── Legg til ekstra bilde (ingen analyse) ───────────────────────────────
-  const addExtraImage = (slotIndex: number) => (e: React.ChangeEvent<HTMLInputElement>) => {
+  const addExtraImage = (slotIndex: number) => async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
-    const url = URL.createObjectURL(file)
-    setImages(prev => {
-      const next = [...prev]
-      next[slotIndex] = file
-      return next.slice(0, 4)
-    })
+    
+    const uploadedUrl = await uploadImageToStorage(file)
+    if (!uploadedUrl) {
+      alert('Kunne ikke laste opp bildet')
+      return
+    }
+    
     setImagePreviews(prev => {
       const next = [...prev]
-      next[slotIndex] = url
+      next[slotIndex] = uploadedUrl
       return next.slice(0, 4)
     })
   }
 
   const removeImage = (i: number) => {
-    setImages(prev => prev.filter((_, idx) => idx !== i))
     setImagePreviews(prev => prev.filter((_, idx) => idx !== i))
     if (i === 0) setSelectedImageSrc('own')
   }

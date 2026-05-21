@@ -342,8 +342,7 @@ export default function ProfilePage() {
             <h2 className="font-display text-xl font-bold" style={{ color: 'var(--terra-dark)' }}>
               {displayName}
             </h2>
-            <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>{user?.email}</p>
-
+            
             {/* Bio — redigerbar med blyantikon */}
             {editingBio ? (
               <div className="mt-2">

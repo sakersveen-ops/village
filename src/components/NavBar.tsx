@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
 // data-tour attributes wire up the AppTour spotlight to each nav element
-  const navItems = [
+  const NAV_ITEMS = [
     { href: '/',                 icon: 'home',      label: 'Hjem',         tour: 'feed' },
     { href: '/community/search', icon: 'community', label: 'Kretser',      tour: 'communities' },
     { href: '/',                 icon: 'home',      label: 'Hjem',          tour: 'feed' },

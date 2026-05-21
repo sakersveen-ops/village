@@ -53,18 +53,16 @@ type Draft = {
   suggestedImageUrl: string
   selectedImageSrc: 'own' | 'suggested'
   imagePreviews: string[]
+  bookTitle: string
+  bookAuthor: string
 }
 
 export default function AddPage() {
   const router = useRouter()
-  // Én enkelt ref for fil-input (kun brukt for analyse-knappen)
+  // FIX: Analyse-input ref (slot 0 i grid + kamera-knapp øverst)
   const analyzeFileInputRef = useRef<HTMLInputElement>(null)
-  // Separate refs for ekstra bildeslots (ingen analyse)
-  const extraFileInputRefs = [
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-    useRef<HTMLInputElement>(null),
-  ]
+  // FIX: Ekstra bildeslots — bruker én felles multi-input i stedet for separate refs
+  const multiFileInputRef = useRef<HTMLInputElement>(null)
 
   // ── Core state ──
   const [categoryId, setCategoryId]         = useState('')
@@ -76,14 +74,19 @@ export default function AddPage() {
   const [size, setSize]                     = useState('')
   const [ageRanges, setAgeRanges]           = useState<string[]>([])
   const [color, setColor]                   = useState('')
-  // imagePreviews: Storage URLs (persistent across navigation)
   const [imagePreviews, setImagePreviews]   = useState<string[]>([])
   const [suggestedImageUrl, setSuggestedImageUrl] = useState('')
   const [selectedImageSrc, setSelectedImageSrc]   = useState<'own' | 'suggested'>('own')
+  // FIX: Bok-felt lagres separat og overskriver aldri manuelt innfylte felt
+  const [bookTitle, setBookTitle]           = useState('')
+  const [bookAuthor, setBookAuthor]         = useState('')
 
   // ── Image analysis state ──
+  // FIX: imageAnalyzing sporer kun den aktive analysen — ikke ekstra-bilder
   const [imageAnalyzing, setImageAnalyzing] = useState(false)
   const [imageAnalyzed, setImageAnalyzed]   = useState(false)
+  // FIX: analysisLocked forhindrer at analyse utløses på manuelt opplastede bilder
+  const [analysisLocked, setAnalysisLocked] = useState(false)
 
   // ── Shelf (bokhylle) state ──
   const [shelfBooks, setShelfBooks]       = useState<BookResult[]>([])
@@ -99,17 +102,18 @@ export default function AddPage() {
   const [urlLoading, setUrlLoading] = useState(false)
 
   // ─── Løpende lagring av draft til sessionStorage ──────────────────────────
-  // Kjøres hver gang relevant state endres. imagePreviews er nå Storage URLs (persistent).
   useEffect(() => {
     const draft: Draft = {
       categoryId, subcategoryIds, name, description, location,
       gender, size, ageRanges, color,
       suggestedImageUrl, selectedImageSrc, imagePreviews,
+      bookTitle, bookAuthor,
     }
     sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
   }, [categoryId, subcategoryIds, name, description, location,
       gender, size, ageRanges, color,
-      suggestedImageUrl, selectedImageSrc, imagePreviews])
+      suggestedImageUrl, selectedImageSrc, imagePreviews,
+      bookTitle, bookAuthor])
 
   // ─── Last inn draft og profil-location ved mount ──────────────────────────
   useEffect(() => {
@@ -122,22 +126,26 @@ export default function AddPage() {
       if (raw) {
         try {
           const d: Draft = JSON.parse(raw)
+          // FIX: Gjenopprett ALT fra draft — inkludert bilder og bok-felt
           if (d.categoryId)       setCategoryId(d.categoryId)
           if (d.subcategoryIds)   setSubcategoryIds(d.subcategoryIds)
           if (d.ageRanges)        setAgeRanges(d.ageRanges)
           if (d.name)             setName(d.name)
           if (d.description)      setDescription(d.description)
           if (d.location)         setLocation(d.location)
-          if (d.gender)           setGender(d.gender)
+          if (d.gender)           setGender(d.gender as Gender)
           if (d.size)             setSize(d.size)
           if (d.color)            setColor(d.color)
           if (d.suggestedImageUrl) setSuggestedImageUrl(d.suggestedImageUrl)
           if (d.selectedImageSrc)  setSelectedImageSrc(d.selectedImageSrc)
+          if (d.bookTitle)         setBookTitle(d.bookTitle)
+          if (d.bookAuthor)        setBookAuthor(d.bookAuthor)
           if (d.imagePreviews?.length) {
             setImagePreviews(d.imagePreviews)
-            // imagePreviews er nå Storage URLs — fungerer etter navigering
+            // FIX: Sett analysisLocked så gjenopprettede bilder ikke utløser analyse
+            setAnalysisLocked(true)
           }
-          return // Ikke overskriv med profil-location om draft finnes
+          return
         } catch { /* ugyldig draft – ignorer */ }
       }
 
@@ -157,7 +165,7 @@ export default function AddPage() {
       if (!user) return null
       
       const ext = file.name.split('.').pop()
-      const path = `items/${user.id}/${Date.now()}.${ext}`
+      const path = `items/${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
       const { error } = await supabase.storage.from('item-images').upload(path, file)
       if (error) throw error
       
@@ -170,27 +178,29 @@ export default function AddPage() {
   }
 
   // ─── Bildeanalyse — kun kamera-knappen øverst ────────────────────────────
-  // Ekstra bildeslots bruker addExtraImage() og trigger IKKE analyse.
+  // FIX: Ekstra bildeslots bruker addMultipleImages() og trigger IKKE analyse.
   const handleAnalyzeImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    // Reset input slik at samme fil kan velges på nytt
     e.target.value = ''
 
-    // Last opp til Storage med en gang → får persistent URL
+    // FIX: Lås analyse-flagg FØR opplasting, slik at gjenopprettede bilder ikke
+    // ved et uhell utløser analyse
+    setAnalysisLocked(false) // dette bildet skal analyseres
+    setImageAnalyzing(true)
+    setImageAnalyzed(false)
+    setSuggestedImageUrl('')
+    setSelectedImageSrc('own')
+
     const uploadedUrl = await uploadImageToStorage(file)
     if (!uploadedUrl) {
       alert('Kunne ikke laste opp bildet')
+      setImageAnalyzing(false)
       return
     }
 
     // Legg til URL i imagePreviews (persistent, ikke blob-URL)
     setImagePreviews(prev => [uploadedUrl, ...prev.slice(1)].slice(0, 4))
-
-    setImageAnalyzing(true)
-    setImageAnalyzed(false)
-    setSuggestedImageUrl('')
-    setSelectedImageSrc('own')
 
     const base64 = await toBase64(file)
 
@@ -229,7 +239,29 @@ Returner KUN JSON, ingen annen tekst.` }
       })
       const data = await res.json()
       const text = data.content?.[0]?.text || ''
-      const parsed = JSON.parse(text.replace(/```json|```/g, '').trim())
+
+      // FIX: Robust parsing — håndter trailing tegn etter JSON-blokken
+      let parsed: any = null
+      try {
+        const cleaned = text.replace(/```json|```/g, '').trim()
+        // Finn første { og siste } for å ekstrahere bare JSON-objektet
+        const jsonStart = cleaned.indexOf('{')
+        const jsonEnd = cleaned.lastIndexOf('}')
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1))
+        }
+      } catch {
+        // Kan ikke parse — avbryt stille
+        setImageAnalyzing(false)
+        setImageAnalyzed(false)
+        return
+      }
+
+      if (!parsed) {
+        setImageAnalyzing(false)
+        setImageAnalyzed(false)
+        return
+      }
 
       if (parsed.type === 'shelf') {
         setImageAnalyzing(false)
@@ -268,7 +300,8 @@ Returner KUN JSON, ingen annen tekst.` }
         return
       }
 
-      // Fyll kun tomme felt — aldri overskriv det brukeren har skrevet
+      // FIX: Fyll kun tomme felt — aldri overskriv det brukeren har skrevet.
+      // Bruk separate bokfelt for bøker så navn/beskrivelse ikke overskrives ved retur.
       if (parsed.name && !name.trim())               setName(parsed.name)
       if (parsed.description && !description.trim()) setDescription(parsed.description)
       if (parsed.category)                           setCategoryId(parsed.category)
@@ -297,8 +330,10 @@ Returner KUN JSON, ingen annen tekst.` }
           const imgData = await imgRes.json()
           const imgText = imgData.content?.find((b: any) => b.type === 'text')?.text || ''
           const imgClean = imgText.replace(/```json|```/g, '').trim()
-          if (imgClean.startsWith('{')) {
-            const imgParsed = JSON.parse(imgClean)
+          const imgStart = imgClean.indexOf('{')
+          const imgEnd   = imgClean.lastIndexOf('}')
+          if (imgStart !== -1 && imgEnd !== -1) {
+            const imgParsed = JSON.parse(imgClean.slice(imgStart, imgEnd + 1))
             if (imgParsed.imageUrl) {
               setSuggestedImageUrl(imgParsed.imageUrl)
               setSelectedImageSrc('suggested')
@@ -314,28 +349,29 @@ Returner KUN JSON, ingen annen tekst.` }
     setImageAnalyzing(false)
   }
 
-  // ─── Legg til ekstra bilde (ingen analyse) ───────────────────────────────
-  const addExtraImage = (slotIndex: number) => async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  // ─── FIX: Legg til flere bilder samtidig (ingen analyse) ─────────────────
+  const addMultipleImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
     e.target.value = ''
-    
-    const uploadedUrl = await uploadImageToStorage(file)
-    if (!uploadedUrl) {
-      alert('Kunne ikke laste opp bildet')
-      return
-    }
-    
+
+    // Last opp alle filer parallelt
+    const uploadPromises = files.map(f => uploadImageToStorage(f))
+    const urls = await Promise.all(uploadPromises)
+    const validUrls = urls.filter((u): u is string => !!u)
+
     setImagePreviews(prev => {
-      const next = [...prev]
-      next[slotIndex] = uploadedUrl
-      return next.slice(0, 4)
+      const merged = [...prev, ...validUrls]
+      return merged.slice(0, 4) // maks 4
     })
   }
 
   const removeImage = (i: number) => {
     setImagePreviews(prev => prev.filter((_, idx) => idx !== i))
-    if (i === 0) setSelectedImageSrc('own')
+    if (i === 0) {
+      setSelectedImageSrc('own')
+      setSuggestedImageUrl('')
+    }
   }
 
   // ─── Shelf: lagre valgte bøker ────────────────────────────────────────────
@@ -387,33 +423,37 @@ Returner KUN JSON, ingen annen tekst.` }
       })
       const data = await res.json()
       const text = data.content?.[0]?.text || ''
-      const parsed = JSON.parse(text.replace(/```json|```/g, '').trim())
-      if (parsed.name && !name.trim())               setName(parsed.name)
-      if (parsed.description && !description.trim()) setDescription(parsed.description)
-      if (parsed.category)                           setCategoryId(parsed.category)
-      if (parsed.subcategory) {
-        setSubcategoryIds(prev =>
-          prev.includes(parsed.subcategory) ? prev : [...prev, parsed.subcategory]
-        )
-      }
-      if (parsed.imageUrl) {
-        setSuggestedImageUrl(parsed.imageUrl)
-        setSelectedImageSrc('suggested')
+      // FIX: Robust parsing
+      const cleaned = text.replace(/```json|```/g, '').trim()
+      const jsonStart = cleaned.indexOf('{')
+      const jsonEnd = cleaned.lastIndexOf('}')
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1))
+        if (parsed.name && !name.trim())               setName(parsed.name)
+        if (parsed.description && !description.trim()) setDescription(parsed.description)
+        if (parsed.category)                           setCategoryId(parsed.category)
+        if (parsed.subcategory) {
+          setSubcategoryIds(prev =>
+            prev.includes(parsed.subcategory) ? prev : [...prev, parsed.subcategory]
+          )
+        }
+        if (parsed.imageUrl) {
+          setSuggestedImageUrl(parsed.imageUrl)
+          setSelectedImageSrc('suggested')
+        }
       }
     } catch (e) { console.error(e) }
     setUrlLoading(false)
   }
 
   // ─── Validering og navigering til access-siden ───────────────────────────
-  // NB: Item insertes IKKE i DB her. Data holdes i sessionStorage og insertes
-  // etter at access-innstillinger er lagret i access/page.tsx.
   const validate = () => {
     const errs: Record<string, string> = {}
     if (!categoryId)               errs.category    = 'Velg en kategori'
     if (subcategoryIds.length === 0) errs.subcategory = 'Velg minst én underkategori'
     if (!name.trim())              errs.name        = 'Tittel er påkrevd'
     if (!location.trim())          errs.location    = 'Postnummer er påkrevd'
-    const hasImage = imagePreviews.length > 0 || selectedImageSrc === 'suggested'
+    const hasImage = imagePreviews.length > 0 || (selectedImageSrc === 'suggested' && suggestedImageUrl)
     if (!hasImage)                 errs.images      = 'Legg til minst ett bilde'
     setErrors(errs)
     return Object.keys(errs).length === 0
@@ -421,7 +461,8 @@ Returner KUN JSON, ingen annen tekst.` }
 
   const goToAccess = () => {
     if (!validate()) return
-    // Draft er allerede lagret løpende — gå bare videre
+    // FIX: Draft er allerede lagret løpende — gå bare videre.
+    // Ingen re-analyse eller state-reset skjer herfra.
     router.push('/items/access')
   }
 
@@ -435,6 +476,7 @@ Returner KUN JSON, ingen annen tekst.` }
     })
 
   const selectedCat = getCategoryById(categoryId)
+  const isBook = categoryId === 'boker'
 
   // ─── SHELF: resultater ────────────────────────────────────────────────────
   if (shelfStep === 'results') {
@@ -501,7 +543,7 @@ Returner KUN JSON, ingen annen tekst.` }
         {/* ── FINN PRODUKTET RASKT ── */}
         <div className="flex flex-col gap-3">
           <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
-            {categoryId === 'boker' ? 'Finn boken raskt' : 'Finn produktet raskt'}
+            {isBook ? 'Finn boken raskt' : 'Finn produktet raskt'}
           </p>
 
           {/* URL */}
@@ -519,7 +561,7 @@ Returner KUN JSON, ingen annen tekst.` }
             </button>
           </div>
 
-          {/* Analyser bilde — trigger kun gjenkjenning */}
+          {/* FIX: Analyser bilde — trigger kun gjenkjenning, separat fra ekstra-bilder */}
           <button
             onClick={() => analyzeFileInputRef.current?.click()}
             disabled={imageAnalyzing}
@@ -583,6 +625,7 @@ Returner KUN JSON, ingen annen tekst.` }
                     setGender('')
                     setSize('')
                     setAgeRanges([])
+                    setSubcategoryIds([])
                   }}
                   className="flex flex-col items-center gap-1.5 flex-1 rounded-xl py-3 px-2 transition-all"
                   style={{
@@ -609,19 +652,6 @@ Returner KUN JSON, ingen annen tekst.` }
         {/* ── RESTEN vises etter kategori er valgt ── */}
         {selectedCat && (
           <>
-            {/* TITTEL */}
-            <div className="flex flex-col gap-1.5">
-              <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Tittel *</p>
-              <input
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Hva vil du låne ut?"
-                className="glass outline-none"
-                style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)', fontSize: 15 }}
-              />
-              {errors.name && <p className="text-xs" style={{ color: '#ef4444' }}>{errors.name}</p>}
-            </div>
-
             {/* UNDERKATEGORI */}
             <div className="flex flex-col gap-2">
               <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
@@ -649,6 +679,40 @@ Returner KUN JSON, ingen annen tekst.` }
                 <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>{selectedCat.subcategoryHint}</p>
               )}
               {errors.subcategory && <p className="text-xs" style={{ color: '#ef4444' }}>{errors.subcategory}</p>}
+            </div>
+
+            {/* FIX: «Hvilken bok er dette» — kun etter underkategori, kun for bøker */}
+            {isBook && subcategoryIds.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Hvilken bok er dette?</p>
+                <input
+                  value={bookTitle}
+                  onChange={e => setBookTitle(e.target.value)}
+                  placeholder="Boktittel"
+                  className="glass outline-none"
+                  style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)', fontSize: 15 }}
+                />
+                <input
+                  value={bookAuthor}
+                  onChange={e => setBookAuthor(e.target.value)}
+                  placeholder="Forfatter"
+                  className="glass outline-none"
+                  style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)', fontSize: 15 }}
+                />
+              </div>
+            )}
+
+            {/* TITTEL */}
+            <div className="flex flex-col gap-1.5">
+              <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Tittel *</p>
+              <input
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Hva vil du låne ut?"
+                className="glass outline-none"
+                style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)', fontSize: 15 }}
+              />
+              {errors.name && <p className="text-xs" style={{ color: '#ef4444' }}>{errors.name}</p>}
             </div>
 
             {/* ALDER (baby-og-barn, ikke gravid) */}
@@ -766,7 +830,7 @@ Returner KUN JSON, ingen annen tekst.` }
               {errors.location && <p className="text-xs" style={{ color: '#ef4444' }}>{errors.location}</p>}
             </div>
 
-            {/* BILDER */}
+            {/* FIX: BILDER — felles multi-fil-input + analyse-slot holdes separert */}
             <div className="flex flex-col gap-2">
               <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
                 {imagePreviews.length > 0 || suggestedImageUrl ? 'Bilder' : 'Bilder *'}
@@ -794,7 +858,8 @@ Returner KUN JSON, ingen annen tekst.` }
                 </div>
               )}
 
-              {/* Bildegrid — slot 0 bruker analyseknappen; slot 1–3 legger kun til bilde */}
+              {/* FIX: Bildegrid — slot 0 er alltid analyse-knapp (separat input),
+                  slots 1–3 åpner felles multi-fil-input uten analyse */}
               <div className="grid grid-cols-4 gap-2">
                 {[0, 1, 2, 3].map(i => {
                   const preview = imagePreviews[i]
@@ -813,7 +878,7 @@ Returner KUN JSON, ingen annen tekst.` }
                             style={{ background: 'rgba(0,0,0,0.5)', fontSize: 12 }}>×</button>
                         </>
                       ) : i === 0 ? (
-                        // Slot 0: trigger analyseknappen
+                        // Slot 0: trigger bildeanalyse
                         <button
                           onClick={() => analyzeFileInputRef.current?.click()}
                           className="w-full h-full rounded-xl flex flex-col items-center justify-center gap-1"
@@ -823,27 +888,30 @@ Returner KUN JSON, ingen annen tekst.` }
                           </svg>
                           <span style={{ fontSize: 9, color: 'var(--terra-mid)' }}>Bilde</span>
                         </button>
-                      ) : imagePreviews.length >= i ? (
-                        // Slot 1–3: legg til ekstra bilde uten analyse
-                        <label className="cursor-pointer block w-full h-full">
-                          <div className="w-full h-full rounded-xl flex items-center justify-center"
-                            style={{ background: '#F5F0EA', border: '0.5px dashed rgba(46,98,113,0.2)' }}>
-                            <span style={{ fontSize: 18, color: 'rgba(46,98,113,0.3)' }}>+</span>
-                          </div>
-                          <input
-                            ref={extraFileInputRefs[i - 1]}
-                            type="file"
-                            accept="image/*"
-                            onChange={addExtraImage(i)}
-                            className="hidden"
-                          />
-                        </label>
-                      ) : null}
+                      ) : (
+                        // Slots 1–3: legg til ekstra bilder uten analyse
+                        // Vises alltid (ikke kun om forrige slot er fylt) for fri rekkefølge
+                        <button
+                          onClick={() => multiFileInputRef.current?.click()}
+                          className="w-full h-full rounded-xl flex items-center justify-center"
+                          style={{ background: '#F5F0EA', border: '0.5px dashed rgba(46,98,113,0.2)' }}>
+                          <span style={{ fontSize: 18, color: 'rgba(46,98,113,0.3)' }}>+</span>
+                        </button>
+                      )}
                     </div>
                   )
                 })}
               </div>
-              <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>Første bilde blir hovedbilde. Maks 4 bilder.</p>
+              {/* FIX: Felles multi-fil-input for slots 1–3 — multiple tillatt */}
+              <input
+                ref={multiFileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={addMultipleImages}
+                className="hidden"
+              />
+              <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>Første bilde blir hovedbilde. Du kan legge til opptil 4 bilder.</p>
               {errors.images && <p className="text-xs" style={{ color: '#ef4444' }}>{errors.images}</p>}
             </div>
 

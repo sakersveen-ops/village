@@ -3,13 +3,18 @@ import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
-const NAV_ITEMS = [
-  { href: '/',              icon: '🏠', label: 'Hjem'     },
-  { href: '/search',        icon: '🔍', label: 'Søk'      },
-  { href: '/add',           icon: '＋', label: 'Legg ut'  },
-  { href: '/notifications', icon: '🔔', label: 'Varsler'  },
-  { href: '/profile',       icon: '👤', label: 'Profil'   },
-]
+// data-tour attributes wire up the AppTour spotlight to each nav element
+  const navItems = [
+    { href: '/',                 icon: 'home',      label: 'Hjem',         tour: 'feed' },
+    { href: '/community/search', icon: 'community', label: 'Kretser',      tour: 'communities' },
+    { href: '/',                 icon: 'home',      label: 'Hjem',          tour: 'feed' },
+    { href: '/community/search', icon: 'community', label: 'Kretser',       tour: 'communities' },
+    { href: '/add',              icon: null,         label: 'Del gjenstand', tour: 'add' },
+    { href: '/schedule',         icon: 'schedule',  label: 'Avtaler',      tour: 'schedule' },
+    { href: '/profile',          icon: 'profile',   label: 'Profil',       tour: 'profile' },
+    { href: '/schedule',         icon: 'schedule',  label: 'Avtaler',       tour: 'schedule' },
+    { href: '/profile',          icon: 'profile',   label: 'Profil',        tour: 'profile' },
+  ]
 
 const HIDE_ON = ['/login', '/signup', '/onboarding']
 

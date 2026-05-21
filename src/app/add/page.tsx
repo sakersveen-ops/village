@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import {
@@ -7,8 +7,10 @@ import {
   getCategoryById, type Gender,
 } from '@/lib/categories'
 
-// ─── SVG-ikoner per kategori ──────────────────────────────────────────────────
+// ─── Nøkkel for draft i sessionStorage ───────────────────────────────────────
+const DRAFT_KEY = 'village_add_draft'
 
+// ─── SVG-ikoner per kategori ──────────────────────────────────────────────────
 const CAT_ICONS: Record<string, React.ReactNode> = {
   'baby-og-barn': (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -37,23 +39,46 @@ type BookResult = {
   genre: string; isbn: string; image_url: string; selected: boolean
 }
 
+// ─── Draft-type ───────────────────────────────────────────────────────────────
+type Draft = {
+  categoryId: string
+  subcategoryIds: string[]
+  name: string
+  description: string
+  location: string
+  gender: Gender | ''
+  size: string
+  ageRanges: string[]
+  color: string
+  suggestedImageUrl: string
+  selectedImageSrc: 'own' | 'suggested'
+  imagePreviews: string[]
+}
+
 export default function AddPage() {
   const router = useRouter()
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const shelfSaveRef = useRef<HTMLInputElement>(null)
+  // Én enkelt ref for fil-input (kun brukt for analyse-knappen)
+  const analyzeFileInputRef = useRef<HTMLInputElement>(null)
+  // Separate refs for ekstra bildeslots (ingen analyse)
+  const extraFileInputRefs = [
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+    useRef<HTMLInputElement>(null),
+  ]
 
   // ── Core state ──
-  const [categoryId, setCategoryId]       = useState('')
+  const [categoryId, setCategoryId]         = useState('')
   const [subcategoryIds, setSubcategoryIds] = useState<string[]>([])
-  const [name, setName]                   = useState('')
-  const [description, setDescription]    = useState('')
-  const [location, setLocation]           = useState('')
-  const [gender, setGender]               = useState<Gender | ''>('')
-  const [size, setSize]                   = useState('')
-  const [ageRanges, setAgeRanges]         = useState<string[]>([])
-  const [color, setColor]                 = useState('')
-  const [images, setImages]               = useState<File[]>([])
-  const [imagePreviews, setImagePreviews] = useState<string[]>([])
+  const [name, setName]                     = useState('')
+  const [description, setDescription]       = useState('')
+  const [location, setLocation]             = useState('')
+  const [gender, setGender]                 = useState<Gender | ''>('')
+  const [size, setSize]                     = useState('')
+  const [ageRanges, setAgeRanges]           = useState<string[]>([])
+  const [color, setColor]                   = useState('')
+  // images: kun File-objekter for opplasting – kan ikke serialiseres til sessionStorage
+  const [images, setImages]                 = useState<File[]>([])
+  const [imagePreviews, setImagePreviews]   = useState<string[]>([])
   const [suggestedImageUrl, setSuggestedImageUrl] = useState('')
   const [selectedImageSrc, setSelectedImageSrc]   = useState<'own' | 'suggested'>('own')
 
@@ -62,68 +87,93 @@ export default function AddPage() {
   const [imageAnalyzed, setImageAnalyzed]   = useState(false)
 
   // ── Shelf (bokhylle) state ──
-  const [shelfBooks, setShelfBooks]     = useState<BookResult[]>([])
-  const [shelfStep, setShelfStep]       = useState<'idle' | 'loading' | 'results' | 'saving'>('idle')
+  const [shelfBooks, setShelfBooks]       = useState<BookResult[]>([])
+  const [shelfStep, setShelfStep]         = useState<'idle' | 'loading' | 'results' | 'saving'>('idle')
   const [shelfProgress, setShelfProgress] = useState(0)
 
   // ── UI state ──
-  const [saving, setSaving]   = useState(false)
-  const [errors, setErrors]   = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Load default location from profile
+  // ── URL analyse ──
+  const [urlInput, setUrlInput]     = useState('')
+  const [urlLoading, setUrlLoading] = useState(false)
+
+  // ─── Løpende lagring av draft til sessionStorage ──────────────────────────
+  // Kjøres hver gang relevant state endres. File-objekter kan ikke serialiseres,
+  // men image-previews (blob-URLer) lagres slik at UI viser bilder ved tilbakenavigering.
+  useEffect(() => {
+    const draft: Draft = {
+      categoryId, subcategoryIds, name, description, location,
+      gender, size, ageRanges, color,
+      suggestedImageUrl, selectedImageSrc, imagePreviews,
+    }
+    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+  }, [categoryId, subcategoryIds, name, description, location,
+      gender, size, ageRanges, color,
+      suggestedImageUrl, selectedImageSrc, imagePreviews])
+
+  // ─── Last inn draft og profil-location ved mount ──────────────────────────
   useEffect(() => {
     const load = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // ── Restore draft from sessionStorage (user came back from access page) ──
-      const draft = sessionStorage.getItem('village_add_draft')
-      if (draft) {
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      if (raw) {
         try {
-          const d = JSON.parse(draft)
-          if (d.categoryId)    setCategoryId(d.categoryId)
-          if (d.subcategoryIds) setSubcategoryIds(d.subcategoryIds)
-          if (d.ageRanges)      setAgeRanges(d.ageRanges)
-          if (d.name)          setName(d.name)
-          if (d.description)   setDescription(d.description)
-          if (d.location)      setLocation(d.location)
-          if (d.gender)        setGender(d.gender)
-          if (d.size)          setSize(d.size)
-          if (d.color)         setColor(d.color)
+          const d: Draft = JSON.parse(raw)
+          if (d.categoryId)       setCategoryId(d.categoryId)
+          if (d.subcategoryIds)   setSubcategoryIds(d.subcategoryIds)
+          if (d.ageRanges)        setAgeRanges(d.ageRanges)
+          if (d.name)             setName(d.name)
+          if (d.description)      setDescription(d.description)
+          if (d.location)         setLocation(d.location)
+          if (d.gender)           setGender(d.gender)
+          if (d.size)             setSize(d.size)
+          if (d.color)            setColor(d.color)
           if (d.suggestedImageUrl) setSuggestedImageUrl(d.suggestedImageUrl)
           if (d.selectedImageSrc)  setSelectedImageSrc(d.selectedImageSrc)
-          if (d.imagePreviews) setImagePreviews(d.imagePreviews)
-          // Note: File objects can't be stored — previews shown, user re-uploads if needed
-        } catch {}
-        sessionStorage.removeItem('village_add_draft')
-      } else {
-        // Only load profile location if no draft (draft has its own location)
-        const { data: prof } = await supabase.from('profiles').select('location').eq('id', user.id).single()
-        if (prof?.location) setLocation(prof.location)
+          if (d.imagePreviews?.length) {
+            setImagePreviews(d.imagePreviews)
+            // File-objekter er borte etter navigering — bruker ser preview men
+            // må laste opp bilde på nytt om de vil bruke eget bilde.
+            // suggestedImageUrl brukes direkte uten re-upload.
+          }
+          return // Ikke overskriv med profil-location om draft finnes
+        } catch { /* ugyldig draft – ignorer */ }
       }
+
+      // Ingen draft: last inn profil-location som default
+      const { data: prof } = await supabase
+        .from('profiles').select('location').eq('id', user.id).single()
+      if (prof?.location) setLocation(prof.location)
     }
     load()
   }, [])
 
-  // ─── Image handler — detects shelf vs single item ─────────────────────────
-
-  const handleImageFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ─── Bildeanalyse — kun kamera-knappen øverst ────────────────────────────
+  // Ekstra bildeslots bruker addExtraImage() og trigger IKKE analyse.
+  const handleAnalyzeImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    // Reset input slik at samme fil kan velges på nytt
+    e.target.value = ''
 
-    // Add to image list (max 4)
-    setImages(prev => [...prev, file].slice(0, 4))
-    setImagePreviews(prev => [...prev, URL.createObjectURL(file)].slice(0, 4))
+    // Legg til som første bilde (eller erstatt slot 0 om det allerede er ett)
+    setImages(prev => [file, ...prev.slice(1)].slice(0, 4))
+    setImagePreviews(prev => [URL.createObjectURL(file), ...prev.slice(1)].slice(0, 4))
 
     setImageAnalyzing(true)
     setImageAnalyzed(false)
     setSuggestedImageUrl('')
+    setSelectedImageSrc('own')
 
     const base64 = await toBase64(file)
 
     try {
-      // Step 1: Analyze the image — detect shelf or single item
+      // Steg 1: Analyser bildet
       const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -160,7 +210,6 @@ Returner KUN JSON, ingen annen tekst.` }
       const parsed = JSON.parse(text.replace(/```json|```/g, '').trim())
 
       if (parsed.type === 'shelf') {
-        // ── BOKHYLLE-FLYT ──
         setImageAnalyzing(false)
         setShelfStep('loading')
         const results: BookResult[] = []
@@ -190,19 +239,24 @@ Returner KUN JSON, ingen annen tekst.` }
         return
       }
 
-      // ── ENKELT GJENSTAND-FLYT ──
+      // Enkelt gjenstand
       if (parsed.confident === false) {
         setImageAnalyzing(false)
         setImageAnalyzed(false)
         return
       }
 
-      if (parsed.name && !name.trim())        setName(parsed.name)
+      // Fyll kun tomme felt — aldri overskriv det brukeren har skrevet
+      if (parsed.name && !name.trim())               setName(parsed.name)
       if (parsed.description && !description.trim()) setDescription(parsed.description)
-      if (parsed.category)    setCategoryId(parsed.category)
-      if (parsed.subcategory) setSubcategoryIds(prev => prev.includes(parsed.subcategory) ? prev.filter(x => x !== parsed.subcategory) : [...prev, parsed.subcategory])
+      if (parsed.category)                           setCategoryId(parsed.category)
+      if (parsed.subcategory) {
+        setSubcategoryIds(prev =>
+          prev.includes(parsed.subcategory) ? prev : [...prev, parsed.subcategory]
+        )
+      }
 
-      // Step 2: Fetch product image
+      // Steg 2: Hent produktbilde
       if (parsed.searchQuery) {
         try {
           const imgRes = await fetch('/api/claude', {
@@ -238,8 +292,31 @@ Returner KUN JSON, ingen annen tekst.` }
     setImageAnalyzing(false)
   }
 
-  // ─── Shelf: save selected books ───────────────────────────────────────────
+  // ─── Legg til ekstra bilde (ingen analyse) ───────────────────────────────
+  const addExtraImage = (slotIndex: number) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    const url = URL.createObjectURL(file)
+    setImages(prev => {
+      const next = [...prev]
+      next[slotIndex] = file
+      return next.slice(0, 4)
+    })
+    setImagePreviews(prev => {
+      const next = [...prev]
+      next[slotIndex] = url
+      return next.slice(0, 4)
+    })
+  }
 
+  const removeImage = (i: number) => {
+    setImages(prev => prev.filter((_, idx) => idx !== i))
+    setImagePreviews(prev => prev.filter((_, idx) => idx !== i))
+    if (i === 0) setSelectedImageSrc('own')
+  }
+
+  // ─── Shelf: lagre valgte bøker ────────────────────────────────────────────
   const saveShelfBooks = async () => {
     setShelfStep('saving')
     const supabase = createClient()
@@ -252,10 +329,10 @@ Returner KUN JSON, ingen annen tekst.` }
         owner_id: user.id,
         name: book.title,
         description: [
-          book.author   ? `Forfatter: ${book.author}`   : '',
-          book.genre    ? `Sjanger: ${book.genre}`      : '',
-          book.isbn     ? `ISBN: ${book.isbn}`          : '',
-          book.description ? `\n${book.description}`   : '',
+          book.author      ? `Forfatter: ${book.author}`   : '',
+          book.genre       ? `Sjanger: ${book.genre}`      : '',
+          book.isbn        ? `ISBN: ${book.isbn}`          : '',
+          book.description ? `\n${book.description}`       : '',
         ].filter(Boolean).join('\n'),
         category: 'boker',
         image_url: book.image_url || null,
@@ -265,14 +342,11 @@ Returner KUN JSON, ingen annen tekst.` }
       done++
       setShelfProgress(Math.round((done / selected.length) * 100))
     }
+    sessionStorage.removeItem(DRAFT_KEY)
     router.push('/')
   }
 
-  // ─── URL analysis ─────────────────────────────────────────────────────────
-
-  const [urlInput, setUrlInput]     = useState('')
-  const [urlLoading, setUrlLoading] = useState(false)
-
+  // ─── URL-analyse ──────────────────────────────────────────────────────────
   const analyzeUrl = async () => {
     if (!urlInput.trim()) return
     setUrlLoading(true)
@@ -292,10 +366,14 @@ Returner KUN JSON, ingen annen tekst.` }
       const data = await res.json()
       const text = data.content?.[0]?.text || ''
       const parsed = JSON.parse(text.replace(/```json|```/g, '').trim())
-      if (parsed.name && !name.trim())        setName(parsed.name)
+      if (parsed.name && !name.trim())               setName(parsed.name)
       if (parsed.description && !description.trim()) setDescription(parsed.description)
-      if (parsed.category)    setCategoryId(parsed.category)
-      if (parsed.subcategory) setSubcategoryIds(prev => prev.includes(parsed.subcategory) ? prev.filter(x => x !== parsed.subcategory) : [...prev, parsed.subcategory])
+      if (parsed.category)                           setCategoryId(parsed.category)
+      if (parsed.subcategory) {
+        setSubcategoryIds(prev =>
+          prev.includes(parsed.subcategory) ? prev : [...prev, parsed.subcategory]
+        )
+      }
       if (parsed.imageUrl) {
         setSuggestedImageUrl(parsed.imageUrl)
         setSelectedImageSrc('suggested')
@@ -304,73 +382,28 @@ Returner KUN JSON, ingen annen tekst.` }
     setUrlLoading(false)
   }
 
-  // ─── Validation & save ────────────────────────────────────────────────────
-
+  // ─── Validering og navigering til access-siden ───────────────────────────
+  // NB: Item insertes IKKE i DB her. Data holdes i sessionStorage og insertes
+  // etter at access-innstillinger er lagret i access/page.tsx.
   const validate = () => {
     const errs: Record<string, string> = {}
-    if (!categoryId)   errs.category    = 'Velg en kategori'
+    if (!categoryId)               errs.category    = 'Velg en kategori'
     if (subcategoryIds.length === 0) errs.subcategory = 'Velg minst én underkategori'
-    if (!name.trim())  errs.name        = 'Tittel er påkrevd'
-    if (!location.trim()) errs.location = 'Postnummer er påkrevd'
-    const hasImage = images.length > 0 || selectedImageSrc === 'suggested'
-    if (!hasImage)     errs.images      = 'Legg til minst ett bilde'
+    if (!name.trim())              errs.name        = 'Tittel er påkrevd'
+    if (!location.trim())          errs.location    = 'Postnummer er påkrevd'
+    const hasImage = imagePreviews.length > 0 || selectedImageSrc === 'suggested'
+    if (!hasImage)                 errs.images      = 'Legg til minst ett bilde'
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
 
-  const saveItem = async () => {
+  const goToAccess = () => {
     if (!validate()) return
-    setSaving(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setSaving(false); return }
-
-    let image_url = ''
-    if (selectedImageSrc === 'suggested' && suggestedImageUrl) {
-      image_url = suggestedImageUrl
-    } else if (images[0]) {
-      const ext = images[0].name.split('.').pop()
-      const path = `items/${user.id}/${Date.now()}.${ext}`
-      await supabase.storage.from('item-images').upload(path, images[0])
-      const { data } = supabase.storage.from('item-images').getPublicUrl(path)
-      image_url = data.publicUrl
-
-      // Upload remaining images (2–4) — stored in extra_images jsonb or ignored for now
-    }
-
-    const { data: item, error } = await supabase.from('items').insert({
-      owner_id: user.id,
-      name,
-      description,
-      category: categoryId,
-      subcategory: subcategoryIds[0] || null,
-      subcategories: subcategoryIds,
-      image_url: image_url || null,
-      available: true,
-      location: location || null,
-      color: color || null,
-      size: size || null,
-      age_ranges: ageRanges,
-    }).select().single()
-
-    if (error || !item?.id) {
-      console.error('Insert failed:', JSON.stringify(error))
-      setSaving(false)
-      return
-    }
-
-    // ── Save draft so user can come back without losing their info ──
-    sessionStorage.setItem('village_add_draft', JSON.stringify({
-      categoryId, subcategoryIds, name, description, location,
-      gender, size, ageRanges, color,
-      suggestedImageUrl, selectedImageSrc, imagePreviews,
-    }))
-
-    router.push(`/items/access?item=${item.id}&name=${encodeURIComponent(name)}`)
+    // Draft er allerede lagret løpende — gå bare videre
+    router.push('/items/access')
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
-
   const toBase64 = (file: File): Promise<string> =>
     new Promise((res, rej) => {
       const r = new FileReader()
@@ -382,7 +415,6 @@ Returner KUN JSON, ingen annen tekst.` }
   const selectedCat = getCategoryById(categoryId)
 
   // ─── SHELF: resultater ────────────────────────────────────────────────────
-
   if (shelfStep === 'results') {
     return (
       <div className="max-w-lg mx-auto pb-24">
@@ -398,7 +430,8 @@ Returner KUN JSON, ingen annen tekst.` }
         </div>
         <div className="px-4 pt-4 flex flex-col gap-3">
           {shelfBooks.map((book, i) => (
-            <div key={i} onClick={() => setShelfBooks(prev => prev.map((b, idx) => idx === i ? { ...b, selected: !b.selected } : b))}
+            <div key={i}
+              onClick={() => setShelfBooks(prev => prev.map((b, idx) => idx === i ? { ...b, selected: !b.selected } : b))}
               className={`glass rounded-2xl p-4 flex gap-3 cursor-pointer transition-all ${book.selected ? 'ring-2' : 'opacity-50'}`}
               style={book.selected ? { '--tw-ring-color': 'var(--terra)' } as React.CSSProperties : {}}>
               {book.image_url
@@ -438,8 +471,7 @@ Returner KUN JSON, ingen annen tekst.` }
     )
   }
 
-  // ─── MAIN FORM ────────────────────────────────────────────────────────────
-
+  // ─── HOVED-SKJEMA ─────────────────────────────────────────────────────────
   return (
     <div className="max-w-lg mx-auto pb-24">
       <div className="px-4 pt-5 flex flex-col gap-5">
@@ -465,27 +497,37 @@ Returner KUN JSON, ingen annen tekst.` }
             </button>
           </div>
 
-          {/* Bilde — trigger filvelger */}
+          {/* Analyser bilde — trigger kun gjenkjenning */}
           <button
-            onClick={() => fileInputRef.current?.click()}
-            className="glass w-full flex items-center gap-3 text-left"
+            onClick={() => analyzeFileInputRef.current?.click()}
+            disabled={imageAnalyzing}
+            className="glass w-full flex items-center gap-3 text-left disabled:opacity-50"
             style={{ borderRadius: 14, padding: '13px 16px', border: '0.5px solid rgba(46,98,113,0.2)' }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-mid)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
             </svg>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)', marginBottom: 2, letterSpacing: '0.06em' }}>Bilde</p>
-              <p className="text-sm" style={{ color: 'var(--terra-dark)' }}>Ta bilde av gjenstanden – eller hele bokhylla</p>
+              <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)', marginBottom: 2, letterSpacing: '0.06em' }}>
+                {imageAnalyzing ? 'Gjenkjenner…' : 'Gjenkjenn med bilde'}
+              </p>
+              <p className="text-sm" style={{ color: 'var(--terra-dark)' }}>
+                Ta bilde av gjenstanden – eller hele bokhylla
+              </p>
             </div>
           </button>
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageFile} className="hidden" />
+          {/* Skjult input KUN for analyse */}
+          <input
+            ref={analyzeFileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleAnalyzeImage}
+            className="hidden"
+          />
 
           {imageAnalyzing && (
             <div className="glass rounded-2xl p-4 text-center flex items-center justify-center gap-3">
               <span className="text-xl animate-pulse">🔍</span>
-              <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>
-                {shelfStep === 'loading' ? 'Analyserer bokhyllen…' : 'Gjenkjenner gjenstanden…'}
-              </p>
+              <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Gjenkjenner gjenstanden…</p>
             </div>
           )}
 
@@ -516,7 +558,6 @@ Returner KUN JSON, ingen annen tekst.` }
                   key={cat.id}
                   onClick={() => {
                     setCategoryId(cat.id)
-                    setSubcategoryIds(prev => prev.includes('') ? prev.filter(x => x !== '') : [...prev, ''])
                     setGender('')
                     setSize('')
                     setAgeRanges([])
@@ -529,7 +570,7 @@ Returner KUN JSON, ingen annen tekst.` }
                     fontSize: 11,
                     boxShadow: isActive ? '0 2px 8px rgba(46,98,113,0.25)' : 'none',
                   }}>
-                  <span style={{ color: isActive ? 'var(--terra)' : 'var(--terra-mid)', display: 'flex' }}>
+                  <span style={{ color: isActive ? 'white' : 'var(--terra-mid)', display: 'flex' }}>
                     {CAT_ICONS[cat.id]}
                   </span>
                   <span style={{ lineHeight: 1.2, textAlign: 'center', fontWeight: isActive ? 500 : 400 }}>
@@ -568,7 +609,9 @@ Returner KUN JSON, ingen annen tekst.` }
                 {selectedCat.subcategories.map(sub => (
                   <button
                     key={sub.id}
-                    onClick={() => setSubcategoryIds(prev => prev.includes(sub.id) ? prev.filter(x => x !== sub.id) : [...prev, sub.id])}
+                    onClick={() => setSubcategoryIds(prev =>
+                      prev.includes(sub.id) ? prev.filter(x => x !== sub.id) : [...prev, sub.id]
+                    )}
                     className="pill"
                     style={{
                       background: subcategoryIds.includes(sub.id) ? 'var(--terra)' : 'white',
@@ -594,7 +637,9 @@ Returner KUN JSON, ingen annen tekst.` }
                   {AGE_GROUPS.map(ag => (
                     <button
                       key={ag.id}
-                      onClick={() => setAgeRanges(prev => prev.includes(ag.id) ? prev.filter(x => x !== ag.id) : [...prev, ag.id])}
+                      onClick={() => setAgeRanges(prev =>
+                        prev.includes(ag.id) ? prev.filter(x => x !== ag.id) : [...prev, ag.id]
+                      )}
                       style={{
                         background: ageRanges.includes(ag.id) ? 'var(--terra)' : 'white',
                         color: ageRanges.includes(ag.id) ? 'white' : 'var(--terra-dark)',
@@ -608,7 +653,7 @@ Returner KUN JSON, ingen annen tekst.` }
               </div>
             )}
 
-            {/* STØRRELSE (antrekk) */}
+            {/* STØRRELSE */}
             {selectedCat.hasSize && (
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Størrelse</p>
@@ -702,15 +747,15 @@ Returner KUN JSON, ingen annen tekst.` }
             {/* BILDER */}
             <div className="flex flex-col gap-2">
               <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
-                {imagePreviews.length > 0 || suggestedImageUrl ? 'Legg til flere bilder' : 'Bilder *'}
+                {imagePreviews.length > 0 || suggestedImageUrl ? 'Bilder' : 'Bilder *'}
               </p>
 
-              {/* Bildevalg: eget vs. foreslått */}
+              {/* Velg mellom eget og foreslått bilde (vises kun når begge finnes) */}
               {imagePreviews.length > 0 && suggestedImageUrl && (
                 <div className="grid grid-cols-2 gap-3 mb-2">
                   <button onClick={() => setSelectedImageSrc('own')}
                     className={`rounded-2xl overflow-hidden border-2 transition-colors ${selectedImageSrc === 'own' ? 'border-[var(--terra)]' : 'border-transparent'}`}>
-                    <img src={imagePreviews[0]} className="w-full h-28 object-cover" />
+                    <img src={imagePreviews[0]} className="w-full h-28 object-cover" alt="Ditt bilde" />
                     <div className="py-2 text-xs font-medium text-center"
                       style={{ background: selectedImageSrc === 'own' ? 'var(--terra)' : 'rgba(46,98,113,0.08)', color: selectedImageSrc === 'own' ? 'white' : 'var(--terra-dark)' }}>
                       {selectedImageSrc === 'own' ? '✓ Ditt bilde' : 'Ditt bilde'}
@@ -718,7 +763,7 @@ Returner KUN JSON, ingen annen tekst.` }
                   </button>
                   <button onClick={() => setSelectedImageSrc('suggested')}
                     className={`rounded-2xl overflow-hidden border-2 transition-colors ${selectedImageSrc === 'suggested' ? 'border-[var(--terra)]' : 'border-transparent'}`}>
-                    <img src={suggestedImageUrl} className="w-full h-28 object-cover" onError={() => setSuggestedImageUrl('')} />
+                    <img src={suggestedImageUrl} className="w-full h-28 object-cover" alt="Produktbilde" onError={() => setSuggestedImageUrl('')} />
                     <div className="py-2 text-xs font-medium text-center"
                       style={{ background: selectedImageSrc === 'suggested' ? 'var(--terra)' : 'rgba(46,98,113,0.08)', color: selectedImageSrc === 'suggested' ? 'white' : 'var(--terra-dark)' }}>
                       {selectedImageSrc === 'suggested' ? '✓ Produktbilde' : 'Produktbilde'}
@@ -727,42 +772,51 @@ Returner KUN JSON, ingen annen tekst.` }
                 </div>
               )}
 
-              {/* Grid med opptil 4 bilder */}
-              <div className="grid grid-cols-2 gap-2">
+              {/* Bildegrid — slot 0 bruker analyseknappen; slot 1–3 legger kun til bilde */}
+              <div className="grid grid-cols-4 gap-2">
                 {[0, 1, 2, 3].map(i => {
                   const preview = imagePreviews[i]
-                  const isFirst = i === 0
                   return (
-                    <div key={i} className="relative" style={{ height: 96 }}>
+                    <div key={i} className="relative" style={{ height: 80 }}>
                       {preview ? (
                         <>
-                          <img src={preview} className="w-full h-full object-cover rounded-xl" />
-                          {isFirst && (
-                            <span className="absolute bottom-1.5 left-1.5 text-white text-xs font-medium px-2 py-0.5 rounded-full"
-                              style={{ background: 'rgba(0,0,0,0.5)', fontSize: 10 }}>Hoved</span>
+                          <img src={preview} className="w-full h-full object-cover rounded-xl" alt={`Bilde ${i + 1}`} />
+                          {i === 0 && (
+                            <span className="absolute bottom-1 left-1 text-white px-1.5 py-0.5 rounded-full"
+                              style={{ background: 'rgba(0,0,0,0.5)', fontSize: 9 }}>Hoved</span>
                           )}
-                          <button onClick={() => {
-                            setImages(prev => prev.filter((_, idx) => idx !== i))
-                            setImagePreviews(prev => prev.filter((_, idx) => idx !== i))
-                          }} className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center text-white"
+                          <button
+                            onClick={() => removeImage(i)}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-white"
                             style={{ background: 'rgba(0,0,0,0.5)', fontSize: 12 }}>×</button>
                         </>
-                      ) : (
+                      ) : i === 0 ? (
+                        // Slot 0: trigger analyseknappen
+                        <button
+                          onClick={() => analyzeFileInputRef.current?.click()}
+                          className="w-full h-full rounded-xl flex flex-col items-center justify-center gap-1"
+                          style={{ background: 'white', border: '1px dashed rgba(46,98,113,0.35)' }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--terra-mid)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                          </svg>
+                          <span style={{ fontSize: 9, color: 'var(--terra-mid)' }}>Bilde</span>
+                        </button>
+                      ) : imagePreviews.length >= i ? (
+                        // Slot 1–3: legg til ekstra bilde uten analyse
                         <label className="cursor-pointer block w-full h-full">
-                          <div className="w-full h-full rounded-xl flex flex-col items-center justify-center gap-1.5"
-                            style={{ background: i === 0 ? 'white' : '#F5F0EA', border: i === 0 ? '1px dashed rgba(46,98,113,0.35)' : '0.5px dashed rgba(46,98,113,0.15)' }}>
-                            {i === 0 && (
-                              <>
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-mid)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                                </svg>
-                                <span className="text-xs" style={{ color: 'var(--terra-mid)' }}>Legg til bilde</span>
-                              </>
-                            )}
+                          <div className="w-full h-full rounded-xl flex items-center justify-center"
+                            style={{ background: '#F5F0EA', border: '0.5px dashed rgba(46,98,113,0.2)' }}>
+                            <span style={{ fontSize: 18, color: 'rgba(46,98,113,0.3)' }}>+</span>
                           </div>
-                          <input type="file" accept="image/*" onChange={handleImageFile} className="hidden" />
+                          <input
+                            ref={extraFileInputRefs[i - 1]}
+                            type="file"
+                            accept="image/*"
+                            onChange={addExtraImage(i)}
+                            className="hidden"
+                          />
                         </label>
-                      )}
+                      ) : null}
                     </div>
                   )
                 })}
@@ -771,9 +825,9 @@ Returner KUN JSON, ingen annen tekst.` }
               {errors.images && <p className="text-xs" style={{ color: '#ef4444' }}>{errors.images}</p>}
             </div>
 
-            {/* SUBMIT */}
-            <button onClick={saveItem} disabled={saving} className="btn-primary w-full mt-2 disabled:opacity-50">
-              {saving ? 'Lagrer…' : 'Neste →'}
+            {/* NESTE */}
+            <button onClick={goToAccess} disabled={saving} className="btn-primary w-full mt-2 disabled:opacity-50">
+              Neste →
             </button>
           </>
         )}

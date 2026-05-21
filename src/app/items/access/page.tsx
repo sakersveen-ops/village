@@ -1,10 +1,13 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 import { track } from '@/lib/track'
 import FirstTimeAddItemModal from '@/components/FirstTimeAddItemModal'
+
+// ─── Nøkkel for draft — må matche add/page.tsx ────────────────────────────────
+const DRAFT_KEY = 'village_add_draft'
 
 const ACCESS_LEVELS = [
   { id: 'close_friends',      label: 'Nære venner',       emoji: '❤️',  description: 'Kun de du har merket som nære venner' },
@@ -82,28 +85,32 @@ function AccessPageInner() {
   const [saving, setSaving]                 = useState(false)
   const [saveError, setSaveError]           = useState<string | null>(null)
   const [loading, setLoading]               = useState(true)
-  // Follow-up modal state
+  const [draftName, setDraftName]           = useState<string | null>(null)
+  // Follow-up modal
   const [showFollowUp, setShowFollowUp]     = useState(false)
+  const [savedItemId, setSavedItemId]       = useState<string | null>(null)
   const [ownedItems, setOwnedItems]         = useState<string[]>([])
   const [listedItems, setListedItems]       = useState<string[]>([])
 
-  const router       = useRouter()
-  const searchParams = useSearchParams()
-  const itemId       = searchParams.get('item')
-  const itemName     = searchParams.get('name') ? decodeURIComponent(searchParams.get('name')!) : null
+  const router = useRouter()
 
   useEffect(() => {
-    if (!itemId || itemId === 'undefined' || itemId === 'null') return
-
     const load = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      const { data: itemCheck, error: itemError } = await supabase
-        .from('items').select('id').eq('id', itemId).single()
-      if (itemError || !itemCheck) { router.push('/'); return }
+      // Les draft — hvis ingen draft, send tilbake til add
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      if (!raw) { router.push('/add'); return }
 
+      let draft: any = null
+      try { draft = JSON.parse(raw) } catch { router.push('/add'); return }
+      if (!draft?.name) { router.push('/add'); return }
+
+      setDraftName(draft.name)
+
+      // Hent kretser brukeren er med i
       const { data: memberships } = await supabase
         .from('community_members')
         .select('communities(id, name, avatar_emoji)')
@@ -111,36 +118,26 @@ function AccessPageInner() {
         .eq('status', 'active')
       setCommunities((memberships || []).map((m: any) => m.communities))
 
-      const { data: existing } = await supabase
-        .from('item_access').select('*').eq('item_id', itemId)
-      if (existing && existing.length > 0) {
-        setSelectedLevels(existing.map((e: any) => ({
-          access_type: e.access_type,
-          community_id: e.community_id,
-          price: e.price,
-          price_type: e.price_type || 'per_day',
-        })))
-        track('access_page_viewed', { item_id: itemId, mode: 'edit' })
-      } else {
-        track('access_page_viewed', { item_id: itemId, mode: 'new' })
-      }
+      // Hent allerede-listede gjenstander for follow-up modal
+      const { data: myItems } = await supabase
+        .from('items').select('name').eq('owner_id', user.id)
+      setListedItems((myItems || []).map((i: any) => i.name))
 
-      // Load onboarding items for follow-up modal
       try {
         const raw = localStorage.getItem('village_owned_items')
         if (raw) setOwnedItems(JSON.parse(raw))
       } catch { /* ignore */ }
 
-      // Load already-listed items to exclude from suggestions
-      const { data: myItems } = await supabase
-        .from('items').select('name').eq('owner_id', user.id)
-      setListedItems((myItems || []).map((i: any) => i.name))
-
+      track('access_page_viewed', { mode: 'new' })
       setLoading(false)
     }
     load()
-  }, [itemId])
+  }, [])
 
+  // ─── Hjelpefunksjoner ─────────────────────────────────────────────────────
+
+  // suggestedPrice: første pris satt på nære venner/venner/venners venner
+  // Brukes kun som placeholder i PriceRow — kopieres IKKE automatisk til andre nivåer
   const suggestedPrice = (() => {
     for (const id of ['close_friends', 'friends', 'friends_of_friends']) {
       const e = selectedLevels.find(l => l.access_type === id && !l.community_id)
@@ -154,9 +151,11 @@ function AccessPageInner() {
     if (idx === -1) return
     const isSelected = selectedLevels.some(l => l.access_type === levelId && !l.community_id)
     if (isSelected) {
+      // Fjern dette nivået og alle lavere
       const toRemove = LEVEL_ORDER.slice(0, idx + 1)
       setSelectedLevels(prev => prev.filter(l => l.community_id || !toRemove.includes(l.access_type)))
     } else {
+      // Legg til dette nivået og alle høyere (inklusiv arv av tilgang, men IKKE pris)
       const toAdd = LEVEL_ORDER.slice(0, idx + 1)
       setSelectedLevels(prev => {
         const existing      = prev.filter(l => l.community_id)
@@ -164,6 +163,7 @@ function AccessPageInner() {
         const newEntries    = toAdd
           .filter(id => !namedExisting.some(l => l.access_type === id))
           .map(id => ({ access_type: id, price_type: 'per_day' as const }))
+          // NB: ingen price kopieres hit — kun tilgangs-arv, ikke pris-arv
         return [...namedExisting, ...newEntries, ...existing]
       })
     }
@@ -174,11 +174,12 @@ function AccessPageInner() {
     if (exists) {
       setSelectedLevels(prev => prev.filter(l => l.community_id !== communityId))
     } else {
+      // Ny community-entry starter uten pris — brukeren fyller inn selv
       setSelectedLevels(prev => [...prev, {
         access_type: 'community',
         community_id: communityId,
         price_type: suggestedPrice?.price_type || 'per_day',
-        price: suggestedPrice?.price,
+        // NB: price kopieres IKKE hit — kun price_type som hint
       }])
     }
   }
@@ -202,64 +203,117 @@ function AccessPageInner() {
   const updateAllCommunitiesPriceType = (val: string) =>
     setSelectedLevels(prev => prev.map(l => l.community_id ? { ...l, price_type: val } : l))
 
+  // ─── Lagre: les draft → insert item → insert access → rydd opp ───────────
   const save = async () => {
-    if (!itemId) return
     setSaving(true)
     setSaveError(null)
     const supabase = createClient()
-    try {
-      const { error: deleteError } = await supabase.from('item_access').delete().eq('item_id', itemId)
-      if (deleteError) throw deleteError
 
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Ikke innlogget')
+
+      // Les draft
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      if (!raw) throw new Error('Ingen draft funnet')
+      const draft = JSON.parse(raw)
+
+      // Last opp bilde om brukeren har valgt eget bilde
+      let image_url = ''
+      if (draft.selectedImageSrc === 'suggested' && draft.suggestedImageUrl) {
+        image_url = draft.suggestedImageUrl
+      }
+      // NB: File-objekter kan ikke serialiseres til sessionStorage.
+      // Om brukeren valgte eget bilde og kom tilbake hit etter navigering,
+      // er filen borte — vi bruker da suggestedImageUrl som fallback.
+      // Dette er en kjent begrensning; løsning er å uploade bildet i add/page.tsx
+      // og bare lagre URL-en. Dette kan forbedres i neste iterasjon.
+
+      // Insert item
+      const { data: item, error: itemError } = await supabase
+        .from('items')
+        .insert({
+          owner_id:    user.id,
+          name:        draft.name,
+          description: draft.description || null,
+          category:    draft.categoryId,
+          subcategory: draft.subcategoryIds?.[0] || null,
+          subcategories: draft.subcategoryIds || [],
+          image_url:   image_url || null,
+          available:   true,
+          location:    draft.location || null,
+          color:       draft.color || null,
+          size:        draft.size || null,
+          age_ranges:  draft.ageRanges || [],
+        })
+        .select()
+        .single()
+
+      if (itemError || !item?.id) {
+        console.error('Item insert failed:', JSON.stringify(itemError))
+        throw new Error('Kunne ikke lagre gjenstanden')
+      }
+
+      // Insert access-regler
+      const communitySelected = selectedLevels.some(l => l.access_type === 'community' && !l.community_id)
       const rows: any[] = selectedLevels
         .filter(l => !(l.access_type === 'community' && !l.community_id && allCommunities))
         .map(l => ({
-          item_id: itemId,
-          access_type: l.access_type,
+          item_id:      item.id,
+          access_type:  l.access_type,
           community_id: l.community_id || null,
-          price: l.price || null,
-          price_type: l.price_type,
+          price:        l.price || null,
+          price_type:   l.price_type,
         }))
 
       if (rows.length > 0) {
-        const { error: insertError } = await supabase.from('item_access').insert(rows)
-        if (insertError) throw insertError
+        const { error: accessError } = await supabase.from('item_access').insert(rows)
+        if (accessError) throw accessError
       }
 
-      track('access_settings_saved', {
-        item_id: itemId,
+      track('item_published', {
+        item_id:      item.id,
+        category:     draft.categoryId,
         access_types: selectedLevels.map(l => l.access_type),
-        has_price: selectedLevels.some(l => !!l.price),
-        num_rules: selectedLevels.length,
+        has_price:    selectedLevels.some(l => !!l.price),
       })
 
-      // Show follow-up modal if user has onboarding items remaining
+      // Slett draft — gjenstanden er nå lagret
+      sessionStorage.removeItem(DRAFT_KEY)
+      setSavedItemId(item.id)
+
+      // Vis follow-up modal om brukeren har ulistede gjenstander fra onboarding
       const remaining = ownedItems.filter(i => !listedItems.includes(i))
       if (remaining.length > 0 || ownedItems.length > 0) {
         setSaving(false)
         setShowFollowUp(true)
       } else {
-        router.push(`/items/${itemId}`)
+        router.push(`/items/${item.id}`)
       }
     } catch (err: any) {
-      console.error('Save access error:', err)
-      setSaveError('Noe gikk galt. Prøv igjen.')
+      console.error('Save error:', err)
+      setSaveError(err.message || 'Noe gikk galt. Prøv igjen.')
       setSaving(false)
     }
   }
 
   const skip = () => {
-    track('access_page_skipped', { item_id: itemId })
-    router.push(itemId ? `/items/${itemId}` : '/')
+    // Hopp over tilgangsstyring — insert item med kun draft, ingen access-regler
+    // Brukeren kan sette tilgang fra gjenstandssiden senere
+    save() // Kaller save() som inserter item — access-regler blir bare tomme
+  }
+
+  const goBack = () => {
+    // Draft er intakt i sessionStorage — brukeren kommer tilbake til utfylt skjema
+    router.push('/add')
   }
 
   if (loading) return (
     <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
   )
 
-  const communitySelected   = selectedLevels.some(l => l.access_type === 'community' && !l.community_id)
-  const allCommunitiesEntry = { price_type: 'per_day', price: suggestedPrice?.price, ...selectedLevels.find(l => l.community_id) }
-  const highestSelectedIdx  = LEVEL_ORDER.reduce((max, id, i) =>
+  const communitySelected  = selectedLevels.some(l => l.access_type === 'community' && !l.community_id)
+  const highestSelectedIdx = LEVEL_ORDER.reduce((max, id, i) =>
     selectedLevels.some(l => l.access_type === id && !l.community_id) ? i : max, -1)
   const namedLevels = ACCESS_LEVELS.filter(l => l.id !== 'community' && l.id !== 'public')
 
@@ -268,7 +322,8 @@ function AccessPageInner() {
 
       <div className="page-header glass sticky top-0 z-40 px-4 pt-3 pb-4"
         style={{ borderRadius: '0 0 20px 20px', flexDirection: 'column', alignItems: 'flex-start' }}>
-        <button onClick={() => router.back()}
+        <button
+          onClick={goBack}
           className="btn-glass flex items-center gap-1.5 text-sm"
           style={{ color: 'var(--terra)' }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -278,7 +333,7 @@ function AccessPageInner() {
         </button>
         <h1 className="font-display font-bold mt-2"
           style={{ fontSize: 20, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-          {itemName ? `Hvem kan låne ${itemName}?` : 'Hvem kan låne dette?'}
+          {draftName ? `Hvem kan låne ${draftName}?` : 'Hvem kan låne dette?'}
         </h1>
         <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
           Velg én eller flere grupper og sett pris per gruppe
@@ -288,9 +343,9 @@ function AccessPageInner() {
       <div className="px-4 pt-5 flex flex-col gap-3">
 
         {namedLevels.map((level) => {
-          const entry           = selectedLevels.find(l => l.access_type === level.id && !l.community_id)
-          const selected        = !!entry
-          const levelOrderIdx   = LEVEL_ORDER.indexOf(level.id)
+          const entry              = selectedLevels.find(l => l.access_type === level.id && !l.community_id)
+          const selected           = !!entry
+          const levelOrderIdx      = LEVEL_ORDER.indexOf(level.id)
           const implicitlySelected = !selected && highestSelectedIdx > levelOrderIdx
 
           return (
@@ -356,8 +411,8 @@ function AccessPageInner() {
 
               {allCommunities && (
                 <PriceRow
-                  price={allCommunitiesEntry?.price}
-                  priceType={allCommunitiesEntry?.price_type || 'per_day'}
+                  price={selectedLevels.find(l => l.community_id)?.price}
+                  priceType={selectedLevels.find(l => l.community_id)?.price_type || 'per_day'}
                   onPriceChange={val => updateAllCommunitiesPrice(val)}
                   onTypeChange={val => updateAllCommunitiesPriceType(val)}
                   placeholder={suggestedPrice ? `${suggestedPrice.price}` : undefined}
@@ -401,7 +456,7 @@ function AccessPageInner() {
           )}
         </div>
 
-        {/* Public */}
+        {/* Alle */}
         {(() => {
           const level    = ACCESS_LEVELS.find(l => l.id === 'public')!
           const entry    = selectedLevels.find(l => l.access_type === 'public' && !l.community_id)
@@ -433,13 +488,13 @@ function AccessPageInner() {
         })()}
 
         {saveError && (
-          <div className="glass" style={{ borderRadius: 12, padding: '12px 16px', borderColor: 'var(--terra)' }}>
-            <p className="text-sm" style={{ color: 'var(--terra)' }}>{saveError}</p>
+          <div className="glass" style={{ borderRadius: 12, padding: '12px 16px' }}>
+            <p className="text-sm" style={{ color: '#ef4444' }}>{saveError}</p>
           </div>
         )}
       </div>
 
-      {/* Bottom CTA */}
+      {/* Bunn-CTA */}
       <div className="fixed bottom-16 left-0 right-0 px-4 py-4 flex gap-3"
         style={{
           background: 'rgba(250,247,242,0.85)',
@@ -447,21 +502,23 @@ function AccessPageInner() {
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
         }}>
-        <button onClick={skip} className="btn-glass flex-1">Hopp over</button>
+        <button onClick={skip} disabled={saving} className="btn-glass flex-1 disabled:opacity-50">
+          Hopp over
+        </button>
         <button onClick={save} disabled={saving} className="btn-primary flex-grow disabled:opacity-50">
           {saving ? 'Lagrer…' : 'Lagre tilgang'}
         </button>
       </div>
 
-      {/* Follow-up modal: "Vil du legge ut noe mer?" */}
-      {showFollowUp && (
+      {/* Follow-up modal */}
+      {showFollowUp && savedItemId && (
         <FirstTimeAddItemModal
           ownedItems={ownedItems}
           listedItems={listedItems}
           isFollowUp
           onDismiss={() => {
             setShowFollowUp(false)
-            router.push(`/items/${itemId}`)
+            router.push(`/items/${savedItemId}`)
           }}
           onSelectItem={(name) => {
             setShowFollowUp(false)

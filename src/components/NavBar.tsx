@@ -21,10 +21,9 @@ const CommunityIcon = () => (
 )
 
 const AddIcon = () => (
-  <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="14" cy="14" r="13" fill="var(--terra)" stroke="none" />
-    <line x1="14" y1="8" x2="14" y2="20" stroke="white" strokeWidth="2.2" />
-    <line x1="8" y1="14" x2="20" y2="14" stroke="white" strokeWidth="2.2" />
+  <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round">
+    <line x1="11" y1="4" x2="11" y2="18" />
+    <line x1="4" y1="11" x2="18" y2="11" />
   </svg>
 )
 
@@ -89,6 +88,38 @@ export default function NavBar() {
           const active = item.href === '/'
             ? pathname === '/'
             : pathname.startsWith(item.href)
+          if (item.tour === 'add') {
+            return (
+              <button
+                key={item.href}
+                data-tour={item.tour}
+                className="nav-item"
+                onClick={() => router.push(item.href)}
+                aria-label={item.label}
+                style={{ position: 'relative' }}
+              >
+                <span
+                  className="nav-icon"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '52px',
+                    height: '52px',
+                    borderRadius: '50%',
+                    background: 'var(--terra)',
+                    boxShadow: '0 4px 16px rgba(46,98,113,0.35)',
+                    marginTop: '-22px',
+                    transform: 'none',
+                  }}
+                >
+                  <AddIcon />
+                </span>
+                <span className="nav-label">{item.label}</span>
+              </button>
+            )
+          }
+
           return (
             <button
               key={item.href}

@@ -203,10 +203,13 @@ export default function AddPage() {
       setImageAnalyzing(false)
       return
     }
+    console.log('Got URL:', uploadedUrl)  // ← legg til
 
     // Legg til URL i imagePreviews (persistent, ikke blob-URL)
-    setImagePreviews(prev => [uploadedUrl, ...prev.slice(1)].slice(0, 4))
-
+    setImagePreviews(prev => {
+      console.log('Setting previews, prev:', prev, 'new:', uploadedUrl)  // ← legg til
+      return [uploadedUrl!, ...prev.slice(1)].slice(0, 4)
+    })
     const base64 = await toBase64(file)
 
     try {

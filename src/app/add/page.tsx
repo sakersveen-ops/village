@@ -166,12 +166,7 @@ export default function AddPage() {
       
       const ext = file.name.split('.').pop()
       const path = `items/${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-      const { error } = await supabase.storage
-        .from('item-images')
-        .upload(path, file, {
-          contentType: file.type || 'image/jpeg',  // ← dette manglet
-          upsert: false,
-        })
+      const { error } = await supabase.storage.from('item-images').upload(path, file)
       if (error) throw error
       
       const { data } = supabase.storage.from('item-images').getPublicUrl(path)
@@ -203,13 +198,10 @@ export default function AddPage() {
       setImageAnalyzing(false)
       return
     }
-    console.log('Got URL:', uploadedUrl)  // ← legg til
 
     // Legg til URL i imagePreviews (persistent, ikke blob-URL)
-    setImagePreviews(prev => {
-      console.log('Setting previews, prev:', prev, 'new:', uploadedUrl)  // ← legg til
-      return [uploadedUrl!, ...prev.slice(1)].slice(0, 4)
-    })
+    setImagePreviews(prev => [uploadedUrl, ...prev.slice(1)].slice(0, 4))
+
     const base64 = await toBase64(file)
 
     try {
@@ -236,7 +228,6 @@ Hvis det er en enkelt gjenstand:
   "description":"...",
   "category":"baby-og-barn|klar-og-mote|boker|annet",
   "subcategory":"...",
-  "searchQuery":"...",
   "confident":true/false
 }
 
@@ -317,37 +308,6 @@ Returner KUN JSON, ingen annen tekst.` }
         setSubcategoryIds(prev =>
           prev.includes(parsed.subcategory) ? prev : [...prev, parsed.subcategory]
         )
-      }
-
-      // Steg 2: Hent produktbilde
-      if (parsed.searchQuery) {
-        try {
-          const imgRes = await fetch('/api/claude', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: 'claude-sonnet-4-20250514',
-              max_tokens: 200,
-              tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-              messages: [{
-                role: 'user',
-                content: `Find a clean product image URL (preferably white background) for: ${parsed.searchQuery}. Return ONLY a JSON object: {"imageUrl": "https://..."} with a direct image URL ending in .jpg, .jpeg, or .png`
-              }]
-            })
-          })
-          const imgData = await imgRes.json()
-          const imgText = imgData.content?.find((b: any) => b.type === 'text')?.text || ''
-          const imgClean = imgText.replace(/```json|```/g, '').trim()
-          const imgStart = imgClean.indexOf('{')
-          const imgEnd   = imgClean.lastIndexOf('}')
-          if (imgStart !== -1 && imgEnd !== -1) {
-            const imgParsed = JSON.parse(imgClean.slice(imgStart, imgEnd + 1))
-            if (imgParsed.imageUrl) {
-              setSuggestedImageUrl(imgParsed.imageUrl)
-              setSelectedImageSrc('suggested')
-            }
-          }
-        } catch { /* ikke kritisk */ }
       }
 
       setImageAnalyzed(true)

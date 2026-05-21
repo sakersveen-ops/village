@@ -62,6 +62,8 @@ export default function StoryCreator({ onClose, onCreated, existingStory }: Stor
   const [coverText, setCoverText] = useState(existingStory?.cover_text ?? '')
   const [coverUploading, setCoverUploading] = useState(false)
   const [savedStoryId, setSavedStoryId] = useState<string | null>(existingStory?.id ?? null)
+  // Keeps track of the freshly-created story id so publish() never reads stale React state
+  const savedStoryIdRef = useRef<string | null>(existingStory?.id ?? null)
   const coverInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -124,11 +126,12 @@ export default function StoryCreator({ onClose, onCreated, existingStory }: Stor
   }
 
   // ── Save / update story + slides ──
-  const saveStoryAndSlides = async (): Promise<boolean> => {
+  // Returns the story id on success, or null on failure.
+  const saveStoryAndSlides = async (): Promise<string | null> => {
     setStep('saving')
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return false
+    if (!user) return null
 
     if (isEditing && savedStoryId) {
       // Update title
@@ -136,7 +139,7 @@ export default function StoryCreator({ onClose, onCreated, existingStory }: Stor
         .from('item_stories')
         .update({ title: title.trim() })
         .eq('id', savedStoryId)
-      if (titleErr) { setError('Noe gikk galt. Prøv igjen.'); setStep('order'); return false }
+      if (titleErr) { setError('Noe gikk galt. Prøv igjen.'); setStep('order'); return null }
 
       // Replace slides: delete all existing, re-insert in new order
       await supabase.from('item_story_slides').delete().eq('story_id', savedStoryId)
@@ -148,32 +151,39 @@ export default function StoryCreator({ onClose, onCreated, existingStory }: Stor
       }))
       await supabase.from('item_story_slides').insert(slides)
       track('story_edited', { story_id: savedStoryId, items_count: selected.length })
+      return savedStoryId
     } else {
       // Create new
       const { data: story, error: storyErr } = await supabase
         .from('item_stories')
         .insert({ owner_id: user.id, title: title.trim(), type: 'custom', category: null, cover_url: null, cover_text: null })
         .select('id').single()
-      if (storyErr || !story) { setError('Noe gikk galt. Prøv igjen.'); setStep('order'); return false }
+      if (storyErr || !story) { setError('Noe gikk galt. Prøv igjen.'); setStep('order'); return null }
       const slides = selected.map((itemId, idx) => ({
         story_id: story.id, item_id: itemId, sort_order: idx, caption: captions[itemId]?.trim() || null,
       }))
       await supabase.from('item_story_slides').insert(slides)
       setSavedStoryId(story.id)
+      savedStoryIdRef.current = story.id
       track('story_created', { story_id: story.id, items_count: selected.length })
+      return story.id
     }
-    return true
   }
 
   const publish = async () => {
-    if (!savedStoryId) return
+    const storyId = savedStoryIdRef.current
+    if (!storyId) return
+    await publishWithId(storyId)
+  }
+
+  const publishWithId = async (storyId: string) => {
     setStep('saving')
     const supabase = createClient()
     const finalCoverUrl = coverUrl ?? defaultCoverImg
     await supabase.from('item_stories').update({
       cover_url: finalCoverUrl,
       cover_text: coverText.trim() || null,
-    }).eq('id', savedStoryId)
+    }).eq('id', storyId)
     onCreated()
   }
 
@@ -184,8 +194,8 @@ export default function StoryCreator({ onClose, onCreated, existingStory }: Stor
   }
 
   const goToCover = async () => {
-    const ok = await saveStoryAndSlides()
-    if (ok) setStep('cover')
+    const storyId = await saveStoryAndSlides()
+    if (storyId) setStep('cover')
   }
 
   const handleBack = () => {

@@ -381,6 +381,15 @@ function RequestStoryViewer({
   )
 }
 
+const LOADING_MESSAGES = [
+  'Spør naboene pent...',
+  'Teller sykler i garasjen...',
+  'Banker på dørene i oppgangen...',
+  'Rydder kjelleren for deg...',
+  'Sjekker om noen har den...',
+  'Henter tingene fra boden...',
+]
+
 export default function FeedPage() {
   const [user, setUser]               = useState<any>(null)
   const [profile, setProfile]         = useState<any>(null)
@@ -390,9 +399,20 @@ export default function FeedPage() {
   const [seenIds, setSeenIds]         = useState<Set<string>>(new Set())
   const [activeGroup, setActiveGroup] = useState<RequestGroup | null>(null)
   const [loading, setLoading]         = useState(true)
+  const [loadingMsg, setLoadingMsg]   = useState(LOADING_MESSAGES[0])
   const [activeCategory, setActiveCategory] = useState('all')
   const [showAllItems, setShowAllItems] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    if (!loading) return
+    let i = 0
+    const interval = setInterval(() => {
+      i = (i + 1) % LOADING_MESSAGES.length
+      setLoadingMsg(LOADING_MESSAGES[i])
+    }, 1800)
+    return () => clearInterval(interval)
+  }, [loading])
 
   useEffect(() => {
     const load = async () => {
@@ -565,7 +585,7 @@ export default function FeedPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <p className="text-[var(--terra-mid)] text-sm">Laster feed…</p>
+        <p className="text-[var(--terra-mid)] text-sm">{loadingMsg}</p>
       </div>
     )
   }

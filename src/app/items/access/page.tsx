@@ -260,7 +260,6 @@ function AccessPageInner() {
           name:        draft.name,
           description: draft.description || null,
           category:    draft.categoryId,
-          subcategory: draft.subcategoryIds?.[0] || null,
           subcategories: draft.subcategoryIds || [],
           image_url:   image_url || null,
           available:   true,

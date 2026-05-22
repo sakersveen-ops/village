@@ -542,9 +542,17 @@ function AccessPageInner() {
             setShowFollowUp(false)
             router.push(`/items/${savedItemId}`)
           }}
-          onSelectItem={(name) => {
+          onSelectItems={(items) => {
             setShowFollowUp(false)
-            router.push(`/add?name=${encodeURIComponent(name)}`)
+            // Lagre resterende i kø og naviger til første
+            const [first, ...rest] = items
+            if (rest.length > 0) {
+              sessionStorage.setItem('village_add_queue', JSON.stringify(rest))
+            } else {
+              sessionStorage.removeItem('village_add_queue')
+            }
+            if (first) router.push(`/add?name=${encodeURIComponent(first.name)}&description=${encodeURIComponent(first.description || '')}`)
+            else router.push(`/items/${savedItemId}`)
           }}
         />
       )}

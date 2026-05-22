@@ -149,10 +149,13 @@ export default function AddPage() {
         } catch { /* ugyldig draft – ignorer */ }
       }
 
-      // Ingen draft: last inn profil-location som default
+      // Ingen draft: last inn adresse fra profil som default hentested
       const { data: prof } = await supabase
-        .from('profiles').select('location').eq('id', user.id).single()
-      if (prof?.location) setLocation(prof.location)
+        .from('profiles').select('address_street, address_zip, address_city').eq('id', user.id).single()
+      if (prof) {
+        const parts = [prof.address_street, prof.address_zip, prof.address_city].filter(Boolean)
+        if (parts.length > 0) setLocation(parts.join(', '))
+      }
     }
     load()
   }, [])

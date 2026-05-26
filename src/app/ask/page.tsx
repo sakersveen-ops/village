@@ -86,7 +86,7 @@ function AskPageInnerComponent() {
       const { data: fof } = await supabase
         .from('friendships').select('user_b').in('user_a', friendIds)
       const fofIds = (fof || []).map((f: any) => f.user_b)
-        .filter(id => id !== user.id && !friendIds.includes(id))
+        .filter((id: string) => id !== user.id && !friendIds.includes(id))
       recipientIds = [...recipientIds, ...fofIds]
     }
 

@@ -120,7 +120,7 @@ export default function AddPage() {
     const load = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) { router.push('/login?next=/add'); return }
 
       const raw = sessionStorage.getItem(DRAFT_KEY)
       if (raw) {

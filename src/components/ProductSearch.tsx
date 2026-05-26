@@ -3,6 +3,9 @@
 import { useState, useRef, useCallback } from 'react'
 import type { ProductResult } from '@/app/api/product-search/route'
 
+// Set to true once @zxing/browser camera scan is wired up
+const BARCODE_SCAN_ENABLED = false
+
 interface Props {
   onSelect: (product: ProductResult) => void
 }
@@ -39,11 +42,10 @@ export default function ProductSearch({ onSelect }: Props) {
   const handleInput = (val: string) => {
     setQuery(val)
     if (timerRef.current) clearTimeout(timerRef.current)
-    // Litt lengre debounce siden Claude-søk tar noe tid
     timerRef.current = setTimeout(() => search(val), 700)
   }
 
-  // TODO: bytt ut simulering med ekte @zxing/browser kamera-decode
+  // TODO: wire up @zxing/browser camera decode, then set BARCODE_SCAN_ENABLED = true
   // const barcode = await scanBarcodeWithCamera()
   // const res = await fetch(`/api/product-search?barcode=${barcode}`)
   const handleScan = async () => {
@@ -69,9 +71,12 @@ export default function ProductSearch({ onSelect }: Props) {
 
   return (
     <div>
-      {/* To likeverdige innganger */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
-
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: BARCODE_SCAN_ENABLED ? '1fr 1fr' : '1fr',
+        gap: '10px',
+        marginBottom: '16px',
+      }}>
         <label style={{
           display: 'flex', flexDirection: 'column', gap: '6px',
           background: 'rgba(255,248,243,0.92)', border: '1.5px solid rgba(196,103,58,0.2)',
@@ -94,31 +99,32 @@ export default function ProductSearch({ onSelect }: Props) {
           </div>
         </label>
 
-        <button
-          onClick={handleScan}
-          disabled={scanLoading}
-          style={{
-            display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-            background: scanLoading ? 'rgba(196,103,58,0.08)' : 'rgba(255,248,243,0.92)',
-            border: '1.5px solid rgba(196,103,58,0.2)',
-            borderRadius: '14px', padding: '12px 14px',
-            cursor: scanLoading ? 'default' : 'pointer',
-            textAlign: 'left', transition: 'border-color 0.15s, background 0.15s',
-          }}
-          onMouseEnter={e => { if (!scanLoading) (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(196,103,58,0.5)' }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(196,103,58,0.2)' }}
-        >
-          <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--terra-mid)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Scan</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-            {scanLoading ? <Spinner /> : <CameraIcon />}
-            <span style={{ fontSize: '14px', color: 'var(--terra-dark)' }}>
-              {scanLoading ? 'Leser...' : 'Strekkode'}
-            </span>
-          </div>
-        </button>
+        {BARCODE_SCAN_ENABLED && (
+          <button
+            onClick={handleScan}
+            disabled={scanLoading}
+            style={{
+              display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+              background: scanLoading ? 'rgba(196,103,58,0.08)' : 'rgba(255,248,243,0.92)',
+              border: '1.5px solid rgba(196,103,58,0.2)',
+              borderRadius: '14px', padding: '12px 14px',
+              cursor: scanLoading ? 'default' : 'pointer',
+              textAlign: 'left', transition: 'border-color 0.15s, background 0.15s',
+            }}
+            onMouseEnter={e => { if (!scanLoading) (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(196,103,58,0.5)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(196,103,58,0.2)' }}
+          >
+            <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--terra-mid)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Scan</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+              {scanLoading ? <Spinner /> : <CameraIcon />}
+              <span style={{ fontSize: '14px', color: 'var(--terra-dark)' }}>
+                {scanLoading ? 'Leser...' : 'Strekkode'}
+              </span>
+            </div>
+          </button>
+        )}
       </div>
 
-      {/* Loading — viser hint om at dette tar litt lenger */}
       {loading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px 0' }}>
           <Spinner />
@@ -128,7 +134,6 @@ export default function ProductSearch({ onSelect }: Props) {
         </div>
       )}
 
-      {/* Feilmelding */}
       {error && !loading && (
         <p style={{
           fontSize: '13px', color: '#A83200',
@@ -139,7 +144,6 @@ export default function ProductSearch({ onSelect }: Props) {
         </p>
       )}
 
-      {/* Resultater */}
       {!loading && results.length > 0 && (
         <div>
           <p style={{ fontSize: '11px', color: 'var(--terra-mid)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '10px' }}>

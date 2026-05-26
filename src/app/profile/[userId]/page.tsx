@@ -41,6 +41,8 @@ export default function UserProfilePage() {
   const [mutualFriends, setMutualFriends] = useState<any[]>([])
   const [itemSearch, setItemSearch] = useState('')
   const [itemCategory, setItemCategory] = useState('')
+  const [activeLoansCount, setActiveLoansCount] = useState(0)
+  const [friendsCount, setFriendsCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const { userId } = useParams()
@@ -134,6 +136,20 @@ export default function UserProfilePage() {
           .eq('user_a', userId as string)
           .limit(12)
         setFriends((theirFriendsFull || []).map((f: any) => f.profiles))
+
+        // Stats: totalt antall venner + aktive lån
+        const { count: totalFriends } = await supabase
+          .from('friendships').select('user_b', { count: 'exact', head: true })
+          .eq('user_a', userId as string)
+        setFriendsCount(totalFriends ?? 0)
+
+        const { count: lendCount } = await supabase
+          .from('loans').select('id', { count: 'exact', head: true })
+          .eq('owner_id', userId as string).in('status', ['pending', 'active', 'change_proposed'])
+        const { count: borrowCount } = await supabase
+          .from('loans').select('id', { count: 'exact', head: true })
+          .eq('borrower_id', userId as string).in('status', ['pending', 'active', 'change_proposed'])
+        setActiveLoansCount((lendCount ?? 0) + (borrowCount ?? 0))
       }
 
       setLoading(false)
@@ -340,6 +356,28 @@ export default function UserProfilePage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Stats-bokser */}
+      <div className="flex gap-2 px-4 pt-4 pb-2" style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }}>
+        <div className="flex-1">
+          <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16 }}>
+            <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{items.length}</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>gjenstander</p>
+          </div>
+        </div>
+        <div className="flex-1">
+          <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16 }}>
+            <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{activeLoansCount}</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>avtaler</p>
+          </div>
+        </div>
+        <div className="flex-1">
+          <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16 }}>
+            <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{friendsCount}</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>venner</p>
+          </div>
+        </div>
       </div>
 
       {/* Stories */}

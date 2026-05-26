@@ -174,44 +174,20 @@ function AccessPageInner() {
     if (exists) {
       setSelectedLevels(prev => prev.filter(l => l.community_id !== communityId))
     } else {
-      // Ny community-entry: foreslå pris fra suggestedPrice om den finnes
+      // Ny community-entry starter helt tom — ingen pris, standard price_type
       setSelectedLevels(prev => [...prev, {
         access_type: 'community',
         community_id: communityId,
-        price_type: suggestedPrice?.price_type || 'per_day',
-        price: suggestedPrice?.price,
+        price_type: 'per_day',
       }])
     }
   }
 
   const updatePrice = (levelId: string, communityId: string | undefined, val: string) => {
-    const newPrice = val ? parseInt(val) : undefined
-    setSelectedLevels(prev => {
-      const updated = prev.map(l => {
-        const match = communityId ? l.community_id === communityId : l.access_type === levelId && !l.community_id
-        return match ? { ...l, price: newPrice } : l
-      })
-      // Foreslå pris nedover til alle valgte nivåer og kretser som ikke allerede har pris
-      if (!communityId && newPrice) {
-        const levelIdx = LEVEL_ORDER.indexOf(levelId)
-        return updated.map(l => {
-          // Kun spre til lavere nivåer (høyere indeks = bredere tilgang) uten pris
-          if (!l.community_id) {
-            const lIdx = LEVEL_ORDER.indexOf(l.access_type)
-            if (lIdx > levelIdx && !l.price) return { ...l, price: newPrice, price_type: updated.find(u => u.access_type === levelId && !u.community_id)?.price_type || l.price_type }
-          } else {
-            // Kretser: foreslå om de ikke har pris
-            if (!l.price) return { ...l, price: newPrice }
-          }
-          return l
-        })
-      }
-      // Pris satt på krets: spre til andre kretser uten pris
-      if (communityId && newPrice) {
-        return updated.map(l => l.community_id && !l.price ? { ...l, price: newPrice } : l)
-      }
-      return updated
-    })
+    setSelectedLevels(prev => prev.map(l => {
+      const match = communityId ? l.community_id === communityId : l.access_type === levelId && !l.community_id
+      return match ? { ...l, price: val ? parseInt(val) : undefined } : l
+    }))
   }
 
   const updatePriceType = (levelId: string, communityId: string | undefined, val: string) => {
@@ -241,16 +217,14 @@ function AccessPageInner() {
       if (!raw) throw new Error('Ingen draft funnet')
       const draft = JSON.parse(raw)
 
-      // Last opp bilde om brukeren har valgt eget bilde
-      let image_url = ''
+      // Bestem image_url: bruk eget opplastet bilde (allerede i Storage) eller foreslått bilde
+      let image_url: string | null = null
       if (draft.selectedImageSrc === 'suggested' && draft.suggestedImageUrl) {
         image_url = draft.suggestedImageUrl
+      } else if (draft.imagePreviews?.[0]) {
+        // imagePreviews[0] er allerede en Storage URL — bruk direkte
+        image_url = draft.imagePreviews[0]
       }
-      // NB: File-objekter kan ikke serialiseres til sessionStorage.
-      // Om brukeren valgte eget bilde og kom tilbake hit etter navigering,
-      // er filen borte — vi bruker da suggestedImageUrl som fallback.
-      // Dette er en kjent begrensning; løsning er å uploade bildet i add/page.tsx
-      // og bare lagre URL-en. Dette kan forbedres i neste iterasjon.
 
       // Insert item
       const { data: item, error: itemError } = await supabase
@@ -260,6 +234,7 @@ function AccessPageInner() {
           name:        draft.name,
           description: draft.description || null,
           category:    draft.categoryId,
+          subcategory: draft.subcategoryIds?.[0] || null,
           subcategories: draft.subcategoryIds || [],
           image_url:   image_url || null,
           available:   true,
@@ -326,8 +301,8 @@ function AccessPageInner() {
   }
 
   const goBack = () => {
-    // Draft er intakt i sessionStorage — router.back() bevarer history og aktiverer iOS swipe-back
-    router.back()
+    // Draft er intakt i sessionStorage — brukeren kommer tilbake til utfylt skjema
+    router.push('/add')
   }
 
   if (loading) return (
@@ -342,22 +317,22 @@ function AccessPageInner() {
   return (
     <div className="max-w-lg mx-auto pb-48">
 
-      <div className="glass sticky top-0 z-40 px-4 pb-4"
-        style={{ borderRadius: '0 0 20px 20px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+      <div className="page-header glass sticky top-0 z-40 px-4 pt-3 pb-4"
+        style={{ borderRadius: '0 0 20px 20px', flexDirection: 'column', alignItems: 'flex-start' }}>
         <button
           onClick={goBack}
-          className="btn-glass flex items-center gap-1.5 text-sm mt-3"
+          className="btn-glass flex items-center gap-1.5 text-sm"
           style={{ color: 'var(--terra)' }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 5l-7 7 7 7" />
           </svg>
           Tilbake
         </button>
-        <h1 className="font-display font-bold mt-1"
+        <h1 className="font-display font-bold mt-2"
           style={{ fontSize: 20, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
           {draftName ? `Hvem kan låne ${draftName}?` : 'Hvem kan låne dette?'}
         </h1>
-        <p className="text-sm mt-0.5" style={{ color: 'var(--terra-mid)' }}>
+        <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
           Velg én eller flere grupper og sett pris per gruppe
         </p>
       </div>
@@ -542,17 +517,9 @@ function AccessPageInner() {
             setShowFollowUp(false)
             router.push(`/items/${savedItemId}`)
           }}
-          onSelectItems={(items) => {
+          onSelectItem={(name) => {
             setShowFollowUp(false)
-            // Lagre resterende i kø og naviger til første
-            const [first, ...rest] = items
-            if (rest.length > 0) {
-              sessionStorage.setItem('village_add_queue', JSON.stringify(rest))
-            } else {
-              sessionStorage.removeItem('village_add_queue')
-            }
-            if (first) router.push(`/add?name=${encodeURIComponent(first.name)}&description=${encodeURIComponent(first.description || '')}`)
-            else router.push(`/items/${savedItemId}`)
+            router.push(`/add?name=${encodeURIComponent(name)}`)
           }}
         />
       )}

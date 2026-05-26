@@ -94,7 +94,7 @@ function AskPageInnerComponent() {
     const { data: relevantOwners } = await supabase
       .from('items').select('owner_id')
       .in('owner_id', uniqueRecipients).eq('category', category)
-    const relevantIds = [...new Set((relevantOwners || []).map((i: any) => i.owner_id))]
+    const relevantIds = [...new Set((relevantOwners || []).map((i: any) => i.owner_id as string))]
 
     const senderName = profile?.name || user?.email?.split('@')[0] || 'Noen'
     const catLabel   = CATEGORIES.find(c => c.id === category)?.label ?? category

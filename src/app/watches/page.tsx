@@ -77,7 +77,7 @@ export default function WatchesPage() {
   const formatDate = (d: string) => new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
 
   const watchLabel = (w: any) => {
-    const parts = []
+    const parts: string[] = []
     if (w.category) {
       const cat = CATEGORIES.find(c => c.id === w.category)
       if (cat) parts.push(`${cat.emoji} ${cat.label}`)

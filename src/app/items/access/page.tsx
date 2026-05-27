@@ -2,7 +2,7 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ItemCalendar from '@/components/ItemCalendar'
 import LoanThread from '@/components/LoanThread'
@@ -39,7 +39,7 @@ export default function ItemPage() {
   const [accessRules, setAccessRules]       = useState<any[]>([])
   const [loading, setLoading]               = useState(true)
   const router = useRouter()
-  const { id } = useParams()
+  const id = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('item') : null
 
   useEffect(() => {
     const load = async () => {
@@ -93,7 +93,7 @@ export default function ItemPage() {
       setLoading(false)
     }
     load()
-  }, [id])
+  }, [])
 
   // Owner blocking: first tap sets range start, second tap blocks the full range
   const toggleBlock = async (dateStr: string) => {

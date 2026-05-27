@@ -65,7 +65,7 @@ export default function AddPage() {
   const multiFileInputRef = useRef<HTMLInputElement>(null)
 
   // ── Core state ──
-  const [categoryId, setCategoryId]         = useState('hjem-og-hage')
+  const [categoryId, setCategoryId]         = useState('baby-og-barn')
   const [subcategoryIds, setSubcategoryIds] = useState<string[]>([])
   const [name, setName]                     = useState('')
   const [description, setDescription]       = useState('')
@@ -122,6 +122,13 @@ export default function AddPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login?next=/add'); return }
 
+      // Hent alltid adresse fra profil — brukes som fallback hvis draft ikke har hentested
+      const { data: prof } = await supabase
+        .from('profiles').select('address_street, address_zip, address_city').eq('id', user.id).single()
+      const profileLocation = prof
+        ? [prof.address_street, prof.address_zip, prof.address_city].filter(Boolean).join(', ')
+        : ''
+
       const raw = sessionStorage.getItem(DRAFT_KEY)
       if (raw) {
         try {
@@ -132,7 +139,9 @@ export default function AddPage() {
           if (d.ageRanges)        setAgeRanges(d.ageRanges)
           if (d.name)             setName(d.name)
           if (d.description)      setDescription(d.description)
-          if (d.location)         setLocation(d.location)
+          // Bruk draft-location hvis satt, ellers fall tilbake til profil-adresse
+          if (d.location)           setLocation(d.location)
+          else if (profileLocation) setLocation(profileLocation)
           if (d.gender)           setGender(d.gender as Gender)
           if (d.size)             setSize(d.size)
           if (d.color)            setColor(d.color)
@@ -149,13 +158,8 @@ export default function AddPage() {
         } catch { /* ugyldig draft – ignorer */ }
       }
 
-      // Ingen draft: last inn adresse fra profil som default hentested
-      const { data: prof } = await supabase
-        .from('profiles').select('address_street, address_zip, address_city').eq('id', user.id).single()
-      if (prof) {
-        const parts = [prof.address_street, prof.address_zip, prof.address_city].filter(Boolean)
-        if (parts.length > 0) setLocation(parts.join(', '))
-      }
+      // Ingen gyldig draft: sett profil-adresse som default hentested
+      if (profileLocation) setLocation(profileLocation)
     }
     load()
   }, [])

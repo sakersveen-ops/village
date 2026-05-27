@@ -268,11 +268,9 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-lg mx-auto">
-      <div className="sticky top-0 z-40 page-header glass" style={{ borderRadius: '0 0 20px 20px' }}>
-        <button onClick={() => router.back()} className="text-sm mb-2 block" style={{ color: 'var(--terra)' }}>← Tilbake</button>
+      <button onClick={() => router.back()} className="text-sm mb-2 block" style={{ color: 'var(--terra)' }}>← Tilbake</button>
         
-      </div>
-
+      
       <div className="px-4 pt-5 flex flex-col gap-6">
 
         {/* ── Profil ── */}

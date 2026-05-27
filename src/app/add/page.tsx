@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import Script from 'next/script'
 import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   CATEGORIES, SIZES_BY_GENDER, AGE_GROUPS, COLORS,
   getCategoryById, type Gender,
 } from '@/lib/categories'
+import ImportModal, { type ImportDraft, type ParsedItem } from '@/components/ImportModal'
+import { track, Events } from '@/lib/track'
 
 // ─── Nøkkel for draft i sessionStorage ───────────────────────────────────────
 const DRAFT_KEY = 'village_add_draft'
@@ -99,6 +101,10 @@ export default function AddPage() {
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
+  // ── Import modal ──
+  const [importDraft, setImportDraft] = useState<ImportDraft | null>(null)
+  const searchParams = useSearchParams()
+
   // ── URL analyse ──
   const [urlInput, setUrlInput]     = useState('')
   const [urlLoading, setUrlLoading] = useState(false)
@@ -162,6 +168,28 @@ export default function AddPage() {
 
       // Ingen gyldig draft: sett profil-adresse som default hentested
       if (profileLocation) setLocation(profileLocation)
+
+      // ── Import draft fra email-import (leggut@villageapp.no) ──
+      const importId = new URLSearchParams(window.location.search).get('import')
+      if (importId) {
+        const { data: draft } = await supabase
+          .from('item_import_drafts')
+          .select('id, parsed_items, store, order_id, source')
+          .eq('id', importId)
+          .eq('user_id', user.id)
+          .is('used_at', null)
+          .single()
+        if (draft?.parsed_items?.length) {
+          setImportDraft({
+            id: draft.id,
+            parsed_items: draft.parsed_items,
+            store: draft.store,
+            order_id: draft.order_id,
+            source: draft.source,
+          })
+          track(Events.RECEIPT_IMPORT_STARTED, { source: draft.source })
+        }
+      }
     }
     load()
   }, [])
@@ -381,6 +409,48 @@ Returner KUN JSON, ingen annen tekst.` }
     router.push('/')
   }
 
+
+  // ─── Import: publiser valgte items fra ordreimport ─────────────────────────
+  const handleImportPublish = async (items: ParsedItem[]) => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user || !items.length) return
+
+    for (const item of items) {
+      await supabase.from('items').insert({
+        owner_id: user.id,
+        name: item.name,
+        description: item.description,
+        category: item.category,
+        subcategories: item.subcategory ? [item.subcategory] : [],
+        color: item.color || null,
+        size: item.size || null,
+        age_ranges: item.age_range ? [item.age_range] : [],
+        price: item.price_nok || null,
+        available: true,
+        location: location || null,
+      })
+    }
+
+    if (importDraft?.id) {
+      await supabase
+        .from('item_import_drafts')
+        .update({ used_at: new Date().toISOString() })
+        .eq('id', importDraft.id)
+    }
+
+    track(Events.RECEIPT_IMPORT_PUBLISHED, {
+      source: importDraft?.source,
+      item_count: items.length,
+      store: importDraft?.store ?? undefined,
+      categories: [...new Set(items.map(i => i.category))],
+    })
+
+    setImportDraft(null)
+    sessionStorage.removeItem(DRAFT_KEY)
+    router.push('/')
+  }
+
   // ─── URL-analyse ──────────────────────────────────────────────────────────
   const analyzeUrl = async () => {
     if (!urlInput.trim()) return
@@ -515,6 +585,11 @@ Returner KUN JSON, ingen annen tekst.` }
   // ─── HOVED-SKJEMA ─────────────────────────────────────────────────────────
   return (
     <div className="max-w-lg mx-auto pb-24">
+      <ImportModal
+        draft={importDraft}
+        onClose={() => setImportDraft(null)}
+        onPublish={handleImportPublish}
+      />
       <Script
         src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
         strategy="lazyOnload"

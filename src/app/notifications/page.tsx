@@ -110,6 +110,13 @@ const NotifIcon = ({ type }: { type: string }) => {
       <rect x="8.5" y="13" width="5" height="7" rx="0.75" stroke="var(--terra)" strokeWidth="1.3"/>
     </svg>
   )
+  if (type === 'import_ready') return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <rect x="3" y="4" width="12" height="15" rx="1.5" stroke="var(--terra)" strokeWidth="1.5"/>
+      <path d="M7 8h6M7 11h4" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M17 14l-3 3-1.5-1.5" stroke="var(--terra-green)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
   if (type === 'loan_start_owner' || type === 'loan_start_borrower') return (
     <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
       <rect x="3" y="6" width="13" height="4" rx="1.5" fill="var(--terra)"/>
@@ -423,7 +430,8 @@ export default function NotificationsPage() {
 
     // Regular info card — tappable, auto-read on scroll
     const href =
-      ['connection_accepted', 'connection_disconnected'].includes(n.type) ? '/settings'
+      n.type === 'import_ready' ? (n.action_url ?? '/add')
+      : ['connection_accepted', 'connection_disconnected'].includes(n.type) ? '/settings'
       : n.loans?.community_id ? `/community/${n.loans.community_id}`
       : n.loans?.item_id ? `/items/${n.loans.item_id}`
       : '#'

@@ -78,23 +78,23 @@ function verifySignature(rawBody: string, headers: Headers): boolean {
 
 // Fetch full email body from Resend received emails API
 async function fetchEmailBody(emailId: string): Promise<{ text: string | null; html: string | null }> {
-  const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
+  const url = `https://api.resend.com/emails/receiving/${emailId}`
+  const res = await fetch(url, {
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
   })
-  if (!res.ok) return { text: null, html: null }
   const data = await res.json()
+  console.log('[fetchEmailBody]', url, res.status, JSON.stringify(data).slice(0, 300))
+  if (!res.ok) return { text: null, html: null }
   return { text: data.text ?? null, html: data.html ?? null }
 }
 
 // Fetch first PDF attachment and return as base64
 async function fetchPdfAttachment(emailId: string, attachmentId: string): Promise<string | null> {
-  // Get download_url from attachments API
-  const metaRes = await fetch(
-    `https://api.resend.com/emails/receiving/${emailId}/attachments/${attachmentId}`,
-    { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` } }
-  )
-  if (!metaRes.ok) return null
+  const url = `https://api.resend.com/emails/receiving/${emailId}/attachments/${attachmentId}`
+  const metaRes = await fetch(url, { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` } })
   const meta = await metaRes.json()
+  console.log('[fetchPdfAttachment]', url, metaRes.status, JSON.stringify(meta).slice(0, 300))
+  if (!metaRes.ok) return null
   if (!meta.download_url) return null
 
   // Download the actual PDF bytes

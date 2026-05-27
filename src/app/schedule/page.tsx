@@ -22,7 +22,7 @@ type Loan = {
   counterpart: { name: string | null; email: string | null; avatar_url: string | null }
 }
 
-type GanttRow = {
+type TimelineRow = {
   item_id: string
   item_name: string
   item_image: string | null
@@ -32,13 +32,15 @@ type GanttRow = {
 }
 
 type PopupState = { loan: Loan; anchorRect: DOMRect } | null
-type ViewMode = 'gantt' | 'liste'
+type ViewMode = 'tidslinje' | 'liste'
+type ListGroup = 'gjenstand' | 'utlansdato' | 'person'
+type LoanFilter = 'pagaende' | 'historikk'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const PAST_DAYS   = 3
+const PAST_DAYS   = 60
 const FUTURE_DAYS = 27
 const TOTAL_DAYS  = PAST_DAYS + FUTURE_DAYS + 1
 const COL_WIDTH   = 34
@@ -160,12 +162,24 @@ export default function SchedulePage() {
   const [myLoans, setMyLoans]       = useState<Loan[]>([])
   const [theirLoans, setTheirLoans] = useState<Loan[]>([])
   const [loading, setLoading]       = useState(true)
-  const [tab, setTab]               = useState<'mine' | 'andres'>('andres')
-  const [viewMode, setViewMode]     = useState<ViewMode>('gantt')
+  const [tab, setTab]               = useState<'mine_utlan' | 'mine_lan'>('mine_utlan')
+  const [viewMode, setViewMode]     = useState<ViewMode>(() => {
+    if (typeof window !== 'undefined') {
+      return (sessionStorage.getItem('schedule_view') as ViewMode) || 'tidslinje'
+    }
+    return 'tidslinje'
+  })
+  const [listGroup, setListGroup]   = useState<ListGroup>('utlansdato')
+  const [loanFilter, setLoanFilter] = useState<LoanFilter>('pagaende')
   const [popup, setPopup]           = useState<PopupState>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+
+  function handleSetViewMode(m: ViewMode) {
+    setViewMode(m)
+    if (typeof window !== 'undefined') sessionStorage.setItem('schedule_view', m)
+  }
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const startDay = addDays(today, -PAST_DAYS)
@@ -179,21 +193,23 @@ export default function SchedulePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      const statuses = ['pending', 'confirmed', 'active', 'change_proposed', 'pending_return', 'overdue', 'returned']
+      const activeStatuses = ['pending', 'confirmed', 'active', 'change_proposed', 'pending_return', 'overdue']
+      const historyStatuses = ['returned', 'declined']
+      const allStatuses = [...activeStatuses, ...historyStatuses]
 
       const { data: lendRows } = await supabase
         .from('loans')
         .select(`*, items(name,image_url,category),
           owner_profile:profiles!loans_owner_id_fkey(name),
           counterpart:profiles!loans_borrower_id_fkey(name,email,avatar_url)`)
-        .eq('owner_id', user.id).in('status', statuses).order('start_date')
+        .eq('owner_id', user.id).in('status', allStatuses).order('start_date')
 
       const { data: borrowRows } = await supabase
         .from('loans')
         .select(`*, items(name,image_url,category),
           owner_profile:profiles!loans_owner_id_fkey(name),
           counterpart:profiles!loans_owner_id_fkey(name,email,avatar_url)`)
-        .eq('borrower_id', user.id).in('status', statuses).order('start_date')
+        .eq('borrower_id', user.id).in('status', allStatuses).order('start_date')
 
       const norm = (rows: any[], role: 'lender' | 'borrower'): Loan[] =>
         (rows || []).map(r => ({ ...r, role }))
@@ -202,7 +218,7 @@ export default function SchedulePage() {
       setTheirLoans(norm(borrowRows || [], 'borrower'))
       setLoading(false)
       setTimeout(() => {
-        if (scrollRef.current) scrollRef.current.scrollLeft = PAST_DAYS * COL_WIDTH - 8
+        if (scrollRef.current) scrollRef.current.scrollLeft = (PAST_DAYS - 2) * COL_WIDTH
       }, 80)
     }
     load()
@@ -250,8 +266,8 @@ export default function SchedulePage() {
 
   // ── Build Gantt rows ──────────────────────────────────────────────────────
 
-  function buildRows(loans: Loan[]): GanttRow[] {
-    const map = new Map<string, GanttRow>()
+  function buildRows(loans: Loan[]): TimelineRow[] {
+    const map = new Map<string, TimelineRow>()
     for (const l of loans) {
       if (!map.has(l.item_id)) map.set(l.item_id, {
         item_id: l.item_id, item_name: l.items?.name ?? '',
@@ -277,15 +293,44 @@ export default function SchedulePage() {
     setPopup({ loan, anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect() })
   }
 
-  const currentLoans = tab === 'mine' ? myLoans : theirLoans
-  const rows = buildRows(currentLoans)
+  const activeStatuses = ['pending', 'confirmed', 'active', 'change_proposed', 'pending_return', 'overdue']
+
+  const currentLoans = tab === 'mine_utlan' ? myLoans : theirLoans
+
+  // For timeline: always show active/pending (no history filter here)
+  const timelineLoans = currentLoans.filter(l => activeStatuses.includes(l.status))
+  const rows = buildRows(timelineLoans)
   const months = monthGroups(days)
 
-  const listLoans = [...currentLoans].sort((a, b) => {
-    const so = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)
-    if (so !== 0) return so
-    return (a.start_date || '').localeCompare(b.start_date || '')
-  })
+  // For list: apply filter
+  const baseListLoans = loanFilter === 'pagaende'
+    ? currentLoans.filter(l => activeStatuses.includes(l.status))
+    : currentLoans.filter(l => ['returned', 'declined'].includes(l.status))
+
+  function sortLoans(loans: Loan[]): Loan[] {
+    return [...loans].sort((a, b) => {
+      if (listGroup === 'utlansdato') {
+        const so = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9)
+        if (so !== 0) return so
+        return (a.start_date || '').localeCompare(b.start_date || '')
+      }
+      if (listGroup === 'gjenstand') {
+        const nameA = (a.items?.name ?? '').toLowerCase()
+        const nameB = (b.items?.name ?? '').toLowerCase()
+        const nc = nameA.localeCompare(nameB, 'no')
+        if (nc !== 0) return nc
+        return (a.start_date || '').localeCompare(b.start_date || '')
+      }
+      // person
+      const personA = (a.counterpart?.name ?? a.counterpart?.email ?? '').toLowerCase()
+      const personB = (b.counterpart?.name ?? b.counterpart?.email ?? '').toLowerCase()
+      const pc = personA.localeCompare(personB, 'no')
+      if (pc !== 0) return pc
+      return (a.start_date || '').localeCompare(b.start_date || '')
+    })
+  }
+
+  const listLoans = sortLoans(baseListLoans)
 
   if (loading) return (
     <div style={{ padding: 40, textAlign: 'center', color: 'var(--terra-mid)', fontSize: 14 }}>Laster…</div>
@@ -415,7 +460,7 @@ export default function SchedulePage() {
             {loan.items?.name}
           </p>
           <p style={{ fontSize: 11.5, color: 'var(--terra-mid)', margin: '0 0 4px' }}>
-            {loan.role === 'lender' ? `Lånt ut til ${cpName}` : ownerName ? `${possessive(ownerName)} gjenstand` : 'Andres gjenstand'}
+          {loan.role === 'lender' ? `Lånt ut til ${cpName}` : ownerName ? `${possessive(ownerName)} gjenstand` : 'Andres gjenstand'}
           </p>
           <p style={{ fontSize: 11, color: 'var(--terra-mid)', margin: 0 }}>
             {fmtShort(loan.start_date)} → {fmtShort(loan.due_date)}
@@ -442,34 +487,83 @@ export default function SchedulePage() {
       <header className="page-header glass" style={{ borderRadius: '0 0 20px 20px', position: 'sticky', top: 0, zIndex: 40 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ display: 'flex', gap: 6 }}>
-            {(['andres', 'mine'] as const).map(t => (
+            {(['mine_utlan', 'mine_lan'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)} className={`pill ${tab === t ? 'active' : ''}`} style={{ fontSize: 12 }}>
-                {t === 'mine' ? 'Mine' : 'Andres'}
+                {t === 'mine_utlan' ? 'Mine utlån' : 'Mine lån'}
               </button>
             ))}
           </div>
-          <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(46,98,113,0.2)' }}>
-            {(['gantt', 'liste'] as const).map(m => (
-              <button key={m} onClick={() => setViewMode(m)}
-                style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 600, border: 'none', cursor: 'pointer',
-                  background: viewMode === m ? 'var(--terra)' : 'transparent',
-                  color: viewMode === m ? 'white' : 'var(--terra-mid)',
-                  transition: 'background 150ms' }}>
-                {m === 'gantt' ? '▦ Gantt' : '☰ Liste'}
-              </button>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 10.5, color: 'var(--terra-mid)', fontWeight: 500 }}>Visningsvalg</span>
+            <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(46,98,113,0.2)' }}>
+              {(['tidslinje', 'liste'] as const).map(m => (
+                <button key={m} onClick={() => handleSetViewMode(m)}
+                  style={{ padding: '5px 11px', fontSize: 11.5, fontWeight: 600, border: 'none', cursor: 'pointer',
+                    background: viewMode === m ? 'var(--terra)' : 'transparent',
+                    color: viewMode === m ? 'white' : 'var(--terra-mid)',
+                    transition: 'background 150ms' }}>
+                  {m === 'tidslinje' ? '▦ Tidslinje' : '☰ Liste'}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* List sub-controls */}
+        {viewMode === 'liste' && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 8 }}>
+            {/* Group by */}
+            <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+              <span style={{ fontSize: 10.5, color: 'var(--terra-mid)', fontWeight: 500, whiteSpace: 'nowrap' }}>Sorter</span>
+              {([
+                { id: 'utlansdato', label: 'Utlånsdato' },
+                { id: 'gjenstand',  label: 'Gjenstand'  },
+                { id: 'person',     label: tab === 'mine_utlan' ? 'Låntaker' : 'Utlåner' },
+              ] as { id: ListGroup; label: string }[]).map(g => (
+                <button key={g.id} onClick={() => setListGroup(g.id)}
+                  className={`pill ${listGroup === g.id ? 'active' : ''}`}
+                  style={{ fontSize: 11, padding: '3px 9px' }}>
+                  {g.label}
+                </button>
+              ))}
+            </div>
+            {/* History filter */}
+            <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(46,98,113,0.2)', flexShrink: 0 }}>
+              {([
+                { id: 'pagaende',  label: 'Pågående' },
+                { id: 'historikk', label: 'Historikk' },
+              ] as { id: LoanFilter; label: string }[]).map(f => (
+                <button key={f.id} onClick={() => setLoanFilter(f.id)}
+                  style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
+                    background: loanFilter === f.id ? 'rgba(46,98,113,0.15)' : 'transparent',
+                    color: loanFilter === f.id ? 'var(--terra-dark)' : 'var(--terra-mid)',
+                    transition: 'background 150ms' }}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </header>
 
-      {rows.length === 0 ? (
+      {rows.length === 0 && viewMode === 'tidslinje' ? (
         <div style={{ textAlign: 'center', padding: '72px 24px 0', color: 'var(--terra-mid)' }}>
           <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>📭</div>
           <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--terra-dark)', marginBottom: 6 }}>
-            {tab === 'mine' ? 'Ingen utlån' : 'Ingen innlån'}
+            {tab === 'mine_utlan' ? 'Ingen utlån' : 'Ingen innlån'}
           </p>
           <p style={{ fontSize: 13, lineHeight: 1.6 }}>
-            {tab === 'mine' ? 'Låneavtaler for dine gjenstander vises her.' : 'Gjenstander du har lånt vises her.'}
+            {tab === 'mine_utlan' ? 'Låneavtaler for dine gjenstander vises her.' : 'Gjenstander du har lånt vises her.'}
+          </p>
+        </div>
+      ) : listLoans.length === 0 && viewMode === 'liste' ? (
+        <div style={{ textAlign: 'center', padding: '72px 24px 0', color: 'var(--terra-mid)' }}>
+          <div style={{ fontSize: 40, marginBottom: 12, opacity: 0.4 }}>📭</div>
+          <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--terra-dark)', marginBottom: 6 }}>
+            {loanFilter === 'historikk' ? 'Ingen historikk' : tab === 'mine_utlan' ? 'Ingen utlån' : 'Ingen innlån'}
+          </p>
+          <p style={{ fontSize: 13, lineHeight: 1.6 }}>
+            {loanFilter === 'historikk' ? 'Tidligere låneavtaler vises her.' : tab === 'mine_utlan' ? 'Låneavtaler for dine gjenstander vises her.' : 'Gjenstander du har lånt vises her.'}
           </p>
         </div>
       ) : viewMode === 'liste' ? (
@@ -512,7 +606,7 @@ export default function SchedulePage() {
                     <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--terra-dark)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {row.item_name}
                     </p>
-                    {tab === 'andres' && row.owner_name && (
+                    {tab === 'mine_lan' && row.owner_name && (
                       <p style={{ fontSize: 10, color: 'var(--terra-mid)', margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {possessive(row.owner_name)}
                       </p>

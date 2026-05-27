@@ -52,8 +52,8 @@ export default function CommunityPage() {
         .select('*, profiles(name, email, avatar_url)')
         .eq('community_id', id)
 
-      const activeMembers = (allMembers || []).filter(m => m.status === 'active')
-      const pendingMembers = (allMembers || []).filter(m => m.status === 'pending')
+      const activeMembers = (allMembers || []).filter((m: any) => m.status === 'active')
+      const pendingMembers = (allMembers || []).filter((m: any) => m.status === 'pending')
       setMembers(activeMembers)
       setPending(pendingMembers)
 

@@ -78,7 +78,7 @@ applySuggestion(s)
 **Message types rendered**
 - `system` → centred pill (grey)
 - `change_proposal` → card with header, dates, status badge; Godta/Avslå buttons if `!mine && status==='pending'`
-- `chat` → iMessage bubbles; mine=right+terracotta, theirs=left+white; grouped by sender (avatar only on first in group)
+- `chat` → iMessage bubbles; mine=right+teal, theirs=left+white; grouped by sender (avatar only on first in group)
 
 **Quick suggestions**
 ```ts
@@ -116,8 +116,8 @@ hover: string | null         // drives in-range highlight
 3. `status==='pending'|'change_proposed'` → `bg-amber-100`
 4. `requestedRange` match → `bg-[#FDE68A]`
 5. `blockedDates` match → `bg-[#E8DDD0]`
-6. `selectStart` match → `bg-[#C4673A] text-white`
-7. In hover range → `bg-[#FFF0E6]`
+6. `selectStart` match → `bg-[#2E6271] text-white`
+7. In hover range → `bg-teal-50`
 
 **Click behaviour**
 - Owner + `onToggleBlock` → toggles date in/out of blocked
@@ -154,11 +154,19 @@ const hasOwnerAccess = isOwner || isCoOwner
 // isOwner only gates: editing item metadata (name, description, image, price)
 ```
 
+**Loan status flow**
+```
+pending → confirmed (owner accepts) → active (pickup confirmed) → pending_return → returned
+pending → declined
+active / confirmed → change_proposed (proposal sent) → back to prior status
+active → overdue (computed client-side from due_date)
+```
+
 **Key functions**
 ```ts
 load()
   // SELECT items + profiles WHERE id=$id
-  // SELECT loans + profiles!loans_borrower_id_fkey WHERE item_id=$id AND status IN(pending,active,change_proposed) ORDER BY start_date
+  // SELECT loans + profiles!loans_borrower_id_fkey WHERE item_id=$id AND status IN(pending,confirmed,active,change_proposed,pending_return,overdue) ORDER BY start_date
   // SELECT item_blocked_dates WHERE item_id=$id
   // Sets: item, allLoans, loan (myLoan), pendingLoans (hasOwnerAccess)
 
@@ -176,7 +184,7 @@ sendRequest()
   // Sets sentRange, loan, sent=true
 
 respondToLoan(loanId, accept)
-  // UPDATE loans SET status='active'|'declined' WHERE id=$loanId AND status='pending'
+  // UPDATE loans SET status='confirmed'|'declined' WHERE id=$loanId AND status='pending'
   //   → if data is null: loan already handled → show toast "Denne forespørselen er allerede behandlet"
   // If accept: UPDATE items SET available=false
   // INSERT loan_messages (type:'system') with outcome text
@@ -190,28 +198,79 @@ markReturned(loanId)
 
 **Render decision tree**
 ```
-hasOwnerAccess + available + no pending + no active → "Dette er din gjenstand" + access link
-hasOwnerAccess + activeLoan                         → LoanThread (isOwner=true)
-hasOwnerAccess + pendingLoans                       → per-loan: request card + Godta/Foreslå endring/Avslå + LoanThread
+hasOwnerAccess + available + no pending + no active/confirmed → "Dette er din gjenstand" + access link
+hasOwnerAccess + activeLoan/confirmedLoan                    → LoanThread (isOwner=true)
+hasOwnerAccess + pendingLoans                                → per-loan: request card + Godta/Foreslå endring/Avslå + LoanThread
 
 borrower + loan.status==='pending'           → waiting banner + LoanThread
+borrower + loan.status==='confirmed'         → confirmed banner + LoanThread
 borrower + loan.status==='change_proposed'   → proposal banner + LoanThread
 borrower + loan.status==='active'            → active banner + Vipps link (if price+vipps_number) + LoanThread
+borrower + loan.status==='pending_return'    → pending return banner + LoanThread
+borrower + loan.status==='overdue'           → overdue warning + LoanThread
 borrower + no loan + available               → date inputs + message textarea + send button
 borrower + no loan + unavailable             → "Utlånt akkurat nå"
 ```
 
-**ItemCalendar props passed from ItemPage**
+---
+
+### `src/app/messages/page.tsx` — `MessagesPage`
+
+**Purpose:** Inbox-style list of all active loan threads (both directions). Replaces navigating via item page; linked from bottom nav.
+
+**State**
 ```ts
-<ItemCalendar
-  loans={allLoans}
-  blockedDates={blockedDates}
-  requestedRange={sentRange}
-  onToggleBlock={hasOwnerAccess ? toggleBlock : undefined}
-  onSelectRange={!hasOwnerAccess && !loan && item.available ? handleSelectRange : undefined}
-  isOwner={hasOwnerAccess}
-/>
+threads: Thread[]
+search: string
+unreadOnly: boolean
+loading: boolean
 ```
+
+**Thread type**
+```ts
+type Thread = {
+  loan_id: string
+  item_id: string
+  item_name: string
+  item_image: string | null
+  item_category: string
+  owner_id: string
+  owner_name: string | null
+  loan_status: string
+  start_date: string | null
+  due_date: string | null
+  role: 'lender' | 'borrower'
+  counterpart_id: string | null
+  counterpart_name: string | null
+  counterpart_avatar: string | null
+  last_message_body: string | null
+  last_message_at: string | null
+  unread: boolean
+  requires_action: boolean
+}
+```
+
+**Query**
+```ts
+// SELECT loans WHERE (owner_id=$me OR borrower_id=$me) AND status IN non-terminal
+// JOIN items, profiles (both owner and borrower)
+// JOIN loan_messages (last per loan), loan_message_reads (read state)
+// Unread = last message sender !== $me AND read_at IS NULL
+```
+
+**Routing:** `/messages` — in bottom nav. Thread row → `/messages/{loanId}`.
+
+---
+
+### `src/app/messages/[id]/page.tsx` — `MessageThreadPage`
+
+Standalone thread view used when navigating from MessagesPage. Wraps `LoanThread` component with data loading by `loanId`.
+
+---
+
+### `src/app/loans/[loanId]/page.tsx` — `LoanPage`
+
+Direct loan permalink. Loads loan + item + LoanThread. Used from notifications action_url.
 
 ---
 
@@ -221,13 +280,13 @@ borrower + no loan + unavailable             → "Utlånt akkurat nå"
 ```ts
 notifications: any[]
 tab: 'actions' | 'updates'
-handledRequests: Set<string>   // local UI state; marks friend requests handled after click
+handledRequests: Set<string>   // local UI state; marks friend/connection requests handled after click
 loading: boolean
 ```
 
 **Tab split**
 ```ts
-ACTION_TYPES = ['loan_request', 'friend_request', 'join_request', 'friend_accepted', 'connection_request']
+ACTION_TYPES = ['loan_request', 'friend_request', 'join_request', 'loan_change_proposal', 'connection_request']
 actions = notifications.filter(n =>  ACTION_TYPES.includes(n.type))
 updates = notifications.filter(n => !ACTION_TYPES.includes(n.type))
 ```
@@ -342,7 +401,7 @@ sendFriendRequest()
 
 ---
 
-### `src/app/connections/page.tsx` — `ConnectionsPage` *(new)*
+### `src/app/connections/page.tsx` — `ConnectionsPage`
 
 **Purpose:** Manage the single connected profile (Tilkoblet profil). Accessible from settings or own profile.
 
@@ -365,13 +424,11 @@ sendInvite(targetId)
   // INSERT profile_connections (user_a=min(me,target), user_b=max(me,target), initiated_by=$me, status='pending')
   // INSERT notifications (type:'connection_request') to target
   // Sets inviteSent=true
-  // track(Events.CONNECTION_INVITE_SENT)
 
 disconnect()
   // UPDATE profile_connections SET status='disconnected'
   // UPDATE items SET connected_profile_id=null WHERE owner_id=$me OR owner_id=$partnerId
   // INSERT notifications (type:'connection_disconnected') to partner
-  // track(Events.CONNECTION_DISCONNECTED)
 ```
 
 **Render**
@@ -384,24 +441,220 @@ no connection      → search field + "Send tilkobling" CTA
 
 ---
 
+### `src/app/schedule/page.tsx` — `SchedulePage`
+
+**Formål:** Viser alle aktive og kommende lån (begge retninger) i tidslinje- eller listevisning, med historikk dempet.
+
+**State**
+```ts
+myLoans: Loan[]          // all loans both directions
+viewMode: 'tidslinje' | 'liste'
+loanFilter: 'pagaende' | 'historikk'
+listGroup: 'gjenstand' | 'utlansdato' | 'person'
+loading: boolean
+```
+
+**Loan-type (normalisert)**
+```ts
+type Loan = {
+  id: string
+  item_id: string
+  owner_id: string
+  borrower_id: string
+  status: string
+  start_date: string
+  due_date: string
+  role: 'lender' | 'borrower'
+  items: { name: string; image_url: string | null; category: string }
+  owner_profile: { name: string | null }
+  counterpart: { name: string | null; email: string | null; avatar_url: string | null }
+}
+```
+
+**Loan statuses (full set)**
+```
+pending          → amber   (forespurt, venter svar)
+confirmed        → blå     (godtatt, venter henting)
+active           → grønn   (aktivt lån)
+change_proposed  → amber   (endringsforslag underveis)
+pending_return   → blå     (låntaker merket levert, venter bekreftelse)
+overdue          → rød     (forfalt)
+declined         → grå
+returned         → grå
+```
+
+**Queries**
+```ts
+// Utlån (jeg er owner eller co-owner)
+SELECT loans + items + profiles!loans_borrower_id_fkey
+WHERE (owner_id=$me OR items.connected_profile_id=$me) AND status IN all
+
+// Innlån (jeg er borrower)
+SELECT loans + items + profiles!loans_owner_id_fkey
+WHERE borrower_id=$me AND status IN all
+```
+
+**Tidslinje-modus**
+- 60 dager bakover + 27 dager fremover, en rad per item
+- Lånebar på tidslinjen fargekodet etter status
+- Popup på tap/klikk med låndetaljer og handlingsknapper
+
+**Inline actions på lånekort**
+- `pending` → Godta / Avslå (eier); venter (låner)
+- `confirmed` → Bekreft henting (eier)
+- `active` → Marker levert (låner)
+- `pending_return` → Bekreft mottak (eier)
+
+**Routing:** `/schedule` — i bottom nav ("Avtaler").
+
+---
+
+### `src/app/add/page.tsx` — `AddPage`
+
+**Formål:** Skjema for å legge ut ny gjenstand. Multi-steg med kategori, underkategori, filtre (størrelse, alder, farge), bilde, beskrivelse og lokasjon.
+
+**State (draft)**
+```ts
+type Draft = {
+  categoryId: string
+  subcategoryIds: string[]
+  name: string
+  description: string
+  location: string
+  gender: Gender | ''
+  size: string
+  ageRanges: string[]
+  color: string
+  suggestedImageUrl: string
+  selectedImageSrc: 'own' | 'suggested'
+  imagePreviews: string[]
+  bookTitle: string
+  bookAuthor: string
+}
+```
+
+Draft lagres i `sessionStorage` under nøkkel `village_add_draft`.
+
+**Routing:** `/add` — i bottom nav.
+
+---
+
+### `src/app/ask/page.tsx` — `AskPage`
+
+**Formål:** Legg ut en etterlysning ("Jeg ser etter…") til venner/venners venner. Resulterer i en rad i `item_requests`.
+
+**State**
+```ts
+itemName: string
+category: string
+audience: 'friends' | 'friends_of_friends'
+imageFile: File | null
+imagePreview: string
+```
+
+**Insert**
+```ts
+INSERT item_requests (user_id, item_name, category, audience, image_url, created_at)
+INSERT notifications (type:'item_request_response') — ved svar fra andre
+```
+
+**Routing:** `/ask` — tilgjengelig fra feed og profil.
+
+---
+
+### `src/app/watches/page.tsx` — `WatchesPage`
+
+**Formål:** Lagrede søk ("varsle meg når X dukker opp"). Bruker tabellen `item_watches`.
+
+**State**
+```ts
+watches: any[]
+query: string
+maxPrice: string
+category: string
+location: string
+availableFrom / availableTo: string
+showForm: boolean
+```
+
+**CRUD**
+```ts
+SELECT item_watches WHERE user_id=$me ORDER BY created_at DESC
+INSERT item_watches (user_id, query, max_price, category, location, available_from, available_to)
+DELETE item_watches WHERE id=$id
+```
+
+**Routing:** `/watches` — tilgjengelig fra søkesiden og innstillinger.
+
+---
+
+### `src/app/onboarding/page.tsx` — `OnboardingPage`
+
+Flerstegsonboarding for nye brukere: verdiprop-slides → interessevalg → Finn-import (valgfritt) → ferdig. Bruker `FinnImporter`-komponenten.
+
+**Routing:** `/onboarding` — redirectes til etter register.
+
+---
+
+### `src/app/settings/page.tsx` — `SettingsPage`
+
+Profilinnstillinger: navn, bio, telefon, by, interesser, personvern (privacy_profile, privacy_search), varslingsinnstillinger, tilkoblet profil, slett konto.
+
+**Tabeller oppdatert**
+```ts
+UPDATE profiles SET name, bio, phone, city, interests, privacy_profile, privacy_search,
+  notif_loan_request, notif_loan_accepted, notif_friend_request, notif_join_request
+```
+
+---
+
+### `src/app/close-friends/page.tsx` — `CloseFriendsPage`
+
+Administrer "nære venner"-liste. Bruker tabellen `close_friends`.
+
+---
+
+### `src/app/items/manage/page.tsx` — `ManageItemsPage`
+
+Liste over egne gjenstander med sortering (nyeste/eldste/navn/status) og kategoribadges.
+
+---
+
+### `src/app/items/edit/page.tsx` — `EditItemPage`
+
+Rediger eksisterende gjenstand (navn, beskrivelse, bilde, pris, synlighet).
+
+---
+
+### `src/app/items/access/page.tsx` — `ItemAccessPage`
+
+Konfigurer tilgangsnivå for en gjenstand: public / friends / friends_of_friends / community. Skriver til `item_access`.
+
+---
+
 ## Shared utilities
 
-### `src/lib/sortProfiles.ts` *(new)*
+### `src/lib/sortProfiles.ts`
 ```ts
 // Pins connected profile to top of any profile list, then sorts by name
 export function sortProfilesWithConnectionFirst(
   profiles: any[],
   connectedProfileId: string | null
-): any[] {
-  return [...profiles].sort((a, b) => {
-    if (a.id === connectedProfileId) return -1
-    if (b.id === connectedProfileId) return 1
-    return a.name.localeCompare(b.name, 'no')
-  })
-}
+): any[]
 // Usage: friend lists, mutual friends, community member lists, people search results
 // Rendering: connected profile row prefixed with 🔗 before name
 ```
+
+### `src/lib/categories.ts`
+Master kategoridefinisjoner — **importer alltid herfra, aldri hardkod kategori-strenger**.
+
+Eksporterer: `CATEGORIES`, `getCategoryById()`, `getCategoryLabel()`, `getCategoryGradient()`, `normalizeCategory()`, `SIZES_BY_GENDER`, `AGE_GROUPS`, `COLORS`, `LEGACY_CATEGORY_MAP`.
+
+### `src/lib/track.ts`
+Fire-and-forget analytics. Se `05_track_calls_guide.md`.
+
+### `src/lib/sliderFill.ts`
+`initSlider` / `updateSlider` — hjelpere for `input[type="range"]` CSS-variabel `--slider-val`.
 
 ### Item deduplication utility
 ```ts
@@ -411,7 +664,6 @@ export function sortProfilesWithConnectionFirst(
 //   - If viewer friends with connected_profile_id only → attributed to co-owner
 //   - If viewer friends with both → attributed to owner_id
 //   - If viewer friends with neither (public item) → attributed to owner_id
-// Never shown twice regardless of access path
 ```
 
 ### Loan request routing
@@ -422,7 +674,6 @@ const friendOfCoOwner = item.connected_profile_id && viewerFriendIds.includes(it
 const notifyUserId = friendOfOwner ? item.owner_id
   : friendOfCoOwner ? item.connected_profile_id
   : item.owner_id  // fallback (public item, no friendship)
-// Only one notification inserted; both owners can act on the loan via item page
 ```
 
 ---
@@ -431,53 +682,35 @@ const notifyUserId = friendOfOwner ? item.owner_id
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `profiles` | id, name, username, email, avatar_url | 1:1 with auth.users |
-| `items` | id, owner_id, name, category, description, image_url, price, vipps_number, available, community_id, **connected_profile_id** | `connected_profile_id` → nullable FK to profiles; set symmetrically on both partners' items when connection activates |
-| `loans` | id, item_id, owner_id, borrower_id, status, start_date, due_date, message, community_id | status: pending/active/change_proposed/declined/returned |
+| `profiles` | id, name, username, email, avatar_url, bio, phone, interests, language, privacy_profile, privacy_search, notif_loan_request, notif_loan_accepted, notif_friend_request, notif_join_request, tier, village_points, city, address_street, address_zip, address_city, address_country, created_at | 1:1 med auth.users |
+| `items` | id, owner_id, name, description, image_url, category, subcategories, available, price, vipps_number, community_id, connected_profile_id, location, item_filters, color, size, age_group, age_ranges, created_at | `connected_profile_id` → nullable FK til profiles; settes symmetrisk på begge partneres items når tilkobling aktiveres |
+| `loans` | id, item_id, owner_id, borrower_id, status, start_date, due_date, message, community_id, created_at, updated_at, pickup_reminder_sent, return_reminder_sent | status: pending/confirmed/active/change_proposed/pending_return/overdue/declined/returned |
 | `loan_messages` | id, loan_id, sender_id, type, body, metadata (jsonb), created_at | FK sender_id→profiles named `_sender_fkey`; type: chat/change_proposal/system |
-| `notifications` | id, user_id, type, title, body, loan_id, action_url, read | |
-| `friendships` | user_a, user_b | Both directions inserted on accept |
-| `friend_requests` | from_id, to_id, status | status: pending/accepted/declined |
-| `communities` | id, name, avatar_emoji, is_public | |
-| `community_members` | user_id, community_id, status | status: active |
-| `item_blocked_dates` | item_id, date | |
-| `item_access` | item_id, access_type, community_id | access_type: public/friends/friends_of_friends/community |
-| `starred_users` | user_id, starred_id | |
-| **`profile_connections`** | id, user_a, user_b, status, initiated_by, created_at, accepted_at | status: pending/active/disconnected; UNIQUE(user_a,user_b); CHECK(user_a < user_b); max one active per user |
+| `loan_message_reads` | loan_id, user_id, read_at | Sporer lest/ulest per bruker per tråd |
+| `notifications` | id, user_id, type, subtype, title, body, loan_id, action_url, metadata (jsonb), read, created_at | |
+| `friendships` | id, user_a, user_b, created_at | Both directions inserted on accept |
+| `friend_requests` | id, from_id, to_id, status, created_at | status: pending/accepted/declined |
+| `close_friends` | user_id, friend_id | Nære venner-liste |
+| `communities` | id, name, description, avatar_emoji, invite_code, created_by, is_public, visibility, created_at | |
+| `community_members` | id, community_id, user_id, role, status, joined_at | status: active |
+| `community_favorites` | user_id, community_id | Favorittmarkerte kretser |
+| `join_requests` | community_id, user_id, status | Kø for ikke-åpne kretser |
+| `item_blocked_dates` | id, item_id, date, created_at | |
+| `item_access` | id, item_id, access_type, community_id, price, price_type, created_at | access_type: public/friends/friends_of_friends/community |
+| `item_requests` | user_id, item_name, category, audience, image_url, created_at | Etterlysninger ("Jeg ser etter…") |
+| `item_request_views` | user_id, request_id | Spor hvem som har sett en etterlysning |
+| `item_watches` | id, user_id, query, max_price, category, location, available_from, available_to, created_at | Lagrede søkevarslere |
+| `starred_users` | id, user_id, starred_id, created_at | |
+| `profile_connections` | id, user_a, user_b, status, initiated_by, created_at, accepted_at | status: pending/active/disconnected; UNIQUE(user_a,user_b); CHECK(user_a < user_b); max one active per user |
+| `stories` | id, user_id, ... | Item-stories/snutter |
+| `item_stories` | item_id, story_id | Kobling mellom story og item |
+| `item_story_slides` | story_id, ... | Enkelt-slides i en story |
+| `group_loan_requests` | id, ... | Gruppeforespørsler (beta) |
+| `group_loan_request_items` | request_id, item_id | Items i en gruppeforespørsel |
+| `beta_feedback` | id, user_id, ... | Tilbakemeldinger fra FeedbackButton |
+| `membership_log` | user_id, community_id, ... | Historikk for krets-medlemskap |
 
-## Notification types
-
-| type | recipient | inserted when |
-|---|---|---|
-| `loan_request` | owner or co-owner (friend of borrower) | borrower sends request |
-| `loan_accepted` / `loan_declined` | borrower | either owner or co-owner responds |
-| `loan_accepted_coowner` / `loan_declined_coowner` | non-acting co-owner | the other owner acts on a loan |
-| `loan_message` | counterpart | chat message sent in thread |
-| `loan_change_proposal` | counterpart | proposal sent |
-| `proposal_accepted` / `proposal_declined` | proposal sender | proposal responded to |
-| `friend_request` | target | friend request sent |
-| `friend_accepted` | requester | request accepted |
-| `join_request` | community admin | community join |
-| `join_accepted` / `join_declined` | applicant | community response |
-| `starred` | target | user starred |
-| **`connection_request`** | invitee | connection invite sent |
-| **`connection_accepted`** | inviter | invite accepted |
-| **`connection_disconnected`** | both partners | either party disconnects |
-
-## Analytics & Tracking
-
-### `src/lib/track.ts`
-Fire-and-forget event logger.
-
-**Signatur**
-```ts
-track(event: string, properties?: Record<string, unknown>): void
-// Kaller supabase.from('analytics_events').insert() — ingen await, ingen error-blocking
-```
-
-**Kalles fra:** alle pages og nøkkelkomponenter ved brukerhandlinger.
-
-### DB Tables (analytics)
+### Analytics tables
 
 | Table | Key columns | Notes |
 |---|---|---|
@@ -494,120 +727,75 @@ track(event: string, properties?: Record<string, unknown>): void
 | `v_loan_metrics` | Antall lån, completion rate, tid til godkjenning |
 | `v_item_metrics` | Antall ting lagt ut per uke |
 
-
 ---
 
-### `src/app/schedule/page.tsx` — `SchedulePage`
+## Notification types
 
-**Formål:** Viser alle aktive og kommende lån (begge retninger — utlån og innlån) i én integrert liste sortert på dato, med historikk dempet til slutt.
+| type | recipient | inserted when |
+|---|---|---|
+| `loan_request` | owner or co-owner (friend of borrower) | borrower sends request |
+| `loan_accepted` / `loan_declined` | borrower | either owner or co-owner responds |
+| `loan_accepted_coowner` / `loan_declined_coowner` | non-acting co-owner | the other owner acts on a loan |
+| `loan_message` | counterpart | chat message sent in thread |
+| `loan_change_proposal` | counterpart | proposal sent |
+| `proposal_accepted` / `proposal_declined` | proposal sender | proposal responded to |
+| `loan_offer` | borrower | owner proaktivt tilbyr lån |
+| `loan_reminder` | borrower/owner | automatisk purring (cron) |
+| `loan_start_owner` / `loan_start_borrower` | owner/borrower | lån starter (cron eller bekreftelse) |
+| `loan_return_owner` / `loan_return_borrower` | owner/borrower | retur bekreftet |
+| `friend_request` | target | friend request sent |
+| `friend_accepted` | requester | request accepted |
+| `friend_wishlist` | target | bruker ønsker seg noe fra din liste |
+| `join_request` | community admin | community join request |
+| `join_accepted` / `join_declined` | applicant | community response |
+| `starred` | target | user starred |
+| `item_request_response` | requester | noen svarer på en etterlysning |
+| `connection_request` | invitee | connection invite sent |
+| `connection_accepted` | inviter | invite accepted |
+| `connection_disconnected` | both partners | either party disconnects |
 
-**State**
-```ts
-activeLoans: Loan[]      // pending + active + change_proposed, begge retninger
-historyLoans: Loan[]     // returned + declined, begge retninger
-catFilter: string        // 'all' | kategori-id
-loading: boolean
-```
-
-**Loan-type (normalisert)**
-```ts
-type Loan = {
-  id: string
-  item_id: string
-  owner_id: string
-  borrower_id: string
-  status: string
-  start_date: string
-  due_date: string
-  role: 'lender' | 'borrower'   // lagt til ved normalisering
-  items: { name: string; image_url: string | null; category: string }
-  counterpart: { name: string | null; email: string | null; avatar_url: string | null }
-}
-```
-
-**Queries**
-```ts
-// Utlån (jeg er owner eller co-owner)
-SELECT loans + items + profiles!loans_borrower_id_fkey
-WHERE (owner_id=$me OR items.connected_profile_id=$me) AND status IN('pending','active','change_proposed')
-
-// Innlån (jeg er borrower)
-SELECT loans + items + profiles!loans_owner_id_fkey
-WHERE borrower_id=$me AND status IN('pending','active','change_proposed')
-
-// Historikk utlån
-SELECT ... WHERE (owner_id=$me OR items.connected_profile_id=$me) AND status IN('returned','declined')
-ORDER BY due_date DESC LIMIT 30
-
-// Historikk innlån
-SELECT ... WHERE borrower_id=$me AND status IN('returned','declined')
-ORDER BY due_date DESC LIMIT 30
-```
-
-**Normalisering**
-```ts
-// Begge rader flettes til Loan[] med role og counterpart
-const normalize = (rows, role) => rows.map(r => ({ ...r, role, counterpart: r.profiles }))
-
-// Aktive: sortert på start_date ASC
-// Historikk: sortert på due_date DESC, visuelt dempet (opacity, grayscale)
-```
-
-**Kategorifilter**
-- Vises kun hvis > 1 kategori finnes på tvers av aktive + historikk
-- Filtrerer begge lister samtidig
-
-**Routing:** `/schedule` — lenkes fra stats-boksen "avtaler" i `profile/page.tsx`
+---
 
 ## Kategoritaksonomi
 
-Kategoriene er definert i `src/lib/categories.ts` — **aldri hardkod kategori-strenger andre steder**. Importer alltid `CATEGORIES`, `getCategoryLabel()` o.l. derfra.
-
-Kategorier brukes på følgende steder og må holdes i sync:
-- `src/app/page.tsx`
-- `src/app/items/[id]/page.tsx` — kategori settes ved opprettelse av item
-- `src/app/search/page.tsx` — kategorifilter på gjenstander
-- `src/app/profile/[userId]/page.tsx` — kategorifilter på items
-- `src/app/schedule/page.tsx` — `catFilter` state
-- Onboarding-flyt — kategorivalg ved første item-listing
-- VillageStore — kategorinavigasjon
-
----
+Kategoriene er definert i `src/lib/categories.ts` — **aldri hardkod kategori-strenger andre steder**.
 
 ### Toppnivå
 
 | id | Label |
 |---|---|
-| `hjem-og-hage` | Hjem & hage |
 | `baby-og-barn` | Baby & barn |
-| `fest-og-arrangement` | Fest & arrangement |
-| `friluft-og-sport` | Friluft & sport |
-| `klar-og-mote` | Klær & mote |
+| `klar-og-mote` | Antrekk |
 | `boker` | Bøker |
-
----
+| `annet` | Annet (catch-all; inkluderer sport, verktøy, elektronikk, kjøkken, hage) |
 
 ### Underkategorier
 
-**Hjem & hage**
-`verktoy-og-maskiner` / `hage-og-uteomrader` / `hjem-generelt` / `annet-hjem`
-
 **Baby & barn**
-`spise` / `leke` / `stelle` / `sove` / `bade` / `ha-pa` / `reise` / `gravid`
+`spise` / `leke` / `stelle` / `sove` / `bade` / `ha-pa` / `reise` / `gravid` / `annet`
 → Filter: **Alder** (0–3 mnd, 3–6 mnd, 6–12 mnd, 1–2 år, 2–3 år, 3–5 år, 5–8 år, 8–12 år)
+→ Filter: **Farge**
 
-**Fest & arrangement**
-`dekketoy-og-duker` / `bord-stol-og-bar` / `telt` / `grill` / `lyd-lys-scene-og-varme`
-
-**Friluft & sport**
-`skisport` / `jakt-fiske-og-friluftsliv` / `sykkelsport` / `vannsport` / `musikkinstrumenter` / `golf` / `annen-sport`
-
-**Klær & mote**
-Underkategorier (anledning): `bryllup` / `fest-og-ball` / `konfirmasjon` / `begravelse-og-seremoni` / `hverdag-og-casual` / `annet-klar`
+**Antrekk (klar-og-mote)**
+Underkategorier: `bryllup` / `fest-og-ball` / `konfirmasjon` / `begravelse-og-seremoni` / `hverdag-og-casual` / `annet-klar`
 Filtre (størrelse, sidestilte):
 - Dame: XS / S / M / L / XL / XXL
 - Herre: XS / S / M / L / XL / XXL
 - Barn: 86–92 / 98–104 / 110–116 / 122–128 / 134–140 / 146–152 / 158–164
+→ Filter: **Farge**
 
 **Bøker**
-Ingen underkategorier foreløpig.
+`skjonnlitteratur` / `sakprosa` / `barn-og-ungdom` / `kokebok`
+
+**Annet**
+`sport-og-fritid` / `elektronikk` / `verktoy` / `kjokken-og-hjem` / `hage` / `annet-annet`
+
+> **Merk:** De tidligere kategoriene `hjem-og-hage`, `fest-og-arrangement` og `friluft-og-sport` er slått sammen til `annet`. `LEGACY_CATEGORY_MAP` i `categories.ts` håndterer migrering av gamle DB-verdier.
+
+---
+
+## Bottom nav
+
+5 tabs: **Hjem** (`/`) · **Kretser** (`/community/search`) · **Del** (`/add`) · **Avtaler** (`/schedule`) · **Profil** (`/profile`)
+
+Varsler-klokke og notifikasjonsteller vises i page-headeren (ikke i bottom nav). Ikoner er SVG inline i `NavBar.tsx`.

@@ -182,7 +182,7 @@ export default function SchedulePage() {
   }
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
-  const startDay = addDays(today, -PAST_DAYS)
+  const startDay = addDays(today, -PAST_DAYS)   // grid starts 60d ago
   const days = Array.from({ length: TOTAL_DAYS }, (_, i) => addDays(startDay, i))
 
   // ── Load ──────────────────────────────────────────────────────────────────
@@ -218,7 +218,7 @@ export default function SchedulePage() {
       setTheirLoans(norm(borrowRows || [], 'borrower'))
       setLoading(false)
       setTimeout(() => {
-        if (scrollRef.current) scrollRef.current.scrollLeft = (PAST_DAYS - 2) * COL_WIDTH
+        if (scrollRef.current) scrollRef.current.scrollLeft = PAST_DAYS * COL_WIDTH - 16
       }, 80)
     }
     load()
@@ -511,8 +511,21 @@ export default function SchedulePage() {
 
         {/* List sub-controls */}
         {viewMode === 'liste' && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 8 }}>
-            {/* Group by */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+            {/* Row 1: Pågående / Historikk */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {([
+                { id: 'pagaende',  label: 'Pågående' },
+                { id: 'historikk', label: 'Historikk' },
+              ] as { id: LoanFilter; label: string }[]).map(f => (
+                <button key={f.id} onClick={() => setLoanFilter(f.id)}
+                  className={`pill ${loanFilter === f.id ? 'active' : ''}`}
+                  style={{ fontSize: 12 }}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {/* Row 2: Sorter */}
             <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
               <span style={{ fontSize: 10.5, color: 'var(--terra-mid)', fontWeight: 500, whiteSpace: 'nowrap' }}>Sorter</span>
               {([
@@ -524,21 +537,6 @@ export default function SchedulePage() {
                   className={`pill ${listGroup === g.id ? 'active' : ''}`}
                   style={{ fontSize: 11, padding: '3px 9px' }}>
                   {g.label}
-                </button>
-              ))}
-            </div>
-            {/* History filter */}
-            <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(46,98,113,0.2)', flexShrink: 0 }}>
-              {([
-                { id: 'pagaende',  label: 'Pågående' },
-                { id: 'historikk', label: 'Historikk' },
-              ] as { id: LoanFilter; label: string }[]).map(f => (
-                <button key={f.id} onClick={() => setLoanFilter(f.id)}
-                  style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
-                    background: loanFilter === f.id ? 'rgba(46,98,113,0.15)' : 'transparent',
-                    color: loanFilter === f.id ? 'var(--terra-dark)' : 'var(--terra-mid)',
-                    transition: 'background 150ms' }}>
-                  {f.label}
                 </button>
               ))}
             </div>

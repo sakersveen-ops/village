@@ -470,7 +470,7 @@ export default function FeedPage() {
             .select('request_id')
             .eq('user_id', user.id)
 
-          const seen = new Set((views || []).map((v: any) => v.request_id))
+          const seen = new Set<string>((views || []).map((v: any) => v.request_id as string))
           setSeenIds(seen)
 
           const groupMap = new Map<string, RequestGroup>()

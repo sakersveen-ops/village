@@ -1,10 +1,11 @@
 // src/app/api/email-import/route.ts
-// Receives inbound email webhook from Resend (or Postmark).
-// Caller: Resend inbound rule → POST https://village-jade.vercel.app/api/email-import
-// Auth: verified via INBOUND_WEBHOOK_SECRET header
+// Receives inbound email webhook from Resend (email.received event).
+// Caller: Resend webhook → POST https://village-jade.vercel.app/api/email-import
+// Auth: Resend-Signature header verified with RESEND_WEBHOOK_SECRET
 
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
+import { createHmac } from 'crypto'
 
 const HAIKU_SYSTEM = `Du er en assistent som hjelper folk legge ut ting de ikke lenger trenger på en delingapp kalt Village.
 
@@ -36,12 +37,18 @@ Regler:
 - Utelat verdiløse vedlegg (instruksjonshefter, garantikort, poser)
 - Aldri inkluder navn, adresse, e-post eller annen personinfo i output`
 
-// Resend inbound payload shape (subset we use)
-interface ResendInboundPayload {
-  from: { address: string; name?: string }
-  subject?: string
-  text?: string
-  html?: string
+// Resend email.received payload shape
+interface ResendEmailReceivedEvent {
+  type: 'email.received'
+  created_at: string
+  data: {
+    email_id: string
+    from: string        // plain address string, e.g. "sverre@gmail.com"
+    to: string[]
+    subject?: string
+    text?: string       // NOTE: Resend does not expose body in the webhook payload.
+    html?: string       // Body must be fetched separately – see fetchEmailBody().
+  }
 }
 
 function stripHtml(html: string): string {
@@ -53,15 +60,55 @@ function stripHtml(html: string): string {
     .trim()
 }
 
+// Resend webhook signature verification
+// See: https://resend.com/docs/webhooks/verify-webhooks-requests
+function verifySignature(rawBody: string, headers: Headers): boolean {
+  const secret = process.env.RESEND_WEBHOOK_SECRET
+  if (!secret) return false
+  const signature = headers.get('resend-signature') ?? headers.get('svix-signature') ?? ''
+  const timestamp  = headers.get('resend-timestamp') ?? headers.get('svix-timestamp') ?? ''
+  if (!signature || !timestamp) return false
+  const signed = `${timestamp}.${rawBody}`
+  const expected = createHmac('sha256', secret).update(signed).digest('hex')
+  // signature may be prefixed "v1,<hex>" – strip the prefix
+  const actual = signature.replace(/^v\d+,/, '')
+  return actual === expected
+}
+
+// Fetch full email body from Resend API (body is NOT in the webhook payload)
+async function fetchEmailBody(emailId: string): Promise<{ text: string | null; html: string | null }> {
+  const res = await fetch(`https://api.resend.com/emails/${emailId}`, {
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+  })
+  if (!res.ok) return { text: null, html: null }
+  const data = await res.json()
+  return { text: data.text ?? null, html: data.html ?? null }
+}
+
 export async function POST(req: Request) {
-  // Verify webhook secret
-  const secret = req.headers.get('x-webhook-secret')
-  if (secret !== process.env.INBOUND_WEBHOOK_SECRET) {
+  const rawBody = await req.text()
+
+  // Verify Resend signature
+  if (!verifySignature(rawBody, req.headers)) {
     return Response.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const body: ResendInboundPayload = await req.json()
-  const fromEmail = body.from?.address?.toLowerCase()?.trim()
+  let event: ResendEmailReceivedEvent
+  try {
+    event = JSON.parse(rawBody)
+  } catch {
+    return Response.json({ error: 'invalid_json' }, { status: 400 })
+  }
+
+  // Only handle inbound emails
+  if (event.type !== 'email.received') {
+    return Response.json({ ok: true, reason: 'ignored_event_type' })
+  }
+
+  // from is a plain string in Resend inbound: "Name <addr>" or just "addr"
+  const fromRaw = event.data.from ?? ''
+  const fromMatch = fromRaw.match(/<([^>]+)>/) 
+  const fromEmail = (fromMatch ? fromMatch[1] : fromRaw).toLowerCase().trim()
 
   if (!fromEmail) {
     return Response.json({ ok: false, reason: 'no_from_address' })
@@ -85,9 +132,9 @@ export async function POST(req: Request) {
     return Response.json({ ok: false, reason: 'unknown_sender' })
   }
 
-  // Prefer plain text; fall back to stripped HTML
-  const emailText = body.text?.trim() ||
-    (body.html ? stripHtml(body.html) : '')
+  // Fetch email body from Resend (not included in webhook payload)
+  const { text, html } = await fetchEmailBody(event.data.email_id)
+  const emailText = text?.trim() || (html ? stripHtml(html) : '')
 
   if (!emailText) {
     return Response.json({ ok: false, reason: 'empty_body' })
@@ -107,7 +154,6 @@ export async function POST(req: Request) {
     const raw = msg.content.find(b => b.type === 'text')?.text ?? ''
     parsed = JSON.parse(raw.replace(/```json|```/g, '').trim())
   } catch {
-    // Haiku couldn't parse – silently drop, no notification
     return Response.json({ ok: false, reason: 'parse_failed' })
   }
 

@@ -9,6 +9,7 @@ import {
   getCategoryById, type Gender,
 } from '@/lib/categories'
 import ImportModal, { type ImportDraft, type ParsedItem } from '@/components/ImportModal'
+import FinnImporter from '@/components/FinnImporter'
 import { track, Events } from '@/lib/track'
 
 // ─── Nøkkel for draft i sessionStorage ───────────────────────────────────────
@@ -43,6 +44,9 @@ type BookResult = {
   genre: string; isbn: string; image_url: string; selected: boolean
 }
 
+// ─── AddMode ─────────────────────────────────────────────────────────────────
+type AddMode = 'manuell' | 'lenke' | 'bilde' | 'finn' | 'mail'
+
 // ─── Draft-type ───────────────────────────────────────────────────────────────
 type Draft = {
   categoryId: string
@@ -61,12 +65,13 @@ type Draft = {
   bookAuthor: string
 }
 
+// ─── Max bilder per gjenstand ─────────────────────────────────────────────────
+const MAX_IMAGES = 10
+
 export default function AddPage() {
   const router = useRouter()
-  // FIX: Analyse-input ref (slot 0 i grid + kamera-knapp øverst)
-  const analyzeFileInputRef = useRef<HTMLInputElement>(null)
-  // FIX: Ekstra bildeslots — bruker én felles multi-input i stedet for separate refs
-  const multiFileInputRef = useRef<HTMLInputElement>(null)
+  const analyzeFileInputRef  = useRef<HTMLInputElement>(null)
+  const multiFileInputRef    = useRef<HTMLInputElement>(null)
 
   // ── Core state ──
   const [categoryId, setCategoryId]         = useState('baby-og-barn')
@@ -81,15 +86,13 @@ export default function AddPage() {
   const [imagePreviews, setImagePreviews]   = useState<string[]>([])
   const [suggestedImageUrl, setSuggestedImageUrl] = useState('')
   const [selectedImageSrc, setSelectedImageSrc]   = useState<'own' | 'suggested'>('own')
-  // FIX: Bok-felt lagres separat og overskriver aldri manuelt innfylte felt
   const [bookTitle, setBookTitle]           = useState('')
   const [bookAuthor, setBookAuthor]         = useState('')
+  const [userEmail, setUserEmail]           = useState('')
 
   // ── Image analysis state ──
-  // FIX: imageAnalyzing sporer kun den aktive analysen — ikke ekstra-bilder
   const [imageAnalyzing, setImageAnalyzing] = useState(false)
   const [imageAnalyzed, setImageAnalyzed]   = useState(false)
-  // FIX: analysisLocked forhindrer at analyse utløses på manuelt opplastede bilder
   const [analysisLocked, setAnalysisLocked] = useState(false)
 
   // ── Shelf (bokhylle) state ──
@@ -98,8 +101,8 @@ export default function AddPage() {
   const [shelfProgress, setShelfProgress] = useState(0)
 
   // ── UI state ──
-  const [saving, setSaving] = useState(false)
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [saving, setSaving]   = useState(false)
+  const [errors, setErrors]   = useState<Record<string, string>>({})
 
   // ── Import modal ──
   const [importDraft, setImportDraft] = useState<ImportDraft | null>(null)
@@ -108,6 +111,9 @@ export default function AddPage() {
   // ── URL analyse ──
   const [urlInput, setUrlInput]     = useState('')
   const [urlLoading, setUrlLoading] = useState(false)
+
+  // ── Opplastingsmodus ──
+  const [addMode, setAddMode] = useState<AddMode>('manuell')
 
   // ─── Løpende lagring av draft til sessionStorage ──────────────────────────
   useEffect(() => {
@@ -130,7 +136,8 @@ export default function AddPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login?next=/add'); return }
 
-      // Hent alltid adresse fra profil — brukes som fallback hvis draft ikke har hentested
+      setUserEmail(user.email ?? '')
+
       const { data: prof } = await supabase
         .from('profiles').select('address_street, address_zip, address_city').eq('id', user.id).single()
       const profileLocation = prof
@@ -141,13 +148,11 @@ export default function AddPage() {
       if (raw) {
         try {
           const d: Draft = JSON.parse(raw)
-          // FIX: Gjenopprett ALT fra draft — inkludert bilder og bok-felt
           if (d.categoryId)       setCategoryId(d.categoryId)
           if (d.subcategoryIds)   setSubcategoryIds(d.subcategoryIds)
           if (d.ageRanges)        setAgeRanges(d.ageRanges)
           if (d.name)             setName(d.name)
           if (d.description)      setDescription(d.description)
-          // Bruk draft-location hvis satt, ellers fall tilbake til profil-adresse
           if (d.location)           setLocation(d.location)
           else if (profileLocation) setLocation(profileLocation)
           if (d.gender)           setGender(d.gender as Gender)
@@ -159,17 +164,15 @@ export default function AddPage() {
           if (d.bookAuthor)        setBookAuthor(d.bookAuthor)
           if (d.imagePreviews?.length) {
             setImagePreviews(d.imagePreviews)
-            // FIX: Sett analysisLocked så gjenopprettede bilder ikke utløser analyse
             setAnalysisLocked(true)
           }
           return
         } catch { /* ugyldig draft – ignorer */ }
       }
 
-      // Ingen gyldig draft: sett profil-adresse som default hentested
       if (profileLocation) setLocation(profileLocation)
 
-      // ── Import draft fra email-import (leggut@villageapp.no) ──
+      // ── Import draft fra email-import ──
       const importId = new URLSearchParams(window.location.search).get('import')
       if (importId) {
         const { data: draft } = await supabase
@@ -194,18 +197,16 @@ export default function AddPage() {
     load()
   }, [])
 
-  // ─── Last opp bilde til Supabase Storage (persistent URL) ────────────────
+  // ─── Last opp bilde til Supabase Storage ─────────────────────────────────
   const uploadImageToStorage = async (file: File): Promise<string | null> => {
     try {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return null
-      
       const ext = file.name.split('.').pop()
       const path = `items/${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
       const { error } = await supabase.storage.from('item-images').upload(path, file)
       if (error) throw error
-      
       const { data } = supabase.storage.from('item-images').getPublicUrl(path)
       return data.publicUrl
     } catch (e) {
@@ -214,16 +215,13 @@ export default function AddPage() {
     }
   }
 
-  // ─── Bildeanalyse — kun kamera-knappen øverst ────────────────────────────
-  // FIX: Ekstra bildeslots bruker addMultipleImages() og trigger IKKE analyse.
+  // ─── Bildeanalyse ─────────────────────────────────────────────────────────
   const handleAnalyzeImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
 
-    // FIX: Lås analyse-flagg FØR opplasting, slik at gjenopprettede bilder ikke
-    // ved et uhell utløser analyse
-    setAnalysisLocked(false) // dette bildet skal analyseres
+    setAnalysisLocked(false)
     setImageAnalyzing(true)
     setImageAnalyzed(false)
     setSuggestedImageUrl('')
@@ -236,13 +234,11 @@ export default function AddPage() {
       return
     }
 
-    // Legg til URL i imagePreviews (persistent, ikke blob-URL)
-    setImagePreviews(prev => [uploadedUrl, ...prev.slice(1)].slice(0, 4))
+    setImagePreviews(prev => [uploadedUrl, ...prev.slice(1)].slice(0, MAX_IMAGES))
 
     const base64 = await toBase64(file)
 
     try {
-      // Steg 1: Analyser bildet
       const res = await fetch('/api/claude', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -276,28 +272,21 @@ Returner KUN JSON, ingen annen tekst.` }
       const data = await res.json()
       const text = data.content?.[0]?.text || ''
 
-      // FIX: Robust parsing — håndter trailing tegn etter JSON-blokken
       let parsed: any = null
       try {
         const cleaned = text.replace(/```json|```/g, '').trim()
-        // Finn første { og siste } for å ekstrahere bare JSON-objektet
         const jsonStart = cleaned.indexOf('{')
         const jsonEnd = cleaned.lastIndexOf('}')
         if (jsonStart !== -1 && jsonEnd !== -1) {
           parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1))
         }
       } catch {
-        // Kan ikke parse — avbryt stille
         setImageAnalyzing(false)
         setImageAnalyzed(false)
         return
       }
 
-      if (!parsed) {
-        setImageAnalyzing(false)
-        setImageAnalyzed(false)
-        return
-      }
+      if (!parsed) { setImageAnalyzing(false); setImageAnalyzed(false); return }
 
       if (parsed.type === 'shelf') {
         setImageAnalyzing(false)
@@ -329,15 +318,8 @@ Returner KUN JSON, ingen annen tekst.` }
         return
       }
 
-      // Enkelt gjenstand
-      if (parsed.confident === false) {
-        setImageAnalyzing(false)
-        setImageAnalyzed(false)
-        return
-      }
+      if (parsed.confident === false) { setImageAnalyzing(false); setImageAnalyzed(false); return }
 
-      // FIX: Fyll kun tomme felt — aldri overskriv det brukeren har skrevet.
-      // Bruk separate bokfelt for bøker så navn/beskrivelse ikke overskrives ved retur.
       if (parsed.name && !name.trim())               setName(parsed.name)
       if (parsed.description && !description.trim()) setDescription(parsed.description)
       if (parsed.category)                           setCategoryId(parsed.category)
@@ -346,7 +328,6 @@ Returner KUN JSON, ingen annen tekst.` }
           prev.includes(parsed.subcategory) ? prev : [...prev, parsed.subcategory]
         )
       }
-
       setImageAnalyzed(true)
     } catch {
       setImageAnalyzed(false)
@@ -354,20 +335,19 @@ Returner KUN JSON, ingen annen tekst.` }
     setImageAnalyzing(false)
   }
 
-  // ─── FIX: Legg til flere bilder samtidig (ingen analyse) ─────────────────
+  // ─── Legg til flere bilder (ingen analyse) ────────────────────────────────
   const addMultipleImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (!files.length) return
     e.target.value = ''
 
-    // Last opp alle filer parallelt
     const uploadPromises = files.map(f => uploadImageToStorage(f))
     const urls = await Promise.all(uploadPromises)
     const validUrls = urls.filter((u): u is string => !!u)
 
     setImagePreviews(prev => {
       const merged = [...prev, ...validUrls]
-      return merged.slice(0, 4) // maks 4
+      return merged.slice(0, MAX_IMAGES)
     })
   }
 
@@ -377,6 +357,16 @@ Returner KUN JSON, ingen annen tekst.` }
       setSelectedImageSrc('own')
       setSuggestedImageUrl('')
     }
+  }
+
+  const moveImage = (from: number, to: number) => {
+    if (to < 0 || to >= imagePreviews.length) return
+    setImagePreviews(prev => {
+      const arr = [...prev]
+      const [item] = arr.splice(from, 1)
+      arr.splice(to, 0, item)
+      return arr
+    })
   }
 
   // ─── Shelf: lagre valgte bøker ────────────────────────────────────────────
@@ -408,7 +398,6 @@ Returner KUN JSON, ingen annen tekst.` }
     sessionStorage.removeItem(DRAFT_KEY)
     router.push('/')
   }
-
 
   // ─── Import: publiser valgte items fra ordreimport ─────────────────────────
   const handleImportPublish = async (items: ParsedItem[]) => {
@@ -470,7 +459,6 @@ Returner KUN JSON, ingen annen tekst.` }
       })
       const data = await res.json()
       const text = data.content?.[0]?.text || ''
-      // FIX: Robust parsing
       const cleaned = text.replace(/```json|```/g, '').trim()
       const jsonStart = cleaned.indexOf('{')
       const jsonEnd = cleaned.lastIndexOf('}')
@@ -508,8 +496,6 @@ Returner KUN JSON, ingen annen tekst.` }
 
   const goToAccess = () => {
     if (!validate()) return
-    // FIX: Draft er allerede lagret løpende — gå bare videre.
-    // Ingen re-analyse eller state-reset skjer herfra.
     router.push('/items/access')
   }
 
@@ -596,6 +582,179 @@ Returner KUN JSON, ingen annen tekst.` }
       />
       <div className="px-4 pt-5 flex flex-col gap-5">
 
+        {/* ── OPPLASTINGSMODUS-VELGER ── */}
+        {(() => {
+          const MODES: { id: AddMode; label: string; emoji: string }[] = [
+            { id: 'manuell', label: 'Manuell',   emoji: '✏️' },
+            { id: 'lenke',   label: 'Fra lenke',  emoji: '🔗' },
+            { id: 'bilde',   label: 'Fra bilde',  emoji: '📷' },
+            { id: 'finn',    label: 'Fra Finn',   emoji: '🏠' },
+            { id: 'mail',    label: 'Fra mail',   emoji: '📧' },
+          ]
+          return (
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: 2 }}>
+              <div style={{ display: 'flex', gap: 8, paddingBottom: 2, width: 'max-content' }}>
+                {MODES.map(m => {
+                  const active = addMode === m.id
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => setAddMode(m.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '8px 14px', borderRadius: 20, fontSize: 13,
+                        border: active ? '1.5px solid var(--terra)' : '1px solid var(--glass-border)',
+                        background: active ? 'var(--terra)' : 'white',
+                        color: active ? 'white' : 'var(--terra-dark)',
+                        fontFamily: 'inherit', cursor: 'pointer',
+                        transition: 'all 150ms ease', whiteSpace: 'nowrap',
+                        boxShadow: active ? '0 2px 8px rgba(46,98,113,0.22)' : 'none',
+                      }}>
+                      <span style={{ fontSize: 14 }}>{m.emoji}</span>
+                      {m.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* ── MODUS-PANEL: Lenke ── */}
+        {addMode === 'lenke' && (
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2">
+              <input
+                value={urlInput}
+                onChange={e => setUrlInput(e.target.value)}
+                placeholder="Lim inn lenke til gjenstanden…"
+                className="glass flex-1 outline-none text-sm"
+                style={{ borderRadius: 12, padding: '11px 14px', color: 'var(--terra-dark)' }}
+              />
+              <button onClick={analyzeUrl} disabled={urlLoading || !urlInput.trim()}
+                className="btn-primary disabled:opacity-50" style={{ padding: '11px 16px', fontSize: 14 }}>
+                {urlLoading ? '…' : 'Hent'}
+              </button>
+            </div>
+            {urlLoading && (
+              <div className="glass rounded-2xl p-4 flex items-center gap-3">
+                <span className="text-xl animate-pulse">🔗</span>
+                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Henter produktinfo…</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── MODUS-PANEL: Bilde ── */}
+        {addMode === 'bilde' && (
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => analyzeFileInputRef.current?.click()}
+              disabled={imageAnalyzing}
+              className="glass w-full flex items-center gap-3 text-left disabled:opacity-50"
+              style={{ borderRadius: 14, padding: '14px 16px', border: '0.5px solid rgba(46,98,113,0.25)' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--terra)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+              </svg>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: 'var(--terra-dark)', marginBottom: 2 }}>
+                  {imageAnalyzing ? 'Gjenkjenner…' : 'Ta bilde eller velg fra kamera'}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>
+                  AI gjenkjenner gjenstanden og fyller ut skjemaet – fungerer også på hele bokhyller
+                </p>
+              </div>
+            </button>
+            <input
+              ref={analyzeFileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAnalyzeImage}
+              className="hidden"
+            />
+            {imageAnalyzing && (
+              <div className="glass rounded-2xl p-4 flex items-center gap-3">
+                <span className="text-xl animate-pulse">🔍</span>
+                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Gjenkjenner gjenstanden…</p>
+              </div>
+            )}
+            {imageAnalyzed && (
+              <div className="glass" style={{ borderRadius: 12, padding: '10px 14px' }}>
+                <span className="status-pill active">✓ Gjenkjent – sjekk og juster under</span>
+              </div>
+            )}
+            {shelfStep === 'loading' && (
+              <div className="glass rounded-2xl p-4 flex items-center gap-3">
+                <span className="text-xl animate-pulse">📚</span>
+                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Analyserer bokhyllen…</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── MODUS-PANEL: Finn.no ── */}
+        {addMode === 'finn' && (
+          <div className="glass rounded-2xl p-5 flex flex-col gap-3" style={{ border: '1px solid var(--glass-border)' }}>
+            <p className="text-sm font-semibold" style={{ color: 'var(--terra-dark)' }}>Importer fra Finn.no</p>
+            <p className="text-xs" style={{ color: 'var(--terra-mid)', lineHeight: 1.55 }}>
+              Last opp skjermbilder av dine Finn.no-annonser – AI gjenkjenner produktene og drafter annonsene for deg.
+            </p>
+            <FinnImporter />
+          </div>
+        )}
+
+        {/* ── MODUS-PANEL: Mail ── */}
+        {addMode === 'mail' && (
+          <div className="glass rounded-2xl p-5 flex flex-col gap-4" style={{ border: '1px solid var(--glass-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: 12, flexShrink: 0,
+                background: 'rgba(46,98,113,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
+              }}>📧</div>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: 'var(--terra-dark)', marginBottom: 2 }}>Videresend ordrebekreftelse</p>
+                <p className="text-xs" style={{ color: 'var(--terra-mid)', lineHeight: 1.5 }}>Vi gjenkjenner produktene og drafter annonsene automatisk</p>
+              </div>
+            </div>
+
+            <div style={{
+              background: 'rgba(46,98,113,0.06)', borderRadius: 12,
+              padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10,
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--terra)', letterSpacing: '-0.01em', userSelect: 'all', flex: 1 }}>
+                leggut@villageapp.no
+              </span>
+              <button
+                onClick={() => navigator.clipboard?.writeText('leggut@villageapp.no')}
+                style={{
+                  fontSize: 11, padding: '4px 10px', borderRadius: 20,
+                  border: '1px solid var(--glass-border)', background: 'white',
+                  color: 'var(--terra-mid)', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+                }}>
+                Kopier
+              </button>
+            </div>
+
+            <p className="text-xs" style={{ color: 'var(--terra-mid)', lineHeight: 1.65 }}>
+              Videresend fra e-postadressen tilknyttet kontoen din
+              {userEmail && (
+                <> – <strong style={{ color: 'var(--terra-dark)' }}>{userEmail}</strong></>
+              )}
+              . Vi sender deg et varsel i appen når annonsene er klare til gjennomgang.
+            </p>
+
+            <div style={{
+              background: 'rgba(46,98,113,0.04)', borderRadius: 10,
+              padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'flex-start',
+            }}>
+              <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>💡</span>
+              <p className="text-xs" style={{ color: 'var(--terra-mid)', lineHeight: 1.6 }}>
+                Fungerer med de fleste norske nettbutikker: Zalando, H&M, Stokke, Babyshop, Komplett og mer.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── KATEGORI ── */}
         <div className="flex flex-col gap-2">
           <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Kategori *</p>
@@ -666,7 +825,7 @@ Returner KUN JSON, ingen annen tekst.` }
               {errors.subcategory && <p className="text-xs" style={{ color: '#ef4444' }}>{errors.subcategory}</p>}
             </div>
 
-            {/* FIX: «Hvilken bok er dette» — kun etter underkategori, kun for bøker */}
+            {/* Hvilken bok er dette — kun for bøker */}
             {isBook && subcategoryIds.length > 0 && (
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Hvilken bok er dette?</p>
@@ -700,7 +859,7 @@ Returner KUN JSON, ingen annen tekst.` }
               {errors.name && <p className="text-xs" style={{ color: '#ef4444' }}>{errors.name}</p>}
             </div>
 
-            {/* ALDER (baby-og-barn, ikke gravid) */}
+            {/* ALDER */}
             {selectedCat.hasAge && !subcategoryIds.includes('gravid') && (
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Alder</p>
@@ -815,15 +974,20 @@ Returner KUN JSON, ingen annen tekst.` }
               {errors.location && <p className="text-xs" style={{ color: '#ef4444' }}>{errors.location}</p>}
             </div>
 
-            {/* FIX: BILDER — felles multi-fil-input + analyse-slot holdes separert */}
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
-                {imagePreviews.length > 0 || suggestedImageUrl ? 'Bilder' : 'Bilder *'}
-              </p>
+            {/* ── BILDER ── */}
+            <div className="flex flex-col gap-3">
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
+                  {imagePreviews.length > 0 || suggestedImageUrl ? 'Bilder' : 'Bilder *'}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>
+                  {imagePreviews.length}/{MAX_IMAGES}
+                </p>
+              </div>
 
-              {/* Velg mellom eget og foreslått bilde (vises kun når begge finnes) */}
+              {/* Velg mellom eget og foreslått bilde */}
               {imagePreviews.length > 0 && suggestedImageUrl && (
-                <div className="grid grid-cols-2 gap-3 mb-2">
+                <div className="grid grid-cols-2 gap-3">
                   <button onClick={() => setSelectedImageSrc('own')}
                     className={`rounded-2xl overflow-hidden border-2 transition-colors ${selectedImageSrc === 'own' ? 'border-[var(--terra)]' : 'border-transparent'}`}>
                     <img src={imagePreviews[0]} className="w-full h-28 object-cover" alt="Ditt bilde" />
@@ -843,51 +1007,80 @@ Returner KUN JSON, ingen annen tekst.` }
                 </div>
               )}
 
-              {/* FIX: Bildegrid — slot 0 er alltid analyse-knapp (separat input),
-                  slots 1–3 åpner felles multi-fil-input uten analyse */}
-              <div className="grid grid-cols-4 gap-2">
-                {[0, 1, 2, 3].map(i => {
-                  const preview = imagePreviews[i]
-                  return (
-                    <div key={i} className="relative" style={{ height: 80 }}>
-                      {preview ? (
-                        <>
-                          <img src={preview} className="w-full h-full object-cover rounded-xl" alt={`Bilde ${i + 1}`} />
-                          {i === 0 && (
-                            <span className="absolute bottom-1 left-1 text-white px-1.5 py-0.5 rounded-full"
-                              style={{ background: 'rgba(0,0,0,0.5)', fontSize: 9 }}>Hoved</span>
-                          )}
-                          <button
-                            onClick={() => removeImage(i)}
-                            className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center text-white"
-                            style={{ background: 'rgba(0,0,0,0.5)', fontSize: 12 }}>×</button>
-                        </>
-                      ) : i === 0 ? (
-                        // Slot 0: trigger bildeanalyse
-                        <button
-                          onClick={() => analyzeFileInputRef.current?.click()}
-                          className="w-full h-full rounded-xl flex flex-col items-center justify-center gap-1"
-                          style={{ background: 'white', border: '1px dashed rgba(46,98,113,0.35)' }}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--terra-mid)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                          </svg>
-                          <span style={{ fontSize: 9, color: 'var(--terra-mid)' }}>Bilde</span>
-                        </button>
-                      ) : (
-                        // Slots 1–3: legg til ekstra bilder uten analyse
-                        // Vises alltid (ikke kun om forrige slot er fylt) for fri rekkefølge
-                        <button
-                          onClick={() => multiFileInputRef.current?.click()}
-                          className="w-full h-full rounded-xl flex items-center justify-center"
-                          style={{ background: '#F5F0EA', border: '0.5px dashed rgba(46,98,113,0.2)' }}>
-                          <span style={{ fontSize: 18, color: 'rgba(46,98,113,0.3)' }}>+</span>
-                        </button>
-                      )}
-                    </div>
-                  )
-                })}
+              {/* Horisontal bildescroller */}
+              <div style={{ display: 'flex', gap: 10, overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 4 }}>
+                {imagePreviews.map((preview, i) => (
+                  <div key={preview} style={{ position: 'relative', flexShrink: 0, width: 90, height: 90 }}>
+                    <img
+                      src={preview}
+                      className="w-full h-full object-cover"
+                      style={{ borderRadius: 12 }}
+                      alt={`Bilde ${i + 1}`}
+                    />
+                    {i === 0 && (
+                      <span
+                        style={{
+                          position: 'absolute', bottom: 4, left: 4,
+                          background: 'rgba(0,0,0,0.52)', color: 'white',
+                          fontSize: 9, padding: '2px 6px', borderRadius: 99,
+                        }}>
+                        Hoved
+                      </span>
+                    )}
+                    {/* Flytt til venstre */}
+                    {i > 0 && (
+                      <button
+                        onClick={() => moveImage(i, i - 1)}
+                        style={{
+                          position: 'absolute', top: 4, left: 4,
+                          width: 20, height: 20, borderRadius: '50%',
+                          background: 'rgba(0,0,0,0.5)', border: 'none',
+                          color: 'white', fontSize: 11, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>‹</button>
+                    )}
+                    {/* Slett */}
+                    <button
+                      onClick={() => removeImage(i)}
+                      style={{
+                        position: 'absolute', top: 4, right: 4,
+                        width: 20, height: 20, borderRadius: '50%',
+                        background: 'rgba(0,0,0,0.5)', border: 'none',
+                        color: 'white', fontSize: 14, lineHeight: 1, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>×</button>
+                  </div>
+                ))}
+
+                {/* Legg til bilder-knapp — vises alltid hvis under maks */}
+                {imagePreviews.length < MAX_IMAGES && (
+                  <button
+                    onClick={() => {
+                      // I bilde-modus: analyser hvis ingen bilder enda, ellers bare legg til
+                      if (addMode === 'bilde' && imagePreviews.length === 0) {
+                        analyzeFileInputRef.current?.click()
+                      } else {
+                        multiFileInputRef.current?.click()
+                      }
+                    }}
+                    style={{
+                      flexShrink: 0, width: 90, height: 90, borderRadius: 12,
+                      border: '1px dashed rgba(46,98,113,0.35)',
+                      background: 'white', cursor: 'pointer',
+                      display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center', gap: 4,
+                    }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-mid)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                    <span style={{ fontSize: 9, color: 'var(--terra-mid)' }}>
+                      {imagePreviews.length === 0 ? 'Legg til' : 'Flere'}
+                    </span>
+                  </button>
+                )}
               </div>
-              {/* FIX: Felles multi-fil-input for slots 1–3 — multiple tillatt */}
+
+              {/* Multi-fil-input — multiple + capture for iOS */}
               <input
                 ref={multiFileInputRef}
                 type="file"
@@ -896,7 +1089,20 @@ Returner KUN JSON, ingen annen tekst.` }
                 onChange={addMultipleImages}
                 className="hidden"
               />
-              <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>Første bilde blir hovedbilde. Du kan legge til opptil 4 bilder.</p>
+              {/* Analyse-input — kun én fil, brukes av bilde-modus */}
+              {addMode !== 'bilde' && (
+                <input
+                  ref={analyzeFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAnalyzeImage}
+                  className="hidden"
+                />
+              )}
+
+              <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>
+                Første bilde blir hovedbilde. Du kan legge til opptil {MAX_IMAGES} bilder. Hold og dra for å sortere.
+              </p>
               {errors.images && <p className="text-xs" style={{ color: '#ef4444' }}>{errors.images}</p>}
             </div>
 
@@ -906,84 +1112,6 @@ Returner KUN JSON, ingen annen tekst.` }
             </button>
           </>
         )}
-
-        {/* ── SKILLELINJE ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0' }}>
-          <div style={{ flex: 1, height: 1, background: 'rgba(46,98,113,0.12)' }} />
-          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>
-            Eller fyll ut automatisk
-          </p>
-          <div style={{ flex: 1, height: 1, background: 'rgba(46,98,113,0.12)' }} />
-        </div>
-
-        {/* ── FINN PRODUKTET RASKT ── */}
-        <div className="flex flex-col gap-3">
-          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
-            {isBook ? 'Finn boken raskt' : 'Finn produktet raskt'}
-          </p>
-
-          {/* URL */}
-          <div className="flex gap-2">
-            <input
-              value={urlInput}
-              onChange={e => setUrlInput(e.target.value)}
-              placeholder="Lim inn lenke til gjenstanden…"
-              className="glass flex-1 outline-none text-sm"
-              style={{ borderRadius: 12, padding: '11px 14px', color: 'var(--terra-dark)' }}
-            />
-            <button onClick={analyzeUrl} disabled={urlLoading || !urlInput.trim()}
-              className="btn-primary disabled:opacity-50" style={{ padding: '11px 16px', fontSize: 14 }}>
-              {urlLoading ? '…' : 'Hent'}
-            </button>
-          </div>
-
-          {/* FIX: Analyser bilde — trigger kun gjenkjenning, separat fra ekstra-bilder */}
-          <button
-            onClick={() => analyzeFileInputRef.current?.click()}
-            disabled={imageAnalyzing}
-            className="glass w-full flex items-center gap-3 text-left disabled:opacity-50"
-            style={{ borderRadius: 14, padding: '13px 16px', border: '0.5px solid rgba(46,98,113,0.2)' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-mid)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-            </svg>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)', marginBottom: 2, letterSpacing: '0.06em' }}>
-                {imageAnalyzing ? 'Gjenkjenner…' : 'Gjenkjenn med bilde'}
-              </p>
-              <p className="text-sm" style={{ color: 'var(--terra-dark)' }}>
-                Ta bilde av gjenstanden – eller hele bokhylla
-              </p>
-            </div>
-          </button>
-          {/* Skjult input KUN for analyse */}
-          <input
-            ref={analyzeFileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleAnalyzeImage}
-            className="hidden"
-          />
-
-          {imageAnalyzing && (
-            <div className="glass rounded-2xl p-4 text-center flex items-center justify-center gap-3">
-              <span className="text-xl animate-pulse">🔍</span>
-              <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Gjenkjenner gjenstanden…</p>
-            </div>
-          )}
-
-          {shelfStep === 'loading' && (
-            <div className="glass rounded-2xl p-4 text-center flex items-center justify-center gap-3">
-              <span className="text-xl animate-pulse">📚</span>
-              <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Analyserer bokhyllen…</p>
-            </div>
-          )}
-
-          {imageAnalyzed && (
-            <div className="glass" style={{ borderRadius: 12, padding: '10px 14px' }}>
-              <span className="status-pill active">✓ Gjenkjent – sjekk og juster under</span>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   )

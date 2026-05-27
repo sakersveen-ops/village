@@ -83,9 +83,7 @@ export default function ManageItemsPage() {
             ←
           </span>
         </Link>
-        <h1 className="page-header-title font-display" style={{ flex: 1, textAlign: 'center' }}>
-          Mine gjenstander
-        </h1>
+        
         <Link href="/add" aria-label="Legg ut ny gjenstand">
           <span className="flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-full"
             style={{ background: 'var(--terra)', color: '#fff' }}>

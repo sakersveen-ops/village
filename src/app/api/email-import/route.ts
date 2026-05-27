@@ -89,16 +89,21 @@ async function fetchEmailBody(emailId: string): Promise<{ text: string | null; h
 }
 
 // Fetch first PDF attachment and return as base64
-async function fetchPdfAttachment(emailId: string, attachmentId: string): Promise<string | null> {
-  const url = `https://api.resend.com/emails/receiving/${emailId}/attachments/${attachmentId}`
-  const metaRes = await fetch(url, { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` } })
-  const meta = await metaRes.json()
-  console.log('[fetchPdfAttachment]', url, metaRes.status, JSON.stringify(meta).slice(0, 300))
-  if (!metaRes.ok) return null
-  if (!meta.download_url) return null
+// Lists attachments first to get the correct download_url (webhook attachment ID may differ)
+async function fetchPdfAttachment(emailId: string): Promise<string | null> {
+  // List attachments to get download_url
+  const listUrl = `https://api.resend.com/emails/receiving/${emailId}/attachments`
+  const listRes = await fetch(listUrl, { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` } })
+  const listData = await listRes.json()
+  console.log('[fetchPdfAttachment list]', listUrl, listRes.status, JSON.stringify(listData).slice(0, 300))
+  if (!listRes.ok) return null
+
+  const pdfAttachment = listData.data?.find((a: any) => a.content_type === 'application/pdf')
+  if (!pdfAttachment?.download_url) return null
 
   // Download the actual PDF bytes
-  const pdfRes = await fetch(meta.download_url)
+  const pdfRes = await fetch(pdfAttachment.download_url)
+  console.log('[fetchPdfAttachment download]', pdfAttachment.download_url.slice(0, 80), pdfRes.status)
   if (!pdfRes.ok) return null
   const buffer = await pdfRes.arrayBuffer()
   return Buffer.from(buffer).toString('base64')
@@ -169,7 +174,7 @@ export async function POST(req: Request) {
     if (!pdfAttachment) {
       return Response.json({ ok: false, reason: 'empty_body' })
     }
-    const pdfBase64 = await fetchPdfAttachment(event.data.email_id, pdfAttachment.id)
+    const pdfBase64 = await fetchPdfAttachment(event.data.email_id)
     if (!pdfBase64) {
       return Response.json({ ok: false, reason: 'pdf_fetch_failed' })
     }

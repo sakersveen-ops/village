@@ -48,6 +48,7 @@ interface ResendEmailReceivedEvent {
     subject?: string
     text?: string       // NOTE: Resend does not expose body in the webhook payload.
     html?: string       // Body must be fetched separately – see fetchEmailBody().
+    attachments?: Array<{ id: string; filename: string; content_type: string; content_disposition: string }>
   }
 }
 
@@ -75,9 +76,9 @@ function verifySignature(rawBody: string, headers: Headers): boolean {
   return actual === expected
 }
 
-// Fetch full email body from Resend API (body is NOT in the webhook payload)
+// Fetch full email body from Resend received emails API
 async function fetchEmailBody(emailId: string): Promise<{ text: string | null; html: string | null }> {
-  const res = await fetch(`https://api.resend.com/emails/${emailId}`, {
+  const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
     headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
   })
   if (!res.ok) return { text: null, html: null }
@@ -85,10 +86,28 @@ async function fetchEmailBody(emailId: string): Promise<{ text: string | null; h
   return { text: data.text ?? null, html: data.html ?? null }
 }
 
+// Fetch first PDF attachment and return as base64
+async function fetchPdfAttachment(emailId: string, attachmentId: string): Promise<string | null> {
+  // Get download_url from attachments API
+  const metaRes = await fetch(
+    `https://api.resend.com/emails/receiving/${emailId}/attachments/${attachmentId}`,
+    { headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` } }
+  )
+  if (!metaRes.ok) return null
+  const meta = await metaRes.json()
+  if (!meta.download_url) return null
+
+  // Download the actual PDF bytes
+  const pdfRes = await fetch(meta.download_url)
+  if (!pdfRes.ok) return null
+  const buffer = await pdfRes.arrayBuffer()
+  return Buffer.from(buffer).toString('base64')
+}
+
 export async function POST(req: Request) {
   const rawBody = await req.text()
 
-  // TODO: re-enable signature check once confirmed working
+  // TODO: re-enable once confirmed working
   // if (!verifySignature(rawBody, req.headers)) {
   //   return Response.json({ error: 'unauthorized' }, { status: 401 })
   // }
@@ -136,12 +155,34 @@ export async function POST(req: Request) {
   const { text, html } = await fetchEmailBody(event.data.email_id)
   const emailText = text?.trim() || (html ? stripHtml(html) : '')
 
-  if (!emailText) {
-    return Response.json({ ok: false, reason: 'empty_body' })
+  // Build Haiku message content — prefer text body, fall back to PDF attachment
+  const anthropic = new Anthropic()
+  let haikuContent: any
+
+  if (emailText) {
+    haikuContent = emailText
+  } else {
+    // No text body — look for a PDF attachment in the webhook payload
+    const pdfAttachment = event.data.attachments?.find(
+      (a: any) => a.content_type === 'application/pdf'
+    )
+    if (!pdfAttachment) {
+      return Response.json({ ok: false, reason: 'empty_body' })
+    }
+    const pdfBase64 = await fetchPdfAttachment(event.data.email_id, pdfAttachment.id)
+    if (!pdfBase64) {
+      return Response.json({ ok: false, reason: 'pdf_fetch_failed' })
+    }
+    haikuContent = [
+      {
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
+      },
+      { type: 'text', text: 'Analyser dette dokumentet og returner JSON som beskrevet.' },
+    ]
   }
 
   // Parse with Haiku
-  const anthropic = new Anthropic()
   let parsed: { items: any[]; store: string | null; order_id: string | null }
 
   try {
@@ -149,7 +190,7 @@ export async function POST(req: Request) {
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1000,
       system: HAIKU_SYSTEM,
-      messages: [{ role: 'user', content: emailText }],
+      messages: [{ role: 'user', content: haikuContent }],
     })
     const raw = msg.content.find(b => b.type === 'text')?.text ?? ''
     parsed = JSON.parse(raw.replace(/```json|```/g, '').trim())

@@ -719,6 +719,7 @@ Returner KUN JSON, ingen annen tekst.` }
   return (
     <div className="max-w-lg mx-auto pb-24">
       <ImportModal
+        key={importDraft?.id ?? 'no-draft'}
         draft={importDraft}
         onClose={() => setImportDraft(null)}
         onPublish={handleImportPublish}

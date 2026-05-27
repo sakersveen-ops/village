@@ -1,6 +1,7 @@
 // Path of this file: src/app/add/page.tsx
 'use client'
 import { useEffect, useRef, useState, useCallback } from 'react'
+import Script from 'next/script'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import {
@@ -514,6 +515,10 @@ Returner KUN JSON, ingen annen tekst.` }
   // ─── HOVED-SKJEMA ─────────────────────────────────────────────────────────
   return (
     <div className="max-w-lg mx-auto pb-24">
+      <Script
+        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
+        strategy="lazyOnload"
+      />
       <div className="px-4 pt-5 flex flex-col gap-5">
 
         {/* ── KATEGORI ── */}

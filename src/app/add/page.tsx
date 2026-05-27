@@ -1,6 +1,6 @@
 // Path of this file: src/app/add/page.tsx
 'use client'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Script from 'next/script'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
@@ -320,7 +320,7 @@ Returner KUN JSON, ingen annen tekst.` }
       if (parsed.confident === false) { setImageAnalyzing(false); setImageAnalyzed(false); return }
 
       if (parsed.name && !name.trim())               setName(parsed.name)
-      if (parsed.description && !description.trim()) setDescription(parsed.description)
+      if (addMode === 'bilde' && parsed.description && !description.trim()) setDescription(parsed.description)
       if (parsed.category)                           setCategoryId(parsed.category)
       if (parsed.subcategory) {
         setSubcategoryIds(prev =>
@@ -464,7 +464,7 @@ Returner KUN JSON, ingen annen tekst.` }
       if (jsonStart !== -1 && jsonEnd !== -1) {
         const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1))
         if (parsed.name && !name.trim())               setName(parsed.name)
-        if (parsed.description && !description.trim()) setDescription(parsed.description)
+        // description fylles ikke automatisk — brukeren skriver selv
         if (parsed.category)                           setCategoryId(parsed.category)
         if (parsed.subcategory) {
           setSubcategoryIds(prev =>
@@ -493,9 +493,54 @@ Returner KUN JSON, ingen annen tekst.` }
     return Object.keys(errs).length === 0
   }
 
-  const goToAccess = () => {
+  const goToAccess = async () => {
     if (!validate()) return
-    router.push('/items/access')
+    setSaving(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setSaving(false); return }
+
+      const imageUrl =
+        selectedImageSrc === 'suggested' && suggestedImageUrl
+          ? suggestedImageUrl
+          : imagePreviews[0] ?? null
+
+      const extraImages = imagePreviews.slice(1)
+
+      const { data: item, error } = await supabase
+        .from('items')
+        .insert({
+          owner_id:      user.id,
+          name:          name.trim(),
+          description:   description.trim() || null,
+          category:      categoryId,
+          subcategories: subcategoryIds,
+          location:      location.trim() || null,
+          gender:        gender || null,
+          size:          size || null,
+          age_ranges:    ageRanges.length ? ageRanges : null,
+          color:         color || null,
+          image_url:     imageUrl,
+          extra_images:  extraImages.length ? extraImages : null,
+          available:     true,
+        })
+        .select('id')
+        .single()
+
+      if (error || !item?.id) {
+        console.error('Insert failed:', error)
+        setSaving(false)
+        return
+      }
+
+      sessionStorage.removeItem(DRAFT_KEY)
+      track(Events.ITEM_PUBLISHED, { category: categoryId })
+      router.push(`/items/access?item=${item.id}&name=${encodeURIComponent(name.trim())}`)
+    } catch (e) {
+      console.error(e)
+      setSaving(false)
+    }
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -581,40 +626,76 @@ Returner KUN JSON, ingen annen tekst.` }
       />
       <div className="px-4 pt-5 flex flex-col gap-5">
 
-        {/* ── OPPLASTINGSMODUS-VELGER ── */}
+        {/* ── OPPLASTINGSMODUS-VELGER (segmented slider) ── */}
         {(() => {
-          const MODES: { id: AddMode; label: string; emoji: string }[] = [
-            { id: 'manuell', label: 'Manuell',   emoji: '✏️' },
-            { id: 'lenke',   label: 'Fra lenke',  emoji: '🔗' },
-            { id: 'bilde',   label: 'Fra bilde',  emoji: '📷' },
-            { id: 'finn',    label: 'Fra Finn',   emoji: '🏠' },
-            { id: 'mail',    label: 'Fra mail',   emoji: '📧' },
-          ]
+          // SVG icons per mode — designstandard: 1.6px stroke, rounded, teal palette
+          const ICONS: Record<AddMode, React.ReactNode> = {
+            manuell: (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+              </svg>
+            ),
+            lenke: (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+            ),
+            bilde: (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+              </svg>
+            ),
+            finn: (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+            ),
+            mail: (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
+              </svg>
+            ),
+          }
+          const LABELS: Record<AddMode, string> = {
+            manuell: 'Manuell',
+            lenke:   'Lenke',
+            bilde:   'Bilde',
+            finn:    'Finn',
+            mail:    'Mail',
+          }
+          const MODES: AddMode[] = ['manuell', 'lenke', 'bilde', 'finn', 'mail']
           return (
-            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: 2 }}>
-              <div style={{ display: 'flex', gap: 8, paddingBottom: 2, width: 'max-content' }}>
-                {MODES.map(m => {
-                  const active = addMode === m.id
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={() => setAddMode(m.id)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 6,
-                        padding: '8px 14px', borderRadius: 20, fontSize: 13,
-                        border: active ? '1.5px solid var(--terra)' : '1px solid var(--glass-border)',
-                        background: active ? 'var(--terra)' : 'white',
-                        color: active ? 'white' : 'var(--terra-dark)',
-                        fontFamily: 'inherit', cursor: 'pointer',
-                        transition: 'all 150ms ease', whiteSpace: 'nowrap',
-                        boxShadow: active ? '0 2px 8px rgba(46,98,113,0.22)' : 'none',
-                      }}>
-                      <span style={{ fontSize: 14 }}>{m.emoji}</span>
-                      {m.label}
-                    </button>
-                  )
-                })}
-              </div>
+            <div className="glass" style={{
+              borderRadius: 14, padding: 4,
+              display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 3,
+            }}>
+              {MODES.map(m => {
+                const active = addMode === m
+                return (
+                  <button
+                    key={m}
+                    onClick={() => setAddMode(m)}
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      justifyContent: 'center', gap: 4,
+                      padding: '8px 4px', borderRadius: 10,
+                      border: 'none',
+                      background: active ? 'var(--terra)' : 'transparent',
+                      color: active ? 'white' : 'var(--terra-mid)',
+                      fontFamily: 'inherit', cursor: 'pointer',
+                      transition: 'all 150ms ease',
+                      boxShadow: active ? '0 1px 6px rgba(46,98,113,0.28)' : 'none',
+                      fontSize: 10, fontWeight: active ? 600 : 400,
+                      letterSpacing: '0.01em',
+                      minWidth: 0,
+                    }}>
+                    {ICONS[m]}
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', textAlign: 'center' }}>
+                      {LABELS[m]}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           )
         })()}
@@ -926,24 +1007,60 @@ Returner KUN JSON, ingen annen tekst.` }
             {selectedCat.hasColor && (
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Farge</p>
-                <div className="flex flex-wrap gap-2.5">
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
                   {COLORS.map(c => (
                     <button
                       key={c.id}
                       onClick={() => setColor(c.id === color ? '' : c.id)}
                       title={c.label}
                       style={{
-                        width: 28, height: 28,
+                        width: 30, height: 30,
                         borderRadius: '50%',
                         background: c.hex,
                         border: color === c.id ? '2.5px solid var(--terra)' : `2px solid ${c.border || 'transparent'}`,
-                        transform: color === c.id ? 'scale(1.2)' : 'scale(1)',
-                        transition: 'transform 0.1s',
+                        transform: color === c.id ? 'scale(1.15)' : 'scale(1)',
+                        transition: 'transform 0.15s',
                         outline: c.id === 'hvit' ? '0.5px solid #ddd' : 'none',
+                        flexShrink: 0,
                       }}
                     />
                   ))}
+                  {/* Velg egendefinert farge — pipette-ikon */}
+                  <label
+                    title="Velg farge"
+                    style={{
+                      width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                      background: color.startsWith('#') ? color : 'white',
+                      border: color.startsWith('#') ? '2.5px solid var(--terra)' : '1.5px dashed rgba(46,98,113,0.4)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'pointer', position: 'relative', overflow: 'hidden',
+                      transform: color.startsWith('#') ? 'scale(1.15)' : 'scale(1)',
+                      transition: 'transform 0.15s',
+                    }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                      stroke={color.startsWith('#') ? 'white' : 'var(--terra-mid)'}
+                      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+                      style={{ position: 'relative', zIndex: 1, pointerEvents: 'none' }}>
+                      <path d="M12 2a7 7 0 0 1 7 7c0 4-7 13-7 13S5 13 5 9a7 7 0 0 1 7-7z"/>
+                      <circle cx="12" cy="9" r="2.5" fill={color.startsWith('#') ? 'white' : 'var(--terra-mid)'} stroke="none"/>
+                    </svg>
+                    <input
+                      type="color"
+                      value={color.startsWith('#') ? color : '#2E6271'}
+                      onChange={e => setColor(e.target.value)}
+                      style={{
+                        position: 'absolute', inset: 0, opacity: 0,
+                        width: '100%', height: '100%', cursor: 'pointer', border: 'none', padding: 0,
+                      }}
+                    />
+                  </label>
                 </div>
+                {color.startsWith('#') && (
+                  <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>
+                    Egendefinert farge: <span style={{ fontWeight: 600, color: 'var(--terra-dark)' }}>{color}</span>
+                    <button onClick={() => setColor('')} style={{ marginLeft: 8, color: 'var(--terra)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>Fjern</button>
+                  </p>
+                )}
               </div>
             )}
 

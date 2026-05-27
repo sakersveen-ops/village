@@ -57,10 +57,13 @@ const IconChevronLeft = () => (
 // ─── Item catalogue (full + equal list for share and wishlist) ────────────────
 const ITEM_CATALOGUE: Record<string, { label: string; items: string[] }[]> = {
   Barn: [
-    { label: '0–6 mnd', items: ['Bedside crib', 'Babynest', 'Babybilstol', 'Bæresjal/sele', 'Babygym', 'Vippestol', 'Badebalje med nyfødtstøtte', 'Brystpumpe', 'Sterilisator', 'Flaskevarmer', 'Omslagsbodyer (str. 50–68)', 'Tynne ullsett (str. 50–68)'] },
-    { label: '6–12 mnd', items: ['Babysete til høystol', 'Matprosessor/blender', 'Vognpose (vår/vinter)', 'Bæremeis', 'Gåvogn', 'Aktivitetstablett/-bord', 'Parkdress til krabbing', 'Første par med sko'] },
-    { label: '1–2 år', items: ['Reiseseng', 'Junior-dyne', 'Bilstol nr. 2', 'Sykkelvogn', 'Trille', 'Trehjulsykkel', 'Balansesykkel', 'Sandkassesett', 'Regntøy og skallbekledning', 'Vinterdress'] },
-    { label: '3–6 år', items: ['Sykkel med pedaler', 'Skiutstyr', 'Skøyteutstyr', 'Sparkesykkel', 'Barnehagesekk', 'Termos', 'Sitteunderlag', 'Sengehest til juniorseng', 'Store ytterklær', 'Pensko til spesielle anledninger'] },
+    { label: 'Sove', items: ['Bedside crib', 'Babynest', 'Reiseseng', 'Junior-dyne', 'Sengehest til juniorseng', 'Vippestol', 'Lydmaskin/nattlampe'] },
+    { label: 'Reise', items: ['Babybilstol (gruppe 0/1)', 'Bilstol gruppe 2/3', 'Sykkelvogn', 'Trille', 'Bæresjal/sele', 'Bæremeis', 'Vognpose (vår/vinter)'] },
+    { label: 'Spise', items: ['Babysete til høystol', 'Matprosessor/blender', 'Brystpumpe', 'Sterilisator', 'Flaskevarmer'] },
+    { label: 'Leke & aktivitet', items: ['Babygym', 'Aktivitetstablett/-bord', 'Brettspill', 'Trehjulsykkel', 'Balansesykkel', 'Sykkel med pedaler', 'Sparkesykkel', 'Sandkassesett', 'Skiutstyr (barn)', 'Skøyteutstyr (barn)'] },
+    { label: 'Bade & stelle', items: ['Badebalje med nyfødtstøtte', 'Babybadestol', 'Stellebord'] },
+    { label: 'Ha på', items: ['Omslagsbodyer (str. 50–68)', 'Tynne ullsett (str. 50–68)', 'Parkdress til krabbing', 'Regntøy og skallbekledning', 'Vinterdress', 'Store ytterklær', 'Pensko til spesielle anledninger', 'Første par med sko'] },
+    { label: 'Skole & barnehage', items: ['Barnehagesekk', 'Termos', 'Sitteunderlag', 'Tegnesaker og hobbyutstyr'] },
   ],
   Verktøy: [{ label: 'Hage & bygg', items: ['Drill', 'Sirkelsag', 'Sliper', 'Høytrykkspyler', 'Gressklipper', 'Hagesaks', 'Trillebår', 'Stige', 'Hakke/spade', 'Murpistol'] }],
   Sport: [{ label: 'Friluft & trening', items: ['Ski (voksen)', 'Skistøvler', 'Skistaver', 'Sykkel', 'Telt', 'Sovepose', 'Ryggsekk', 'Kajakk', 'Padleåre', 'Rulleskøyter', 'Isøks', 'Klatresele'] }],
@@ -409,6 +412,147 @@ function FinnOnboardingStep({ onNext, onBack }: { onNext: () => void; onBack: ()
   )
 }
 
+// ─── Step 5b: Add-item loop ───────────────────────────────────────────────────
+type AddItemLoopProps = {
+  items: string[]
+  currentIndex: number
+  onNext: () => void
+  onSkipAll: () => void
+}
+function AddItemLoopStep({ items, currentIndex, onNext, onSkipAll }: AddItemLoopProps) {
+  const supabase = createClient()
+  const item = items[currentIndex]
+  const total = items.length
+  const [description, setDescription] = useState('')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  // Reset form when item changes
+  useEffect(() => {
+    setDescription('')
+    setImageFile(null)
+    setImagePreview('')
+  }, [currentIndex])
+
+  const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { onNext(); return }
+      let image_url = ''
+      if (imageFile) {
+        const ext = imageFile.name.split('.').pop()
+        const path = `items/${user.id}_${Date.now()}.${ext}`
+        await supabase.storage.from('item-images').upload(path, imageFile, { upsert: true })
+        const { data } = supabase.storage.from('item-images').getPublicUrl(path)
+        image_url = data.publicUrl
+      }
+      await supabase.from('items').insert({
+        owner_id: user.id,
+        name: item,
+        description: description || null,
+        image_url: image_url || null,
+        available: true,
+      })
+      track('onboarding_item_registered', { item_name: item })
+    } catch {
+      // continue even on error
+    }
+    setSaving(false)
+    onNext()
+  }
+
+  return (
+    <div className="flex flex-col gap-5 flex-1">
+      {/* Progress within loop */}
+      <div className="flex items-center gap-3">
+        <div className="flex gap-1">
+          {items.map((_, i) => (
+            <div key={i} className="h-1.5 rounded-full transition-all"
+              style={{ width: 24, background: i <= currentIndex ? 'var(--terra)' : 'rgba(46,98,113,0.15)' }} />
+          ))}
+        </div>
+        <span className="text-xs" style={{ color: 'var(--terra-mid)' }}>{currentIndex + 1} av {total}</span>
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--terra-mid)' }}>
+          Legg ut gjenstand
+        </p>
+        <h1 className="font-display text-2xl font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+          {item}
+        </h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
+          Legg gjerne til et bilde og en kort beskrivelse – da er det lettere for venner å se hva du tilbyr.
+        </p>
+      </div>
+
+      {/* Image upload */}
+      <label className="cursor-pointer">
+        <div className="w-full aspect-video rounded-2xl overflow-hidden flex items-center justify-center"
+          style={{ background: 'rgba(46,98,113,0.08)', border: '2px dashed rgba(46,98,113,0.25)' }}>
+          {imagePreview
+            ? <img src={imagePreview} className="w-full h-full object-cover" alt="" />
+            : (
+              <div className="flex flex-col items-center gap-2 text-center p-4">
+                <span className="text-3xl">📷</span>
+                <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>Trykk for å legge til bilde</p>
+              </div>
+            )}
+        </div>
+        <input type="file" accept="image/*" onChange={handleImage} className="hidden" />
+      </label>
+
+      {/* Description */}
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
+          Beskrivelse <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(valgfritt)</span>
+        </label>
+        <textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          placeholder={`Eks: "Brukes 1–2 ganger, god stand. Kan hentes i Frogner."`}
+          rows={3}
+          className="glass px-4 py-3 outline-none w-full resize-none"
+          style={{ borderRadius: 14, color: 'var(--terra-dark)', fontSize: 14 }}
+        />
+      </div>
+
+      <div className="flex flex-col gap-2 mt-2">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="btn-primary w-full"
+          style={{ borderRadius: 14, padding: '14px 0', fontSize: 15, fontWeight: 600, opacity: saving ? 0.6 : 1 }}>
+          {saving ? 'Lagrer…' : currentIndex < total - 1 ? `Lagre og gå til neste →` : 'Lagre og fortsett →'}
+        </button>
+        <button
+          onClick={onNext}
+          className="text-sm py-2 text-center"
+          style={{ color: 'var(--terra-mid)' }}>
+          Hopp over denne
+        </button>
+        {total > 2 && currentIndex < total - 1 && (
+          <button
+            onClick={onSkipAll}
+            className="text-sm py-1 text-center"
+            style={{ color: 'var(--terra-mid)', opacity: 0.7 }}>
+            Hopp over alle gjenværende
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 function OnboardingContent() {
   const [step, setStep] = useState(1)
@@ -434,6 +578,11 @@ function OnboardingContent() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [ownedItems, setOwnedItems] = useState<Set<string>>(new Set())
   const [wantedItems, setWantedItems] = useState<Set<string>>(new Set())
+
+  // Add-item loop: after step 5, loop through selected items for proper registration
+  const [addItemQueue, setAddItemQueue] = useState<string[]>([])
+  const [addItemIndex, setAddItemIndex] = useState(0)
+  const [addItemPhase, setAddItemPhase] = useState(false)
 
   const [showWishModal, setShowWishModal] = useState(false)
   const [showCongrats, setShowCongrats] = useState(false)
@@ -607,7 +756,7 @@ function OnboardingContent() {
         <div>
           <h1 className="font-display text-2xl font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>Hva kan du dele?</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
-            Er det noen av disse tingene – eller andre ting – du ønsker å la vennene dine låne?
+            For å komme i gang har vi listet gjenstander som typisk etterspørres på Village. Velg det du har – du kan gjøre dem tilgjengelige for vennene dine nå eller legge til detaljer senere.
           </p>
         </div>
         <div className="glass px-4 py-3 flex items-start gap-3" style={{ borderRadius: 14 }}>
@@ -634,8 +783,16 @@ function OnboardingContent() {
             </div>
           </div>
         ))}
-        <NavButtons onNext={goNext} onBack={goBack}
-          nextLabel={ownedItems.size > 0 ? `Videre (${ownedItems.size} valgt)` : 'Videre →'}
+        <NavButtons onNext={() => {
+          if (ownedItems.size > 0) {
+            setAddItemQueue([...ownedItems])
+            setAddItemIndex(0)
+            setAddItemPhase(true)
+          } else {
+            goNext()
+          }
+        }} onBack={goBack}
+          nextLabel={ownedItems.size > 0 ? `Registrer ${ownedItems.size} gjenstand${ownedItems.size > 1 ? 'er' : ''} →` : 'Videre →'}
           onSkip={goSkip} skipLabel="Hopp over" />
       </div>
     ),
@@ -644,7 +801,7 @@ function OnboardingContent() {
         <div>
           <h1 className="font-display text-2xl font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>Hva ønsker du å låne?</h1>
           <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
-            Hjertemerk ting du ikke har – du får varsel hvis noen i nettverket ditt begynner å låne det ut.
+            For å komme i gang har vi listet ting som typisk lånes ut på Village. Hjertemerk det du ikke har – du får varsel hvis noen i nettverket ditt begynner å tilby det.
           </p>
         </div>
         <div className="glass px-4 py-3 flex items-start gap-3" style={{ borderRadius: 14 }}>
@@ -694,7 +851,21 @@ function OnboardingContent() {
             style={{ background: i < step ? 'var(--terra)' : 'rgba(46,98,113,0.15)' }} />
         ))}
       </div>
-      {steps[step]}
+      {addItemPhase ? (
+        <AddItemLoopStep
+          items={addItemQueue}
+          currentIndex={addItemIndex}
+          onNext={() => {
+            if (addItemIndex < addItemQueue.length - 1) {
+              setAddItemIndex(i => i + 1)
+            } else {
+              setAddItemPhase(false)
+              goNext()
+            }
+          }}
+          onSkipAll={() => { setAddItemPhase(false); goNext() }}
+        />
+      ) : steps[step]}
       {showWishModal && <WishConfirmModal count={wantedItems.size} onConfirm={confirmWishModal} />}
 
       {/* Gratulerer-splash */}

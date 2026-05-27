@@ -162,12 +162,15 @@ type ProfileStepProps = {
   usernameError: string; setUsernameError: (v: string) => void
   usernameSuggested: boolean; setUsernameSuggested: (v: boolean) => void
   phone: string; setPhone: (v: string) => void
-  address: string; setAddress: (v: string) => void
+  addressStreet: string; setAddressStreet: (v: string) => void
+  addressZip: string; setAddressZip: (v: string) => void
+  addressCity: string; setAddressCity: (v: string) => void
   avatarPreview: string; setAvatarFile: (f: File | null) => void; setAvatarPreview: (s: string) => void
   saving: boolean; onSave: () => void; onBack: () => void; onSkip: () => void
 }
 function ProfileStep({ name, setName, username, setUsername, usernameError, setUsernameError,
-  usernameSuggested, setUsernameSuggested, phone, setPhone, address, setAddress,
+  usernameSuggested, setUsernameSuggested, phone, setPhone,
+  addressStreet, setAddressStreet, addressZip, setAddressZip, addressCity, setAddressCity,
   avatarPreview, setAvatarFile, setAvatarPreview, saving, onSave, onBack, onSkip }: ProfileStepProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -248,10 +251,25 @@ function ProfileStep({ name, setName, username, setUsername, usernameError, setU
             style={{ borderRadius: 14, color: 'var(--terra-dark)', fontSize: 15 }} />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Adresse</label>
-          <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Gate, postnummer, by"
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Gateadresse</label>
+          <input value={addressStreet} onChange={e => setAddressStreet(e.target.value)} placeholder="Gatenavn 12"
             className="glass px-4 py-3 outline-none w-full"
             style={{ borderRadius: 14, color: 'var(--terra-dark)', fontSize: 15 }} />
+        </div>
+        <div className="flex gap-3">
+          <div className="flex flex-col gap-1" style={{ width: '35%' }}>
+            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Postnummer</label>
+            <input value={addressZip} onChange={e => setAddressZip(e.target.value)} placeholder="0000"
+              inputMode="numeric" maxLength={4}
+              className="glass px-4 py-3 outline-none w-full"
+              style={{ borderRadius: 14, color: 'var(--terra-dark)', fontSize: 15 }} />
+          </div>
+          <div className="flex flex-col gap-1 flex-1">
+            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Sted</label>
+            <input value={addressCity} onChange={e => setAddressCity(e.target.value)} placeholder="Oslo"
+              className="glass px-4 py-3 outline-none w-full"
+              style={{ borderRadius: 14, color: 'var(--terra-dark)', fontSize: 15 }} />
+          </div>
         </div>
       </div>
       <NavButtons onNext={onSave} onBack={onBack} nextLabel={saving ? 'Lagrer…' : 'Videre →'}
@@ -566,7 +584,9 @@ function OnboardingContent() {
   const [usernameError, setUsernameError] = useState('')
   const [usernameSuggested, setUsernameSuggested] = useState(false)
   const [phone, setPhone] = useState('')
-  const [address, setAddress] = useState('')
+  const [addressStreet, setAddressStreet] = useState('')
+  const [addressZip, setAddressZip] = useState('')
+  const [addressCity, setAddressCity] = useState('')
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState('')
   const [saving, setSaving] = useState(false)
@@ -646,7 +666,9 @@ function OnboardingContent() {
     const updates: Record<string, unknown> = { id: user.id, email: user.email, name }
     if (username) updates.username = username
     if (phone) updates.phone = phone
-    if (address) updates.address = address
+    if (addressStreet) updates.address_street = addressStreet
+    if (addressZip) updates.address_zip = addressZip
+    if (addressCity) updates.address_city = addressCity
     if (avatar_url) updates.avatar_url = avatar_url
     await supabase.from('profiles').upsert(updates)
     track('onboarding_profile_saved')
@@ -726,7 +748,10 @@ function OnboardingContent() {
     2: <ProfileStep name={name} setName={setName} username={username} setUsername={setUsername}
           usernameError={usernameError} setUsernameError={setUsernameError}
           usernameSuggested={usernameSuggested} setUsernameSuggested={setUsernameSuggested}
-          phone={phone} setPhone={setPhone} address={address} setAddress={setAddress}
+          phone={phone} setPhone={setPhone}
+          addressStreet={addressStreet} setAddressStreet={setAddressStreet}
+          addressZip={addressZip} setAddressZip={setAddressZip}
+          addressCity={addressCity} setAddressCity={setAddressCity}
           avatarPreview={avatarPreview} setAvatarFile={setAvatarFile} setAvatarPreview={setAvatarPreview}
           saving={saving} onSave={saveProfile} onBack={goBack} onSkip={goSkip} />,
     3: <FriendsStep inviter={inviter} friendSuggestions={friendSuggestions} currentUserId={currentUserId}

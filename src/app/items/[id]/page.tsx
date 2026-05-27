@@ -480,7 +480,7 @@ export default function ItemPage() {
                 <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>{labels.join(' · ')}</p>
               </div>
               {isOwner && (
-                <Link href={`/items/${item.id}/access`}
+                <Link href={`/items/access?item=${item.id}`}
                   className="text-xs font-medium flex-shrink-0"
                   style={{ color: 'var(--terra)', textDecoration: 'underline' }}>
                   Endre →
@@ -552,7 +552,7 @@ export default function ItemPage() {
                 <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Rediger</p>
               </div>
             </Link>
-            <Link href={`/items/${item.id}/access`} className="flex-1">
+            <Link href={`/items/access?item=${item.id}`} className="flex-1">
               <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
                 <p className="text-sm">🔒</p>
                 <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Endre tilgang</p>

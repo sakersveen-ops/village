@@ -236,10 +236,12 @@ export default function SettingsPage() {
   const save = async () => {
     setSaving(true)
     const supabase = createClient()
-    await supabase.from('profiles').update({
+    const { error } = await supabase.from('profiles').update({
       name: profile.name,
       phone: profile.phone,
-      address: profile.address,
+      address_street: profile.address_street,
+      address_zip: profile.address_zip,
+      address_city: profile.address_city,
       interests: profile.interests,
       privacy_profile: profile.privacy_profile,
       privacy_search: profile.privacy_search,
@@ -249,6 +251,11 @@ export default function SettingsPage() {
       notif_join_request: profile.notif_join_request,
     }).eq('id', user.id)
     setSaving(false)
+    if (error) {
+      console.error('Save error:', error.message, error.details)
+      alert(`Kunne ikke lagre: ${error.message}`)
+      return
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -300,14 +307,38 @@ export default function SettingsPage() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs" style={{ color: 'var(--terra-mid)' }}>Adresse</label>
+              <label className="text-xs" style={{ color: 'var(--terra-mid)' }}>Gateadresse</label>
               <input
-                value={profile?.address || ''}
-                onChange={e => update('address', e.target.value)}
-                placeholder="Gate, postnummer, by"
+                value={profile?.address_street || ''}
+                onChange={e => update('address_street', e.target.value)}
+                placeholder="Gatenavn 12"
                 className="glass rounded-xl px-4 py-3 text-sm outline-none"
                 style={{ color: 'var(--terra-dark)' }}
               />
+            </div>
+            <div className="flex gap-3">
+              <div className="flex flex-col gap-1" style={{ width: '35%' }}>
+                <label className="text-xs" style={{ color: 'var(--terra-mid)' }}>Postnummer</label>
+                <input
+                  value={profile?.address_zip || ''}
+                  onChange={e => update('address_zip', e.target.value)}
+                  placeholder="0000"
+                  inputMode="numeric"
+                  maxLength={4}
+                  className="glass rounded-xl px-4 py-3 text-sm outline-none"
+                  style={{ color: 'var(--terra-dark)' }}
+                />
+              </div>
+              <div className="flex flex-col gap-1 flex-1">
+                <label className="text-xs" style={{ color: 'var(--terra-mid)' }}>Sted</label>
+                <input
+                  value={profile?.address_city || ''}
+                  onChange={e => update('address_city', e.target.value)}
+                  placeholder="Oslo"
+                  className="glass rounded-xl px-4 py-3 text-sm outline-none"
+                  style={{ color: 'var(--terra-dark)' }}
+                />
+              </div>
             </div>
           </div>
         </section>

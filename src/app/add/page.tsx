@@ -146,6 +146,31 @@ export default function AddPage() {
         ? [prof.address_street, prof.address_zip, prof.address_city].filter(Boolean).join(', ')
         : ''
 
+      // ── Import draft fra email-import — sjekkes FØR sessionStorage ──
+      const importId = new URLSearchParams(window.location.search).get('import')
+      if (importId) {
+        sessionStorage.removeItem(DRAFT_KEY)
+        const { data: draft } = await supabase
+          .from('item_import_drafts')
+          .select('id, parsed_items, store, order_id, source')
+          .eq('id', importId)
+          .eq('user_id', user.id)
+          .is('used_at', null)
+          .single()
+        if (draft?.parsed_items?.length) {
+          if (profileLocation) setLocation(profileLocation)
+          setImportDraft({
+            id: draft.id,
+            parsed_items: draft.parsed_items,
+            store: draft.store,
+            order_id: draft.order_id,
+            source: draft.source,
+          })
+          track(Events.RECEIPT_IMPORT_STARTED, { source: draft.source })
+        }
+        return
+      }
+
       const raw = sessionStorage.getItem(DRAFT_KEY)
       if (raw) {
         try {
@@ -173,32 +198,6 @@ export default function AddPage() {
       }
 
       if (profileLocation) setLocation(profileLocation)
-
-      // ── Import draft fra email-import ──
-      const importId = new URLSearchParams(window.location.search).get('import')
-      console.log('[import] importId:', importId, '| user.id:', user.id)
-      if (importId) {
-        const { data: draft, error: draftError } = await supabase
-          .from('item_import_drafts')
-          .select('id, parsed_items, store, order_id, source')
-          .eq('id', importId)
-          .eq('user_id', user.id)
-          .is('used_at', null)
-          .single()
-        console.log('[import] draft:', draft, '| error:', draftError)
-        if (draft?.parsed_items?.length) {
-          setImportDraft({
-            id: draft.id,
-            parsed_items: draft.parsed_items,
-            store: draft.store,
-            order_id: draft.order_id,
-            source: draft.source,
-          })
-          track(Events.RECEIPT_IMPORT_STARTED, { source: draft.source })
-        } else {
-          console.log('[import] draft not set — parsed_items length:', draft?.parsed_items?.length)
-        }
-      }
     }
     load()
   }, [])

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import Script from 'next/script'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import {
   CATEGORIES, SIZES_BY_GENDER, AGE_GROUPS, COLORS,
   getCategoryById, type Gender,
@@ -106,7 +106,6 @@ export default function AddPage() {
 
   // ── Import modal ──
   const [importDraft, setImportDraft] = useState<ImportDraft | null>(null)
-  const searchParams = useSearchParams()
 
   // ── URL analyse ──
   const [urlInput, setUrlInput]     = useState('')

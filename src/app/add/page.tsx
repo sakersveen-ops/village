@@ -176,14 +176,16 @@ export default function AddPage() {
 
       // ── Import draft fra email-import ──
       const importId = new URLSearchParams(window.location.search).get('import')
+      console.log('[import] importId:', importId, '| user.id:', user.id)
       if (importId) {
-        const { data: draft } = await supabase
+        const { data: draft, error: draftError } = await supabase
           .from('item_import_drafts')
           .select('id, parsed_items, store, order_id, source')
           .eq('id', importId)
           .eq('user_id', user.id)
           .is('used_at', null)
           .single()
+        console.log('[import] draft:', draft, '| error:', draftError)
         if (draft?.parsed_items?.length) {
           setImportDraft({
             id: draft.id,
@@ -193,6 +195,8 @@ export default function AddPage() {
             source: draft.source,
           })
           track(Events.RECEIPT_IMPORT_STARTED, { source: draft.source })
+        } else {
+          console.log('[import] draft not set — parsed_items length:', draft?.parsed_items?.length)
         }
       }
     }

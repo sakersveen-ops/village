@@ -121,10 +121,21 @@ export default function NavBar() {
 
   useEffect(() => {
     let channel: any = null
+    const supabase = createClient()
+
+    // Listen for auth state changes so navbar appears immediately after login
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setHasUser(true)
+        loadUnread()
+      } else {
+        setHasUser(false)
+        setUnread(0)
+      }
+    })
 
     loadUnread().then(userId => {
       if (!userId) return
-      const supabase = createClient()
       channel = supabase
         .channel('navbar_notifications')
         .on('postgres_changes', {
@@ -141,10 +152,8 @@ export default function NavBar() {
     return () => {
       clearInterval(interval)
       notifRefreshEvent?.removeEventListener('refresh', handler)
-      if (channel) {
-        const supabase = createClient()
-        supabase.removeChannel(channel)
-      }
+      subscription.unsubscribe()
+      if (channel) supabase.removeChannel(channel)
     }
   }, [loadUnread])
 

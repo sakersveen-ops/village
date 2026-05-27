@@ -88,16 +88,22 @@ export default function MessagesUserPage() {
   const otherId = params.id as string
   const supabase = createClient()
 
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser]           = useState<any>(null)
   const [otherUser, setOtherUser] = useState<OtherUser | null>(null)
-  const [threads, setThreads] = useState<LoanThread[]>([])
+  const [threads, setThreads]     = useState<LoanThread[]>([])
   const [activeLoanId, setActiveLoanId] = useState<string | null>(null)
   const [newMessage, setNewMessage] = useState('')
-  const [sending, setSending] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [sending, setSending]     = useState(false)
+  const [loading, setLoading]     = useState(true)
 
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const bottomRef  = useRef<HTMLDivElement>(null)
+  const inputRef   = useRef<HTMLTextAreaElement>(null)
+  // Stable refs so the realtime callback doesn't need to re-subscribe
+  const userIdRef      = useRef<string | null>(null)
+  const activeLoanRef  = useRef<string | null>(null)
+
+  // Keep activeLoanRef in sync
+  useEffect(() => { activeLoanRef.current = activeLoanId }, [activeLoanId])
 
   // -------------------------------------------------------------------------
   // Load
@@ -106,6 +112,7 @@ export default function MessagesUserPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push('/login'); return }
+      userIdRef.current = data.user.id
       setUser(data.user)
       loadAll(data.user.id)
     })
@@ -114,7 +121,6 @@ export default function MessagesUserPage() {
   async function loadAll(userId: string) {
     setLoading(true)
 
-    // Fetch other user's profile
     const { data: profile } = await supabase
       .from('profiles')
       .select('id, name, avatar_url')
@@ -123,7 +129,6 @@ export default function MessagesUserPage() {
 
     setOtherUser(profile)
 
-    // Fetch all loans between the two users
     const { data: loans } = await supabase
       .from('loans')
       .select(`
@@ -145,7 +150,6 @@ export default function MessagesUserPage() {
 
     const loanIds = loans.map((l: any) => l.id)
 
-    // Fetch all messages for these loans
     const { data: msgs } = await supabase
       .from('loan_messages')
       .select('id, loan_id, sender_id, type, body, metadata, created_at')
@@ -181,7 +185,6 @@ export default function MessagesUserPage() {
 
     setThreads(normalised)
 
-    // Default: open the first active/pending loan, else first loan
     const firstActive = normalised.find(t =>
       ['pending', 'active', 'change_proposed'].includes(t.loan_status)
     )
@@ -195,6 +198,47 @@ export default function MessagesUserPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [activeLoanId, threads])
+
+  // -------------------------------------------------------------------------
+  // Realtime — listen for new messages across all loans in this conversation
+  // -------------------------------------------------------------------------
+
+  useEffect(() => {
+    // We subscribe once on mount. The filter is broad (all loan_messages INSERTs)
+    // and we filter client-side to only care about loans we loaded.
+    const channel = supabase
+      .channel('messages-thread-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'loan_messages' },
+        (payload) => {
+          const msg = payload.new as Message
+          const userId = userIdRef.current
+          if (!userId) return
+          // Ignore own optimistic inserts — sendMessage() already appended them
+          if (msg.sender_id === userId) return
+
+          setThreads(prev => {
+            const idx = prev.findIndex(t => t.loan_id === msg.loan_id)
+            if (idx === -1) return prev // not our conversation
+
+            const thread = prev[idx]
+            // Deduplicate: don't append if already present (shouldn't happen but guard it)
+            if (thread.messages.some(m => m.id === msg.id)) return prev
+
+            const updated = { ...thread, messages: [...thread.messages, msg] }
+            const next = [...prev]
+            next[idx] = updated
+            return next
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, []) // mount/unmount only
 
   // -------------------------------------------------------------------------
   // Send message
@@ -241,7 +285,7 @@ export default function MessagesUserPage() {
       ))
       setNewMessage(body)
     } else {
-      // Replace optimistic
+      // Replace optimistic with confirmed row
       setThreads(prev => prev.map(t =>
         t.loan_id === activeLoanId
           ? { ...t, messages: t.messages.map(m => m.id === tempId ? inserted : m) }

@@ -76,19 +76,21 @@ export default function AppTour() {
 
   // ── Trigger ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const onboardingKeys = Object.keys(localStorage).filter(k => k.startsWith('village_onboarding_done_'))
-    const tourKeys = Object.keys(localStorage).filter(k => k.startsWith('village_tour_done_'))
-    if (onboardingKeys.length > 0 && tourKeys.length === 0) {
-      setTimeout(() => setActive(true), 1200)
-      return
-    }
     ;(async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      if (!localStorage.getItem(`village_tour_done_${user.id}`)) {
-        setTimeout(() => setActive(true), 1200)
+
+      const tourDone = localStorage.getItem(`village_tour_done_${user.id}`)
+      if (tourDone) return
+
+      const snoozed = localStorage.getItem(`village_tour_snoozed_${user.id}`)
+      if (snoozed) {
+        if (Date.now() - Number(snoozed) < 3 * 24 * 60 * 60 * 1000) return
+        localStorage.removeItem(`village_tour_snoozed_${user.id}`)
       }
+
+      setTimeout(() => setActive(true), 1200)
     })()
   }, [])
 
@@ -143,6 +145,14 @@ export default function AppTour() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) localStorage.setItem(`village_tour_done_${user.id}`, '1')
     track('app_tour_dismissed', { step: stepIndex })
+    setActive(false)
+  }
+
+  const snooze = async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) localStorage.setItem(`village_tour_snoozed_${user.id}`, String(Date.now()))
+    track('app_tour_snoozed', { step: stepIndex })
     setActive(false)
   }
 
@@ -245,10 +255,16 @@ export default function AppTour() {
 
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               {!isLast && (
-                <button onClick={(e) => { e.stopPropagation(); dismiss() }}
-                  style={{ fontSize: 12, color: 'var(--terra-mid)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}>
-                  Hopp over
-                </button>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={(e) => { e.stopPropagation(); snooze() }}
+                    style={{ fontSize: 12, color: 'var(--terra-mid)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}>
+                    Senere
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); dismiss() }}
+                    style={{ fontSize: 12, color: 'var(--terra-mid)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0' }}>
+                    Hopp over
+                  </button>
+                </div>
               )}
               <button onClick={(e) => { e.stopPropagation(); next() }}
                 style={{

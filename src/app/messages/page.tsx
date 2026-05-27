@@ -1,7 +1,7 @@
 // Path of this file: src/app/messages/page.tsx
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { track } from '@/lib/track'
@@ -77,38 +77,30 @@ function derivePill(t: Thread): { label: string; variant: PillVariant } | null {
   const today = todayYMD()
   const isRead = !t.unread
 
-  // Parse last message for system signals
   const body = t.last_message_body ?? ''
   const isAcceptedSystem  = body.includes('godtatt') || body.startsWith('✅')
   const isDeclinedSystem  = body.includes('avslått') && !body.includes('Endringsforslag')
   const isProposalDecline = body.includes('Endringsforslag avslått')
   const isNewRequest      = body.includes('Låneforespørsel') || (t.loan_status === 'pending' && !body)
 
-  // Declined loan
   if (t.loan_status === 'declined')
     return { label: 'Avslått', variant: isRead ? 'neutral' : 'red' }
 
-  // Returned
   if (t.loan_status === 'returned')
     return { label: 'Returnert', variant: 'neutral' }
 
-  // New loan request (pending, first message or body contains "Låneforespørsel")
   if (t.loan_status === 'pending')
     return { label: 'Låneforespørsel', variant: isRead ? 'neutral' : 'green' }
 
-  // Change proposed
   if (t.loan_status === 'change_proposed')
     return { label: 'Endringsforslag', variant: isRead ? 'neutral' : 'yellow' }
 
-  // Active loan — accepted system message
   if (isAcceptedSystem && t.loan_status === 'active') {
-    // Future start = planned
     if (t.start_date && t.start_date > today)
       return { label: 'Planlagt lån bekreftet', variant: isRead ? 'neutral' : 'light-green' }
     return { label: 'Aktivt lån', variant: isRead ? 'neutral' : 'green' }
   }
 
-  // Active loan — no notable system message, show message preview (return null = use body)
   if (t.loan_status === 'active') return null
 
   return null
@@ -122,14 +114,23 @@ export default function MessagesPage() {
   const router = useRouter()
   const supabase = createClient()
 
-  const [threads, setThreads]     = useState<Thread[]>([])
-  const [search, setSearch]       = useState('')
+  const [threads, setThreads]       = useState<Thread[]>([])
+  const [search, setSearch]         = useState('')
   const [unreadOnly, setUnreadOnly] = useState(false)
-  const [loading, setLoading]     = useState(true)
+  const [loading, setLoading]       = useState(true)
+
+  // Keep a stable ref to userId so the realtime callback can access it
+  // without needing to be re-subscribed on every render.
+  const userIdRef = useRef<string | null>(null)
+
+  // -------------------------------------------------------------------------
+  // Initial load
+  // -------------------------------------------------------------------------
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) { router.push('/login'); return }
+      userIdRef.current = data.user.id
       loadAll(data.user.id)
     })
   }, [])
@@ -224,6 +225,65 @@ export default function MessagesPage() {
     setLoading(false)
     track('messages_page_viewed')
   }
+
+  // -------------------------------------------------------------------------
+  // Realtime — listen for new messages on any loan the user is part of
+  // -------------------------------------------------------------------------
+
+  useEffect(() => {
+    // Subscribe to all INSERT events on loan_messages.
+    // We filter client-side so we only need a single channel subscription
+    // regardless of how many loans the user has.
+    const channel = supabase
+      .channel('messages-index-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'loan_messages' },
+        (payload) => {
+          const msg = payload.new as {
+            id: string
+            loan_id: string
+            sender_id: string
+            type: string
+            body: string
+            created_at: string
+          }
+          const userId = userIdRef.current
+          if (!userId) return
+
+          setThreads(prev => {
+            // Find the thread this message belongs to
+            const idx = prev.findIndex(t => t.loan_id === msg.loan_id)
+            if (idx === -1) return prev // not a loan we're tracking — ignore
+
+            const thread = prev[idx]
+            const isUnread = msg.sender_id !== userId
+
+            const updated: Thread = {
+              ...thread,
+              last_message_body: msg.body,
+              last_message_at:   msg.created_at,
+              unread: isUnread ? true : thread.unread,
+            }
+
+            // Move updated thread to top (re-sort by last_message_at)
+            const next = [...prev]
+            next.splice(idx, 1)
+            next.unshift(updated)
+            return next
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, []) // mount/unmount only — setThreads is stable
+
+  // -------------------------------------------------------------------------
+  // Derived
+  // -------------------------------------------------------------------------
 
   const totalUnread = threads.filter(t => t.unread).length
 
@@ -342,7 +402,7 @@ export default function MessagesPage() {
   return (
     <div className="max-w-lg mx-auto">
 
-      {/* Sticky header — sits just below the app navbar (which is ~60px tall) */}
+      {/* Sticky header */}
       <header style={{
         borderRadius: '0 0 20px 20px',
         position: 'sticky', top: 60, zIndex: 40,
@@ -367,7 +427,6 @@ export default function MessagesPage() {
 
         {/* Row 2: unread toggle + search */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {/* Uleste toggle */}
           <button
             onClick={() => setUnreadOnly(v => !v)}
             style={{
@@ -381,7 +440,6 @@ export default function MessagesPage() {
             {unreadOnly ? '● Uleste' : 'Uleste'}
           </button>
 
-          {/* Search */}
           <div style={{
             flex: 1, display: 'flex', alignItems: 'center', gap: 8,
             borderRadius: 11, padding: '7px 12px',
@@ -404,7 +462,7 @@ export default function MessagesPage() {
         </div>
       </header>
 
-      {/* Thread list — directly under header, no top gap */}
+      {/* Thread list */}
       <div style={{ padding: '8px 14px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => (

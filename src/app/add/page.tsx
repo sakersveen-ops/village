@@ -92,8 +92,11 @@ export default function AddPage() {
 
   // ── Image analysis state ──
   const [imageAnalyzing, setImageAnalyzing] = useState(false)
-  const [imageAnalyzed, setImageAnalyzed]   = useState(false)
-  const [analysisLocked, setAnalysisLocked] = useState(false)
+  const [imageAnalyzed, setImageAnalyzed]     = useState(false)
+  const [analysisLocked, setAnalysisLocked]   = useState(false)
+  const [analysisError, setAnalysisError]     = useState<string | null>(null)
+  const [analysisLoadingText, setAnalysisLoadingText] = useState('')
+  const [urlAnalyzed, setUrlAnalyzed]         = useState(false)
 
   // ── Shelf (bokhylle) state ──
   const [shelfBooks, setShelfBooks]       = useState<BookResult[]>([])
@@ -214,6 +217,29 @@ export default function AddPage() {
     }
   }
 
+  // ─── Morsomme ventetekster ────────────────────────────────────────────────
+  const LOADING_TEXTS = [
+    'Skal vi se…',
+    'Ser på ting i boden…',
+    'Denne har jeg vel sett før…',
+    'Rydder litt i kategoriene…',
+    'Kjenner igjen formen her…',
+    'Spør naboen…',
+  ]
+
+  // ─── Timeout + feedback logging ───────────────────────────────────────────
+  const logAnalysisFailure = async (context: 'bilde' | 'lenke', detail: string) => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from('beta_feedback').insert({
+        user_id: user?.id ?? null,
+        feedback: `Analyse-timeout (${context}): ${detail}`,
+        page: '/add',
+      })
+    } catch { /* silent */ }
+  }
+
   // ─── Bildeanalyse ─────────────────────────────────────────────────────────
   const handleAnalyzeImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -223,13 +249,34 @@ export default function AddPage() {
     setAnalysisLocked(false)
     setImageAnalyzing(true)
     setImageAnalyzed(false)
+    setAnalysisError(null)
     setSuggestedImageUrl('')
     setSelectedImageSrc('own')
 
+    // Rullerende ventetekst
+    let textIdx = 0
+    setAnalysisLoadingText(LOADING_TEXTS[0])
+    const textTimer = setInterval(() => {
+      textIdx = (textIdx + 1) % LOADING_TEXTS.length
+      setAnalysisLoadingText(LOADING_TEXTS[textIdx])
+    }, 1800)
+
+    // 10s timeout
+    let timedOut = false
+    const timeoutId = setTimeout(async () => {
+      timedOut = true
+      clearInterval(textTimer)
+      setImageAnalyzing(false)
+      setAnalysisError('Klarte ikke analysere denne gangen – prøv igjen eller fyll ut manuelt.')
+      await logAnalysisFailure('bilde', file.name)
+    }, 10000)
+
     const uploadedUrl = await uploadImageToStorage(file)
     if (!uploadedUrl) {
-      alert('Kunne ikke laste opp bildet')
+      clearTimeout(timeoutId)
+      clearInterval(textTimer)
       setImageAnalyzing(false)
+      setAnalysisError('Kunne ikke laste opp bildet.')
       return
     }
 
@@ -268,6 +315,11 @@ Returner KUN JSON, ingen annen tekst.` }
           }]
         })
       })
+
+      clearTimeout(timeoutId)
+      clearInterval(textTimer)
+      if (timedOut) return
+
       const data = await res.json()
       const text = data.content?.[0]?.text || ''
 
@@ -282,10 +334,16 @@ Returner KUN JSON, ingen annen tekst.` }
       } catch {
         setImageAnalyzing(false)
         setImageAnalyzed(false)
+        setAnalysisError('Klarte ikke gjenkjenne gjenstanden. Prøv et klarere bilde.')
         return
       }
 
-      if (!parsed) { setImageAnalyzing(false); setImageAnalyzed(false); return }
+      if (!parsed) {
+        setImageAnalyzing(false)
+        setImageAnalyzed(false)
+        setAnalysisError('Klarte ikke gjenkjenne gjenstanden. Prøv et klarere bilde.')
+        return
+      }
 
       if (parsed.type === 'shelf') {
         setImageAnalyzing(false)
@@ -317,10 +375,15 @@ Returner KUN JSON, ingen annen tekst.` }
         return
       }
 
-      if (parsed.confident === false) { setImageAnalyzing(false); setImageAnalyzed(false); return }
+      if (parsed.confident === false) {
+        setImageAnalyzing(false)
+        setImageAnalyzed(false)
+        setAnalysisError('Klarte ikke gjenkjenne gjenstanden. Fyll ut manuelt eller prøv et annet bilde.')
+        return
+      }
 
       if (parsed.name && !name.trim())               setName(parsed.name)
-      if (addMode === 'bilde' && parsed.description && !description.trim()) setDescription(parsed.description)
+      if (parsed.description && !description.trim()) setDescription(parsed.description)
       if (parsed.category)                           setCategoryId(parsed.category)
       if (parsed.subcategory) {
         setSubcategoryIds(prev =>
@@ -329,9 +392,14 @@ Returner KUN JSON, ingen annen tekst.` }
       }
       setImageAnalyzed(true)
     } catch {
-      setImageAnalyzed(false)
+      clearTimeout(timeoutId)
+      clearInterval(textTimer)
+      if (!timedOut) {
+        setImageAnalyzed(false)
+        setAnalysisError('Noe gikk galt. Prøv igjen.')
+      }
     }
-    setImageAnalyzing(false)
+    if (!timedOut) setImageAnalyzing(false)
   }
 
   // ─── Legg til flere bilder (ingen analyse) ────────────────────────────────
@@ -443,6 +511,25 @@ Returner KUN JSON, ingen annen tekst.` }
   const analyzeUrl = async () => {
     if (!urlInput.trim()) return
     setUrlLoading(true)
+    setUrlAnalyzed(false)
+    setAnalysisError(null)
+
+    let textIdx = 0
+    setAnalysisLoadingText(LOADING_TEXTS[0])
+    const textTimer = setInterval(() => {
+      textIdx = (textIdx + 1) % LOADING_TEXTS.length
+      setAnalysisLoadingText(LOADING_TEXTS[textIdx])
+    }, 1800)
+
+    let timedOut = false
+    const timeoutId = setTimeout(async () => {
+      timedOut = true
+      clearInterval(textTimer)
+      setUrlLoading(false)
+      setAnalysisError('Klarte ikke analysere lenken denne gangen – prøv igjen eller fyll ut manuelt.')
+      await logAnalysisFailure('lenke', urlInput)
+    }, 10000)
+
     try {
       const res = await fetch('/api/claude', {
         method: 'POST',
@@ -452,10 +539,15 @@ Returner KUN JSON, ingen annen tekst.` }
           max_tokens: 1000,
           messages: [{
             role: 'user',
-            content: `Analyser denne URL-en og returner KUN et JSON-objekt: {name, description, category (én av: baby-og-barn/klar-og-mote/boker/annet), subcategory, imageUrl}. URL: ${urlInput}`
+            content: `Analyser denne URL-en og returner KUN et JSON-objekt: {name, description, category (én av: baby-og-barn/klar-og-mote/boker/annet), subcategory, imageUrl, confident: true/false}. URL: ${urlInput}`
           }]
         })
       })
+
+      clearTimeout(timeoutId)
+      clearInterval(textTimer)
+      if (timedOut) return
+
       const data = await res.json()
       const text = data.content?.[0]?.text || ''
       const cleaned = text.replace(/```json|```/g, '').trim()
@@ -463,21 +555,32 @@ Returner KUN JSON, ingen annen tekst.` }
       const jsonEnd = cleaned.lastIndexOf('}')
       if (jsonStart !== -1 && jsonEnd !== -1) {
         const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1))
-        if (parsed.name && !name.trim())               setName(parsed.name)
-        // description fylles ikke automatisk — brukeren skriver selv
-        if (parsed.category)                           setCategoryId(parsed.category)
-        if (parsed.subcategory) {
-          setSubcategoryIds(prev =>
-            prev.includes(parsed.subcategory) ? prev : [...prev, parsed.subcategory]
-          )
+        if (parsed.confident === false) {
+          setAnalysisError('Klarte ikke hente informasjon fra denne lenken. Fyll ut manuelt.')
+        } else {
+          if (parsed.name && !name.trim())               setName(parsed.name)
+          if (parsed.description && !description.trim()) setDescription(parsed.description)
+          if (parsed.category)                           setCategoryId(parsed.category)
+          if (parsed.subcategory) {
+            setSubcategoryIds(prev =>
+              prev.includes(parsed.subcategory) ? prev : [...prev, parsed.subcategory]
+            )
+          }
+          if (parsed.imageUrl) {
+            setSuggestedImageUrl(parsed.imageUrl)
+            setSelectedImageSrc('suggested')
+          }
+          setUrlAnalyzed(true)
         }
-        if (parsed.imageUrl) {
-          setSuggestedImageUrl(parsed.imageUrl)
-          setSelectedImageSrc('suggested')
-        }
+      } else {
+        setAnalysisError('Klarte ikke lese svaret fra AI. Prøv igjen.')
       }
-    } catch (e) { console.error(e) }
-    setUrlLoading(false)
+    } catch (e) {
+      clearTimeout(timeoutId)
+      clearInterval(textTimer)
+      if (!timedOut) setAnalysisError('Noe gikk galt. Prøv igjen.')
+    }
+    if (!timedOut) setUrlLoading(false)
   }
 
   // ─── Validering og navigering til access-siden ───────────────────────────
@@ -717,9 +820,25 @@ Returner KUN JSON, ingen annen tekst.` }
               </button>
             </div>
             {urlLoading && (
-              <div className="glass rounded-2xl p-4 flex items-center gap-3">
-                <span className="text-xl animate-pulse">🔗</span>
-                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Henter produktinfo…</p>
+              <div className="glass rounded-2xl p-4 flex items-center gap-3" style={{ border: '0.5px solid rgba(46,98,113,0.15)' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="animate-pulse" style={{ flexShrink: 0 }}>
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>{analysisLoadingText}</p>
+              </div>
+            )}
+            {urlAnalyzed && (
+              <div className="glass" style={{ borderRadius: 12, padding: '10px 14px' }}>
+                <span className="status-pill active">✓ Hentet – sjekk og juster under</span>
+              </div>
+            )}
+            {analysisError && addMode === 'lenke' && (
+              <div style={{ borderRadius: 12, padding: '12px 14px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.18)' }}>
+                <p className="text-sm" style={{ color: '#b91c1c' }}>{analysisError}</p>
+                <button onClick={() => setAnalysisError(null)}
+                  style={{ marginTop: 8, fontSize: 12, color: 'var(--terra)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                  Prøv igjen
+                </button>
               </div>
             )}
           </div>
@@ -753,9 +872,11 @@ Returner KUN JSON, ingen annen tekst.` }
               className="hidden"
             />
             {imageAnalyzing && (
-              <div className="glass rounded-2xl p-4 flex items-center gap-3">
-                <span className="text-xl animate-pulse">🔍</span>
-                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Gjenkjenner gjenstanden…</p>
+              <div className="glass rounded-2xl p-4 flex items-center gap-3" style={{ border: '0.5px solid rgba(46,98,113,0.15)' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="animate-pulse" style={{ flexShrink: 0 }}>
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>{analysisLoadingText}</p>
               </div>
             )}
             {imageAnalyzed && (
@@ -763,9 +884,20 @@ Returner KUN JSON, ingen annen tekst.` }
                 <span className="status-pill active">✓ Gjenkjent – sjekk og juster under</span>
               </div>
             )}
+            {analysisError && addMode === 'bilde' && (
+              <div style={{ borderRadius: 12, padding: '12px 14px', background: 'rgba(220,38,38,0.06)', border: '1px solid rgba(220,38,38,0.18)' }}>
+                <p className="text-sm" style={{ color: '#b91c1c' }}>{analysisError}</p>
+                <button onClick={() => { setAnalysisError(null); analyzeFileInputRef.current?.click() }}
+                  style={{ marginTop: 8, fontSize: 12, color: 'var(--terra)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
+                  Prøv igjen
+                </button>
+              </div>
+            )}
             {shelfStep === 'loading' && (
               <div className="glass rounded-2xl p-4 flex items-center gap-3">
-                <span className="text-xl animate-pulse">📚</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="animate-pulse" style={{ flexShrink: 0 }}>
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
                 <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Analyserer bokhyllen…</p>
               </div>
             )}
@@ -835,7 +967,25 @@ Returner KUN JSON, ingen annen tekst.` }
           </div>
         )}
 
-        {/* ── KATEGORI ── */}
+        {/* ── Skjema vises kun etter vellykket analyse i bilde/lenke-modus ── */}
+        {(addMode === 'bilde' || addMode === 'lenke') && !imageAnalyzed && !urlAnalyzed && (
+          <div className="glass" style={{ borderRadius: 14, padding: '18px 16px', textAlign: 'center', border: '1px dashed rgba(46,98,113,0.2)' }}>
+            <p className="text-sm" style={{ color: 'var(--terra-mid)', lineHeight: 1.6 }}>
+              {addMode === 'bilde'
+                ? 'Ta et bilde av gjenstanden for å fylle ut skjemaet automatisk'
+                : 'Lim inn en lenke over for å hente produktinfo automatisk'}
+            </p>
+            <p className="text-xs mt-2" style={{ color: 'rgba(46,98,113,0.45)' }}>
+              Eller{' '}
+              <button onClick={() => setAddMode('manuell')} style={{ color: 'var(--terra)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, textDecoration: 'underline', padding: 0 }}>
+                fyll ut manuelt
+              </button>
+            </p>
+          </div>
+        )}
+
+        {((addMode !== 'bilde' && addMode !== 'lenke') || imageAnalyzed || urlAnalyzed) && (
+        <>{/* ── KATEGORI ── */}
         <div className="flex flex-col gap-2">
           <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Kategori *</p>
           <div className="flex gap-2">
@@ -1228,6 +1378,8 @@ Returner KUN JSON, ingen annen tekst.` }
             </button>
           </>
         )}
+      </>
+      )}
       </div>
     </div>
   )

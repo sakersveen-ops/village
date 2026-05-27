@@ -1,3 +1,4 @@
+// Path of this file: src/components/LoanThread.tsx
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase'

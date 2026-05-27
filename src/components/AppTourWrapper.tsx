@@ -1,3 +1,4 @@
+// Path of this file: src/components/AppTourWrapper.tsx
 'use client'
 import dynamic from 'next/dynamic'
 

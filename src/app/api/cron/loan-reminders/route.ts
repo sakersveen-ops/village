@@ -1,3 +1,4 @@
+// Path of this file: src/app/api/cron/loan-reminders/route.ts
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 

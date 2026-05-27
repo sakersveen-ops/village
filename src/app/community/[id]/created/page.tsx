@@ -1,3 +1,4 @@
+// Path of this file: src/app/community/[id]/created/page.tsx
 'use client'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'

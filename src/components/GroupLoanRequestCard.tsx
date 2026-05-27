@@ -1,3 +1,4 @@
+// Path of this file: src/components/GroupLoanRequestCard.tsx
 'use client'
 // GroupLoanRequestCard.tsx
 // Drop into /schedule page to render group loan requests in the owner's view.

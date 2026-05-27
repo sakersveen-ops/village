@@ -1,3 +1,4 @@
+// Path of this file: src/components/FirstTimeShareModal.tsx
 'use client'
 
 // Legg til i src/components/FirstTimeShareModal.tsx

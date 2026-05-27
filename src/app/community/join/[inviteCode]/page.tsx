@@ -1,3 +1,4 @@
+// Path of this file: src/app/community/join/[inviteCode]/page.tsx
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'

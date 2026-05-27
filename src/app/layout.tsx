@@ -1,3 +1,4 @@
+// Path of this file: src/app/layout.tsx
 import type { Metadata } from 'next'
 import './globals.css'
 import NavBar from '@/components/NavBar'

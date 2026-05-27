@@ -1,3 +1,4 @@
+// Path of this file: src/app/items/[id]/page.tsx
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'

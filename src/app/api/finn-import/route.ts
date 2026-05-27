@@ -1,3 +1,4 @@
+// Path of this file: src/app/api/finn-import/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {

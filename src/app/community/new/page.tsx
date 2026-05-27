@@ -1,3 +1,4 @@
+// Path of this file: src/app/community/new/page.tsx
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'

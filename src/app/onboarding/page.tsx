@@ -1,3 +1,4 @@
+// Path of this file: src/app/onboarding/page.tsx
 'use client'
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'

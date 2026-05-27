@@ -1,3 +1,4 @@
+// Path of this file: src/lib/supabase.ts
 import { createBrowserClient } from '@supabase/ssr'
 
 let _client: ReturnType<typeof createBrowserClient> | null = null

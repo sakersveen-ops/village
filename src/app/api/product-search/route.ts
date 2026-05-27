@@ -1,3 +1,4 @@
+// Path of this file: src/app/api/product-search/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 
 // Produktsøk for barn-kategorien.

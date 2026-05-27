@@ -1,3 +1,4 @@
+// Path of this file: src/lib/track.ts
 /**
  * Village Analytics — track()
  *

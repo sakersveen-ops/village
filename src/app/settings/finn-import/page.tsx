@@ -1,3 +1,4 @@
+// Path of this file: src/app/settings/finn-import/page.tsx
 'use client'
 
 import { useRouter } from 'next/navigation'

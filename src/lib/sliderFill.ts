@@ -1,3 +1,4 @@
+// Path of this file: src/lib/sliderFill.ts
 // src/lib/sliderFill.ts
 // Call this on mount + oninput for all range sliders so the
 // glass gradient tracks the thumb position correctly.

@@ -1,3 +1,4 @@
+// Path of this file: src/hooks/useMessagesRealtime.ts
 'use client'
 
 /**

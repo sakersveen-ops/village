@@ -1,3 +1,4 @@
+// Path of this file: src/components/FeedbackButton.tsx
 'use client'
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'

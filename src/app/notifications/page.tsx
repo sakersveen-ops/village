@@ -1,3 +1,4 @@
+// Path of this file: src/app/notifications/page.tsx
 'use client'
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'

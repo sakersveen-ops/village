@@ -1,3 +1,4 @@
+// Path of this file: src/lib/categories.ts
 /**
  * Village — Master kategoridefinisjon
  * Importer herfra overalt. Aldri hardkod kategori-strenger.

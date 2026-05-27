@@ -1,3 +1,4 @@
+// Path of this file: src/app/loans/[loanId]/page.tsx
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'

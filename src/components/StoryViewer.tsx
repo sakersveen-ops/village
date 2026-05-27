@@ -1,3 +1,4 @@
+// Path of this file: src/components/StoryViewer.tsx
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'

@@ -1,3 +1,4 @@
+// Path of this file: src/components/StoryCreator.tsx
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase'

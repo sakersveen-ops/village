@@ -1,3 +1,4 @@
+// Path of this file: src/components/NavBar.tsx
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase'

@@ -1,3 +1,4 @@
+// Path of this file: src/components/ProductSearch.tsx
 'use client'
 
 import { useState, useRef, useCallback } from 'react'

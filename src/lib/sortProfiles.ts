@@ -1,3 +1,4 @@
+// Path of this file: src/lib/sortProfiles.ts
 // src/lib/sortProfiles.ts
 
 export function sortProfilesWithConnectionFirst(

@@ -1,3 +1,4 @@
+// Path of this file: src/components/FirstTimeAddItemModal.tsx
 'use client'
 import { useState } from 'react'
 

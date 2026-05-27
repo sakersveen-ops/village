@@ -1,3 +1,4 @@
+// Path of this file: src/app/ask/page.tsx
 'use client'
 import dynamic from 'next/dynamic'
 import { useEffect, useState, Suspense } from 'react'

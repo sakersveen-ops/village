@@ -1,3 +1,4 @@
+// Path of this file: src/app/messages/page.tsx
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'

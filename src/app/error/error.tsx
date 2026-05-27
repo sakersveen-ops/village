@@ -1,3 +1,4 @@
+// Path of this file: src/app/error/error.tsx
 'use client'
 
 import { useEffect } from 'react'

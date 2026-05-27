@@ -147,6 +147,7 @@ export const Events = {
   RECEIPT_IMPORT_PUBLISHED:  'receipt_import_published',  // { source, item_count, store, categories }
   RECEIPT_IMPORT_FAILED:     'receipt_import_failed',     // { source }
 
+  
 } as const
 
 export type EventName = typeof Events[keyof typeof Events]

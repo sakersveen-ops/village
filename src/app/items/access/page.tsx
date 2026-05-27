@@ -517,9 +517,9 @@ function AccessPageInner() {
             setShowFollowUp(false)
             router.push(`/items/${savedItemId}`)
           }}
-          onSelectItems={(name) => {
+          onSelectItems={(items) => {
             setShowFollowUp(false)
-            router.push(`/add?name=${encodeURIComponent(name)}`)
+            router.push(`/add?name=${encodeURIComponent(items[0]?.name ?? "")}`)  
           }}
         />
       )}

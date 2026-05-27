@@ -65,7 +65,7 @@ export default function AddPage() {
   const multiFileInputRef = useRef<HTMLInputElement>(null)
 
   // ── Core state ──
-  const [categoryId, setCategoryId]         = useState('')
+  const [categoryId, setCategoryId]         = useState('hjem-og-hage')
   const [subcategoryIds, setSubcategoryIds] = useState<string[]>([])
   const [name, setName]                     = useState('')
   const [description, setDescription]       = useState('')
@@ -511,77 +511,6 @@ Returner KUN JSON, ingen annen tekst.` }
     <div className="max-w-lg mx-auto pb-24">
       <div className="px-4 pt-5 flex flex-col gap-5">
 
-        {/* ── FINN PRODUKTET RASKT ── */}
-        <div className="flex flex-col gap-3">
-          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
-            {isBook ? 'Finn boken raskt' : 'Finn produktet raskt'}
-          </p>
-
-          {/* URL */}
-          <div className="flex gap-2">
-            <input
-              value={urlInput}
-              onChange={e => setUrlInput(e.target.value)}
-              placeholder="Lim inn lenke til gjenstanden…"
-              className="glass flex-1 outline-none text-sm"
-              style={{ borderRadius: 12, padding: '11px 14px', color: 'var(--terra-dark)' }}
-            />
-            <button onClick={analyzeUrl} disabled={urlLoading || !urlInput.trim()}
-              className="btn-primary disabled:opacity-50" style={{ padding: '11px 16px', fontSize: 14 }}>
-              {urlLoading ? '…' : 'Hent'}
-            </button>
-          </div>
-
-          {/* FIX: Analyser bilde — trigger kun gjenkjenning, separat fra ekstra-bilder */}
-          <button
-            onClick={() => analyzeFileInputRef.current?.click()}
-            disabled={imageAnalyzing}
-            className="glass w-full flex items-center gap-3 text-left disabled:opacity-50"
-            style={{ borderRadius: 14, padding: '13px 16px', border: '0.5px solid rgba(46,98,113,0.2)' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-mid)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-            </svg>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)', marginBottom: 2, letterSpacing: '0.06em' }}>
-                {imageAnalyzing ? 'Gjenkjenner…' : 'Gjenkjenn med bilde'}
-              </p>
-              <p className="text-sm" style={{ color: 'var(--terra-dark)' }}>
-                Ta bilde av gjenstanden – eller hele bokhylla
-              </p>
-            </div>
-          </button>
-          {/* Skjult input KUN for analyse */}
-          <input
-            ref={analyzeFileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleAnalyzeImage}
-            className="hidden"
-          />
-
-          {imageAnalyzing && (
-            <div className="glass rounded-2xl p-4 text-center flex items-center justify-center gap-3">
-              <span className="text-xl animate-pulse">🔍</span>
-              <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Gjenkjenner gjenstanden…</p>
-            </div>
-          )}
-
-          {shelfStep === 'loading' && (
-            <div className="glass rounded-2xl p-4 text-center flex items-center justify-center gap-3">
-              <span className="text-xl animate-pulse">📚</span>
-              <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Analyserer bokhyllen…</p>
-            </div>
-          )}
-
-          {imageAnalyzed && (
-            <div className="glass" style={{ borderRadius: 12, padding: '10px 14px' }}>
-              <span className="status-pill active">✓ Gjenkjent – sjekk og juster under</span>
-            </div>
-          )}
-
-          <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>Eller fyll ut manuelt under.</p>
-        </div>
-
         {/* ── KATEGORI ── */}
         <div className="flex flex-col gap-2">
           <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Kategori *</p>
@@ -892,6 +821,84 @@ Returner KUN JSON, ingen annen tekst.` }
             </button>
           </>
         )}
+
+        {/* ── SKILLELINJE ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0' }}>
+          <div style={{ flex: 1, height: 1, background: 'rgba(46,98,113,0.12)' }} />
+          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)', letterSpacing: '0.07em', whiteSpace: 'nowrap' }}>
+            Eller fyll ut automatisk
+          </p>
+          <div style={{ flex: 1, height: 1, background: 'rgba(46,98,113,0.12)' }} />
+        </div>
+
+        {/* ── FINN PRODUKTET RASKT ── */}
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
+            {isBook ? 'Finn boken raskt' : 'Finn produktet raskt'}
+          </p>
+
+          {/* URL */}
+          <div className="flex gap-2">
+            <input
+              value={urlInput}
+              onChange={e => setUrlInput(e.target.value)}
+              placeholder="Lim inn lenke til gjenstanden…"
+              className="glass flex-1 outline-none text-sm"
+              style={{ borderRadius: 12, padding: '11px 14px', color: 'var(--terra-dark)' }}
+            />
+            <button onClick={analyzeUrl} disabled={urlLoading || !urlInput.trim()}
+              className="btn-primary disabled:opacity-50" style={{ padding: '11px 16px', fontSize: 14 }}>
+              {urlLoading ? '…' : 'Hent'}
+            </button>
+          </div>
+
+          {/* FIX: Analyser bilde — trigger kun gjenkjenning, separat fra ekstra-bilder */}
+          <button
+            onClick={() => analyzeFileInputRef.current?.click()}
+            disabled={imageAnalyzing}
+            className="glass w-full flex items-center gap-3 text-left disabled:opacity-50"
+            style={{ borderRadius: 14, padding: '13px 16px', border: '0.5px solid rgba(46,98,113,0.2)' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-mid)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)', marginBottom: 2, letterSpacing: '0.06em' }}>
+                {imageAnalyzing ? 'Gjenkjenner…' : 'Gjenkjenn med bilde'}
+              </p>
+              <p className="text-sm" style={{ color: 'var(--terra-dark)' }}>
+                Ta bilde av gjenstanden – eller hele bokhylla
+              </p>
+            </div>
+          </button>
+          {/* Skjult input KUN for analyse */}
+          <input
+            ref={analyzeFileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleAnalyzeImage}
+            className="hidden"
+          />
+
+          {imageAnalyzing && (
+            <div className="glass rounded-2xl p-4 text-center flex items-center justify-center gap-3">
+              <span className="text-xl animate-pulse">🔍</span>
+              <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Gjenkjenner gjenstanden…</p>
+            </div>
+          )}
+
+          {shelfStep === 'loading' && (
+            <div className="glass rounded-2xl p-4 text-center flex items-center justify-center gap-3">
+              <span className="text-xl animate-pulse">📚</span>
+              <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Analyserer bokhyllen…</p>
+            </div>
+          )}
+
+          {imageAnalyzed && (
+            <div className="glass" style={{ borderRadius: 12, padding: '10px 14px' }}>
+              <span className="status-pill active">✓ Gjenkjent – sjekk og juster under</span>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

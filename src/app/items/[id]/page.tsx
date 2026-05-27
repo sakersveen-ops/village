@@ -35,6 +35,7 @@ export default function ItemPage() {
   const [dueDate, setDueDate]               = useState('')
   const [sent, setSent]                     = useState(false)
   const [sentRange, setSentRange]           = useState<{ start: string; end: string } | null>(null)
+  const [accessRules, setAccessRules]       = useState<any[]>([])
   const [loading, setLoading]               = useState(true)
   const router = useRouter()
   const { id } = useParams()
@@ -79,6 +80,12 @@ export default function ItemPage() {
       const { data: blocked } = await supabase
         .from('item_blocked_dates').select('date').eq('item_id', id)
       setBlockedDates((blocked || []).map((b: any) => b.date))
+
+      const { data: access } = await supabase
+        .from('item_access')
+        .select('access_type, community_id, communities(name)')
+        .eq('item_id', id)
+      setAccessRules(access || [])
 
       if (!hasAccess) track(Events.CALENDAR_OPENED, { item_id: item?.id })
 
@@ -449,6 +456,38 @@ export default function ItemPage() {
             </div>
           </div>
         </Link>
+
+        {/* ── Tilgangsfelt ── */}
+        {(() => {
+          const accessLabels: Record<string, string> = {
+            public: '🌍 Alle kan se denne',
+            friends: '👥 Kun venner',
+            friends_of_friends: '👥👥 Venner av venner',
+            community: '🏘️ Krets',
+          }
+          const labels = accessRules.length === 0
+            ? ['🌍 Alle kan se denne']
+            : accessRules.map(r =>
+                r.access_type === 'community'
+                  ? `🏘️ ${r.communities?.name || 'Krets'}`
+                  : accessLabels[r.access_type] || r.access_type
+              )
+          return (
+            <div className="glass" style={{ borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div className="flex flex-col gap-0.5">
+                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Synlig for</p>
+                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>{labels.join(' · ')}</p>
+              </div>
+              {isOwner && (
+                <Link href={`/items/${item.id}/access`}
+                  className="text-xs font-medium flex-shrink-0"
+                  style={{ color: 'var(--terra)', textDecoration: 'underline' }}>
+                  Endre →
+                </Link>
+              )}
+            </div>
+          )
+        })()}
 
         {/* ── Kalender ── */}
         {hasOwnerAccess && (

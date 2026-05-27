@@ -1,13 +1,8 @@
 'use client'
 // src/components/ImportModal.tsx
-// Glass-heavy drawer shown when user arrives at /add?import=<draftId>
-// or when user pastes email text manually on the add page.
-//
-// Usage:
-//   const [importDraft, setImportDraft] = useState<ImportDraft | null>(null)
-//   <ImportModal draft={importDraft} onClose={() => setImportDraft(null)} onPublish={handlePublishItems} />
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 export interface ParsedItem {
   name: string
@@ -20,6 +15,8 @@ export interface ParsedItem {
   age_range: string | null
   brand: string | null
   confidence: number
+  emoji: string | null        // Haiku-foreslått emoji, brukes som bilde
+  access: 'public' | 'friends' | 'friends_of_friends'  // default: friends
 }
 
 export interface ImportDraft {
@@ -30,11 +27,12 @@ export interface ImportDraft {
   source: 'email' | 'paste' | 'image' | 'finn'
 }
 
+// Nøkkel for å lagre en enkelt item som redigeres i full skjema
+export const IMPORT_EDIT_KEY = 'village_import_edit'
+
 interface Props {
   draft: ImportDraft | null
   onClose: () => void
-  // Called with the items the user chose to publish.
-  // Caller is responsible for iterating and inserting each item into `items` table.
   onPublish: (items: ParsedItem[]) => void
 }
 
@@ -44,6 +42,12 @@ const CAT_LABELS: Record<string, string> = {
   boker: 'Bøker',
   annet: 'Annet',
 }
+
+const ACCESS_OPTIONS: { value: ParsedItem['access']; label: string; icon: string }[] = [
+  { value: 'public',              label: 'Alle',           icon: '🌍' },
+  { value: 'friends',             label: 'Venner',         icon: '👥' },
+  { value: 'friends_of_friends',  label: 'Venners venner', icon: '🤝' },
+]
 
 function ConfidenceBar({ value }: { value: number }) {
   const color =
@@ -55,28 +59,21 @@ function ConfidenceBar({ value }: { value: number }) {
         <span style={{ fontSize: 10, color, fontWeight: 500 }}>{value}%</span>
       </div>
       <div style={{ height: 3, background: 'rgba(46,98,113,0.12)', borderRadius: 2 }}>
-        <div
-          style={{
-            width: `${value}%`, height: '100%',
-            background: color, borderRadius: 2,
-            transition: 'width 0.6s ease',
-          }}
-        />
+        <div style={{ width: `${value}%`, height: '100%', background: color, borderRadius: 2, transition: 'width 0.6s ease' }} />
       </div>
     </div>
   )
 }
 
 function ItemCard({
-  item,
-  selected,
-  onToggle,
-  onChange,
+  item, index, selected, onToggle, onChange, onEditFull,
 }: {
   item: ParsedItem
+  index: number
   selected: boolean
   onToggle: () => void
   onChange: (field: keyof ParsedItem, value: any) => void
+  onEditFull: () => void
 }) {
   return (
     <div
@@ -90,7 +87,7 @@ function ItemCard({
       }}
       onClick={onToggle}
     >
-      {/* Row 1: checkbox + name + price */}
+      {/* Row 1: checkbox + emoji + name + price */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
         {/* Checkbox */}
         <div
@@ -108,6 +105,21 @@ function ItemCard({
             </svg>
           )}
         </div>
+
+        {/* Emoji */}
+        {item.emoji && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+              background: 'rgba(46,98,113,0.08)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 18,
+            }}
+          >
+            {item.emoji}
+          </div>
+        )}
 
         {/* Name (editable) */}
         <div style={{ flex: 1 }}>
@@ -129,16 +141,23 @@ function ItemCard({
           )}
         </div>
 
-        {/* Price badge */}
-        {item.price_nok && (
-          <span style={{
-            fontSize: 12, fontWeight: 600, color: 'var(--terra)',
-            background: 'rgba(46,98,113,0.08)', padding: '2px 8px',
-            borderRadius: 20, flexShrink: 0, whiteSpace: 'nowrap',
-          }}>
-            kr {item.price_nok},-
-          </span>
-        )}
+        {/* Price badge — alltid synlig, redigerbar */}
+        <div onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 11, color: 'var(--terra-mid)' }}>kr</span>
+          <input
+            type="number"
+            min={0}
+            value={item.price_nok ?? 0}
+            onChange={(e) => onChange('price_nok', parseInt(e.target.value) || 0)}
+            style={{
+              width: 54, fontSize: 12, fontWeight: 600, color: 'var(--terra)',
+              background: 'rgba(46,98,113,0.08)', border: 'none', outline: 'none',
+              padding: '2px 6px', borderRadius: 20, textAlign: 'right',
+              fontFamily: 'inherit',
+            }}
+          />
+          <span style={{ fontSize: 11, color: 'var(--terra-mid)' }}>,-</span>
+        </div>
       </div>
 
       {/* Description (editable) */}
@@ -177,9 +196,31 @@ function ItemCard({
         ))}
       </div>
 
-      {/* Metadata fields (color / size / age_range) */}
+      {/* Access toggle */}
       <div
-        style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}
+        onClick={(e) => e.stopPropagation()}
+        style={{ display: 'flex', gap: 6, marginBottom: 10 }}
+      >
+        {ACCESS_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => onChange('access', opt.value)}
+            style={{
+              flex: 1, padding: '4px 0', borderRadius: 20, fontSize: 11, cursor: 'pointer',
+              border: `1px solid ${item.access === opt.value ? 'var(--terra)' : 'var(--glass-border)'}`,
+              background: item.access === opt.value ? 'var(--terra)' : 'transparent',
+              color: item.access === opt.value ? 'white' : 'var(--terra-mid)',
+              fontFamily: 'inherit',
+            }}
+          >
+            {opt.icon} {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Metadata fields */}
+      <div
+        style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}
         onClick={(e) => e.stopPropagation()}
       >
         {(['color', 'size', 'age_range'] as const).map((field) => {
@@ -204,13 +245,36 @@ function ItemCard({
         })}
       </div>
 
+      {/* Endre detaljer-knapp */}
+      <div onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={onEditFull}
+          style={{
+            width: '100%', padding: '7px 0', borderRadius: 10, fontSize: 12,
+            border: '1px solid var(--glass-border)', background: 'transparent',
+            color: 'var(--terra)', cursor: 'pointer', fontFamily: 'inherit',
+            fontWeight: 500,
+          }}
+        >
+          ✏️ Endre detaljer i skjema
+        </button>
+      </div>
+
       <ConfidenceBar value={item.confidence} />
     </div>
   )
 }
 
 export default function ImportModal({ draft, onClose, onPublish }: Props) {
-  const [items, setItems] = useState<ParsedItem[]>(draft?.parsed_items ?? [])
+  const router = useRouter()
+  const [items, setItems] = useState<ParsedItem[]>(() =>
+    (draft?.parsed_items ?? []).map(it => ({
+      ...it,
+      price_nok: it.price_nok ?? 0,
+      access: it.access ?? 'friends',
+      emoji: it.emoji ?? null,
+    }))
+  )
   const [selected, setSelected] = useState<Set<number>>(
     new Set(draft?.parsed_items.map((_, i) => i) ?? [])
   )
@@ -230,6 +294,17 @@ export default function ImportModal({ draft, onClose, onPublish }: Props) {
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)))
   }
 
+  function handleEditFull(idx: number) {
+    // Lagre hele modal-state + idx til sessionStorage, naviger til /add?edit_import=<idx>
+    sessionStorage.setItem(IMPORT_EDIT_KEY, JSON.stringify({
+      draft,
+      items,           // inkluderer alle brukerendringer så langt
+      selected: [...selected],
+      editIndex: idx,
+    }))
+    router.push(`/add?edit_import=${idx}`)
+  }
+
   async function handlePublish() {
     setPublishing(true)
     const chosenItems = items.filter((_, i) => selected.has(i))
@@ -242,44 +317,28 @@ export default function ImportModal({ draft, onClose, onPublish }: Props) {
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="modal-backdrop"
-        onClick={onClose}
-        style={{ zIndex: 60 }}
-      />
-
-      {/* Drawer */}
+      <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 60 }} />
       <div
         className="glass-heavy"
         style={{
-          position: 'fixed',
-          bottom: 0, left: 0, right: 0,
-          zIndex: 61,
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 61,
           borderRadius: '24px 24px 0 0',
           padding: '0 0 env(safe-area-inset-bottom)',
-          maxHeight: '92dvh',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
+          maxHeight: '92dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}
       >
-        {/* Handle */}
         <div className="drawer-handle" style={{ margin: '12px auto 0' }} />
 
         {/* Header */}
         <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid var(--glass-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <h2
-                className="font-display"
-                style={{ fontSize: 18, color: 'var(--terra-dark)', margin: 0 }}
-              >
+              <h2 className="font-display" style={{ fontSize: 18, color: 'var(--terra-dark)', margin: 0 }}>
                 Legg ut gjenstander
               </h2>
               <p style={{ fontSize: 12, color: 'var(--terra-mid)', marginTop: 2 }}>
                 {items.length} {items.length === 1 ? 'produkt funnet' : 'produkter funnet'}
-                {storeLabel} · Velg og rediger før du legger ut
+                {storeLabel} · Velg og rediger
               </p>
             </div>
             <button
@@ -295,20 +354,22 @@ export default function ImportModal({ draft, onClose, onPublish }: Props) {
           </div>
         </div>
 
-        {/* Scrollable item list */}
+        {/* Item list */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {items.map((item, i) => (
             <ItemCard
               key={i}
               item={item}
+              index={i}
               selected={selected.has(i)}
               onToggle={() => toggleItem(i)}
               onChange={(field, val) => updateItem(i, field, val)}
+              onEditFull={() => handleEditFull(i)}
             />
           ))}
         </div>
 
-        {/* Footer CTA */}
+        {/* Footer */}
         <div style={{ padding: '12px 16px', borderTop: '1px solid var(--glass-border)' }}>
           <button
             className="btn-primary"

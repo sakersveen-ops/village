@@ -8,12 +8,13 @@ import {
   CATEGORIES, SIZES_BY_GENDER, AGE_GROUPS, COLORS,
   getCategoryById, type Gender,
 } from '@/lib/categories'
-import ImportModal, { type ImportDraft, type ParsedItem } from '@/components/ImportModal'
+import ImportModal, { type ImportDraft, type ParsedItem, IMPORT_EDIT_KEY } from '@/components/ImportModal'
 import FinnImporter from '@/components/FinnImporter'
 import { track, Events } from '@/lib/track'
 
 // ─── Nøkkel for draft i sessionStorage ───────────────────────────────────────
 const DRAFT_KEY = 'village_add_draft'
+const IMPORT_EDIT_KEY = 'village_import_edit'
 
 // ─── SVG-ikoner per kategori ──────────────────────────────────────────────────
 const CAT_ICONS: Record<string, React.ReactNode> = {
@@ -70,6 +71,8 @@ const MAX_IMAGES = 10
 
 export default function AddPage() {
   const router = useRouter()
+  const [isEditImport, setIsEditImport] = useState(false)
+  const [editImportIdx, setEditImportIdx] = useState<number | null>(null)
   const analyzeFileInputRef  = useRef<HTMLInputElement>(null)
   const multiFileInputRef    = useRef<HTMLInputElement>(null)
 
@@ -146,6 +149,31 @@ export default function AddPage() {
         ? [prof.address_street, prof.address_zip, prof.address_city].filter(Boolean).join(', ')
         : ''
 
+      // ── edit_import: tilbake fra full skjema-redigering ──
+      const editImportParam = new URLSearchParams(window.location.search).get('edit_import')
+      if (editImportParam !== null) {
+        const raw = sessionStorage.getItem(IMPORT_EDIT_KEY)
+        if (raw) {
+          try {
+            const saved = JSON.parse(raw)
+            const idx = parseInt(editImportParam)
+            setIsEditImport(true)
+            setEditImportIdx(idx)
+            const it = saved.items?.[idx]
+            if (it) {
+              if (it.name)        setName(it.name)
+              if (it.description) setDescription(it.description)
+              if (it.category)    setCategoryId(it.category)
+              if (it.subcategory) setSubcategoryIds([it.subcategory])
+              if (it.color)       setColor(it.color)
+              if (it.size)        setSize(it.size)
+              if (profileLocation) setLocation(profileLocation)
+            }
+          } catch { /* ignorer */ }
+        }
+        return
+      }
+
       // ── Import draft fra email-import — sjekkes FØR sessionStorage ──
       const importId = new URLSearchParams(window.location.search).get('import')
       if (importId) {
@@ -159,9 +187,34 @@ export default function AddPage() {
           .single()
         if (draft?.parsed_items?.length) {
           if (profileLocation) setLocation(profileLocation)
+          // Berik items med emoji fra Haiku og default access/price
+          const enriched = await Promise.all(
+            draft.parsed_items.map(async (item: any) => {
+              let emoji: string | null = null
+              try {
+                const res = await fetch('/api/claude', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    model: 'claude-haiku-4-5-20251001',
+                    max_tokens: 10,
+                    messages: [{ role: 'user', content: `Svar med kun én emoji som passer best til: "${item.name}". Kun emoji, ingen tekst.` }],
+                  }),
+                })
+                const data = await res.json()
+                emoji = data.content?.[0]?.text?.trim() ?? null
+              } catch { /* ignorer */ }
+              return {
+                ...item,
+                price_nok: item.price_nok ?? 0,
+                access: 'friends' as const,
+                emoji,
+              }
+            })
+          )
           setImportDraft({
             id: draft.id,
-            parsed_items: draft.parsed_items,
+            parsed_items: enriched,
             store: draft.store,
             order_id: draft.order_id,
             source: draft.source,
@@ -198,6 +251,24 @@ export default function AddPage() {
       }
 
       if (profileLocation) setLocation(profileLocation)
+
+      // ── Gjenopprett import-modal hvis vi kom hit uten edit_import (f.eks. router.back()) ──
+      const editSaved = sessionStorage.getItem(IMPORT_EDIT_KEY)
+      if (editSaved) {
+        try {
+          const saved = JSON.parse(editSaved)
+          if (saved.draft?.parsed_items?.length) {
+            if (profileLocation) setLocation(profileLocation)
+            setImportDraft({
+              id: saved.draft.id,
+              parsed_items: saved.items ?? saved.draft.parsed_items,
+              store: saved.draft.store,
+              order_id: saved.draft.order_id,
+              source: saved.draft.source,
+            })
+          }
+        } catch { /* ignorer */ }
+      }
     }
     load()
   }, [])
@@ -469,6 +540,30 @@ Returner KUN JSON, ingen annen tekst.` }
     router.push('/')
   }
 
+  // ─── Tilbake til import-modal — merge skjema-endringer inn i saved state ───
+  const handleBackToImport = () => {
+    if (editImportIdx === null) { router.back(); return }
+    const raw = sessionStorage.getItem(IMPORT_EDIT_KEY)
+    if (!raw) { router.back(); return }
+    try {
+      const saved = JSON.parse(raw)
+      // Merge endringer fra skjema tilbake til riktig item-index
+      saved.items[editImportIdx] = {
+        ...saved.items[editImportIdx],
+        name,
+        description,
+        category: categoryId,
+        subcategory: subcategoryIds[0] ?? null,
+        color: color || null,
+        size: size || null,
+        age_ranges: ageRanges,
+      }
+      sessionStorage.setItem(IMPORT_EDIT_KEY, JSON.stringify(saved))
+    } catch { /* ignorer */ }
+    // Gjenopprett modal fra IMPORT_EDIT_KEY i add-siden ved å sette importDraft
+    router.back()
+  }
+
   // ─── Import: publiser valgte items fra ordreimport ─────────────────────────
   const handleImportPublish = async (items: ParsedItem[]) => {
     const supabase = createClient()
@@ -476,19 +571,28 @@ Returner KUN JSON, ingen annen tekst.` }
     if (!user || !items.length) return
 
     for (const item of items) {
-      await supabase.from('items').insert({
-        owner_id: user.id,
-        name: item.name,
+      const { data: inserted } = await supabase.from('items').insert({
+        owner_id:    user.id,
+        name:        item.name,
         description: item.description,
-        category: item.category,
+        category:    item.category,
         subcategories: item.subcategory ? [item.subcategory] : [],
-        color: item.color || null,
-        size: item.size || null,
-        age_ranges: item.age_range ? [item.age_range] : [],
-        price: item.price_nok || null,
-        available: true,
-        location: location || null,
-      })
+        color:       item.color || null,
+        size:        item.size || null,
+        age_ranges:  item.age_range ? [item.age_range] : [],
+        price:       item.price_nok ?? 0,
+        available:   true,
+        location:    location || null,
+        image_url:   item.emoji ?? null,   // emoji som midlertidig bilde inntil bilde lastes opp
+      }).select('id').single()
+
+      // Sett access basert på brukervalg i modal
+      if (inserted?.id) {
+        await supabase.from('item_access').insert({
+          item_id:     inserted.id,
+          access_type: item.access ?? 'friends',
+        })
+      }
     }
 
     if (importDraft?.id) {
@@ -507,6 +611,7 @@ Returner KUN JSON, ingen annen tekst.` }
 
     setImportDraft(null)
     sessionStorage.removeItem(DRAFT_KEY)
+    sessionStorage.removeItem(IMPORT_EDIT_KEY)
     router.push('/')
   }
 
@@ -731,6 +836,29 @@ Returner KUN JSON, ingen annen tekst.` }
         src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
         strategy="lazyOnload"
       />
+      {/* Tilbake-banner ved edit_import-modus */}
+      {isEditImport && (
+        <div style={{
+          position: 'sticky', top: 0, zIndex: 42,
+          background: 'rgba(46,98,113,0.08)', borderBottom: '1px solid var(--glass-border)',
+          padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <button
+            onClick={handleBackToImport}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--terra)', fontSize: 14, fontWeight: 500, fontFamily: 'inherit',
+            }}
+          >
+            ← Tilbake til import
+          </button>
+          <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>
+            Endringer lagres automatisk
+          </span>
+        </div>
+      )}
+
       <div className="px-4 pt-5 flex flex-col gap-5">
 
         {/* ── OPPLASTINGSMODUS-VELGER (segmented slider) ── */}

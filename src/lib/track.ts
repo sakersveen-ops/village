@@ -142,6 +142,11 @@ export const Events = {
   FEEDBACK_SUBMITTED: 'feedback_submitted',
   SEARCH_DATE_FILTER_APPLIED: 'search_date_filter_applied',
 
+  // Ordreimport
+  RECEIPT_IMPORT_STARTED:    'receipt_import_started',    // { source }
+  RECEIPT_IMPORT_PUBLISHED:  'receipt_import_published',  // { source, item_count, store, categories }
+  RECEIPT_IMPORT_FAILED:     'receipt_import_failed',     // { source }
+
 } as const
 
 export type EventName = typeof Events[keyof typeof Events]

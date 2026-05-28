@@ -39,6 +39,7 @@ function initials(name?: string, email?: string) {
 }
 
 export default async function PublicProfilePage({ params: paramsPromise }: { params: Promise<{ userId: string }> }) {
+  const resolvedParams = await paramsPromise
   const { data: profile } = await supabaseAdmin
     .from('profiles')
     .select('id, name, email, avatar_url, city, bio')

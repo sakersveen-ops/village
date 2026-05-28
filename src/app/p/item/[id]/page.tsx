@@ -54,6 +54,7 @@ export function buildSmsText(item: any, ownerName: string) {
 }
 
 export default async function PublicItemPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await paramsPromise
   const { data: item } = await supabaseAdmin
     .from('items')
     .select(`

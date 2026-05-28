@@ -14,7 +14,6 @@ import { track, Events } from '@/lib/track'
 
 // ─── Nøkkel for draft i sessionStorage ───────────────────────────────────────
 const DRAFT_KEY = 'village_add_draft'
-const IMPORT_EDIT_KEY = 'village_import_edit'
 
 // ─── SVG-ikoner per kategori ──────────────────────────────────────────────────
 const CAT_ICONS: Record<string, React.ReactNode> = {
@@ -73,6 +72,8 @@ export default function AddPage() {
   const router = useRouter()
   const [isEditImport, setIsEditImport] = useState(false)
   const [editImportIdx, setEditImportIdx] = useState<number | null>(null)
+  const [draftsOpen, setDraftsOpen] = useState(false)
+  const [pendingDrafts, setPendingDrafts] = useState<any[]>([])
   const analyzeFileInputRef  = useRef<HTMLInputElement>(null)
   const multiFileInputRef    = useRef<HTMLInputElement>(null)
 
@@ -565,7 +566,22 @@ Returner KUN JSON, ingen annen tekst.` }
   }
 
   // ─── Import: publiser valgte items fra ordreimport ─────────────────────────
-  const handleImportPublish = async (items: ParsedItem[]) => {
+  // ─── Hent upubliserte import-drafts ──────────────────────────────────────────
+  const loadPendingDrafts = async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { data } = await supabase
+      .from('item_import_drafts')
+      .select('id, store, source, created_at, parsed_items')
+      .eq('user_id', user.id)
+      .is('used_at', null)
+      .order('created_at', { ascending: false })
+    setPendingDrafts(data ?? [])
+    setDraftsOpen(true)
+  }
+
+  const handleImportPublish = async (items: ParsedItem[], deletedIndices: number[]) => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user || !items.length) return
@@ -596,10 +612,35 @@ Returner KUN JSON, ingen annen tekst.` }
     }
 
     if (importDraft?.id) {
+      // Merk draft som brukt
       await supabase
         .from('item_import_drafts')
         .update({ used_at: new Date().toISOString() })
         .eq('id', importDraft.id)
+
+      // Fjern import_ready-varselet fra notification center
+      await supabase
+        .from('notifications')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('type', 'import_ready')
+        .like('action_url', `%${importDraft.id}%`)
+
+      // Fjern slettede items fra parsed_items i draften
+      if (deletedIndices.length > 0) {
+        const { data: draft } = await supabase
+          .from('item_import_drafts')
+          .select('parsed_items')
+          .eq('id', importDraft.id)
+          .single()
+        if (draft?.parsed_items) {
+          const remaining = (draft.parsed_items as any[]).filter((_, i) => !deletedIndices.includes(i))
+          await supabase
+            .from('item_import_drafts')
+            .update({ parsed_items: remaining })
+            .eq('id', importDraft.id)
+        }
+      }
     }
 
     track(Events.RECEIPT_IMPORT_PUBLISHED, {
@@ -832,6 +873,83 @@ Returner KUN JSON, ingen annen tekst.` }
         onClose={() => setImportDraft(null)}
         onPublish={handleImportPublish}
       />
+
+      {/* ── DraftsModal — upubliserte import-drafts ── */}
+      {draftsOpen && (
+        <>
+          <div className="modal-backdrop" onClick={() => setDraftsOpen(false)} style={{ zIndex: 60 }} />
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 61,
+            borderRadius: '24px 24px 0 0',
+            padding: '0 0 env(safe-area-inset-bottom)',
+            maxHeight: '80dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            background: 'rgba(245,250,252,0.97)',
+            backdropFilter: 'blur(24px) saturate(1.5)',
+            WebkitBackdropFilter: 'blur(24px) saturate(1.5)',
+            border: '1px solid rgba(46,98,113,0.18)',
+            borderBottom: 'none',
+            boxShadow: '0 -4px 40px rgba(26,37,48,0.14)',
+          }}>
+            <div className="drawer-handle" style={{ margin: '12px auto 0' }} />
+            <div style={{ padding: '14px 20px 12px', borderBottom: '1px solid rgba(46,98,113,0.1)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h2 className="font-display" style={{ fontSize: 18, color: 'var(--terra-dark)', margin: 0 }}>
+                  Lagrede utkast
+                </h2>
+                <button onClick={() => setDraftsOpen(false)}
+                  style={{ background: 'rgba(46,98,113,0.08)', border: 'none', borderRadius: 20, padding: '4px 12px', fontSize: 13, color: 'var(--terra-mid)', cursor: 'pointer' }}>
+                  Lukk
+                </button>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--terra-mid)', marginTop: 4 }}>
+                Gjenstander fra tidligere import som ikke ble lagt ut
+              </p>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, background: 'rgba(240,247,250,0.6)' }}>
+              {pendingDrafts.length === 0 ? (
+                <p style={{ textAlign: 'center', color: 'var(--terra-mid)', fontSize: 13, padding: '32px 0' }}>
+                  Ingen lagrede utkast
+                </p>
+              ) : pendingDrafts.map((d) => {
+                const itemCount = Array.isArray(d.parsed_items) ? d.parsed_items.length : 0
+                const date = new Date(d.created_at).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })
+                return (
+                  <div key={d.id}
+                    onClick={() => {
+                      setDraftsOpen(false)
+                      router.push(`/add?import=${d.id}`)
+                    }}
+                    style={{
+                      border: '1px solid rgba(46,98,113,0.15)', borderRadius: 14,
+                      padding: '12px 14px', background: 'rgba(248,251,252,0.97)',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12,
+                      transition: 'border-color 150ms',
+                    }}>
+                    <div style={{
+                      width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                      background: 'rgba(46,98,113,0.08)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20,
+                    }}>
+                      📦
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--terra-dark)', margin: 0 }}>
+                        {d.store ?? 'Ukjent butikk'}
+                      </p>
+                      <p style={{ fontSize: 11, color: 'var(--terra-mid)', marginTop: 2 }}>
+                        {itemCount} {itemCount === 1 ? 'gjenstand' : 'gjenstander'} · {date}
+                      </p>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--terra-mid)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
       <Script
         src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
         strategy="lazyOnload"
@@ -1096,6 +1214,19 @@ Returner KUN JSON, ingen annen tekst.` }
                 Fungerer med de fleste norske nettbutikker: Zalando, H&M, Stokke, Babyshop, Komplett og mer.
               </p>
             </div>
+
+            {/* Diskré link til upubliserte drafts */}
+            <button
+              onClick={loadPendingDrafts}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 12, color: 'var(--terra-mid)', padding: 0,
+                textDecoration: 'underline', textUnderlineOffset: 3,
+                textDecorationColor: 'rgba(107,122,130,0.4)',
+                alignSelf: 'flex-start',
+              }}>
+              Se lagrede utkast fra tidligere import
+            </button>
           </div>
         )}
 

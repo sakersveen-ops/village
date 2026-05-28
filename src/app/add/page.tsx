@@ -109,6 +109,7 @@ export default function AddPage() {
 
   // ── UI state ──
   const [saving, setSaving]   = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [errors, setErrors]   = useState<Record<string, string>>({})
 
   // ── Import modal ──
@@ -321,6 +322,7 @@ export default function AddPage() {
     if (!file) return
     e.target.value = ''
 
+    setUploading(true)
     setAnalysisLocked(false)
     setImageAnalyzing(true)
     setImageAnalyzed(false)
@@ -475,6 +477,7 @@ Returner KUN JSON, ingen annen tekst.` }
       }
     }
     if (!timedOut) setImageAnalyzing(false)
+    setUploading(false)
   }
 
   // ─── Legg til flere bilder (ingen analyse) ────────────────────────────────
@@ -483,6 +486,7 @@ Returner KUN JSON, ingen annen tekst.` }
     if (!files.length) return
     e.target.value = ''
 
+    setUploading(true)
     const uploadPromises = files.map(f => uploadImageToStorage(f))
     const urls = await Promise.all(uploadPromises)
     const validUrls = urls.filter((u): u is string => !!u)
@@ -491,6 +495,7 @@ Returner KUN JSON, ingen annen tekst.` }
       const merged = [...prev, ...validUrls]
       return merged.slice(0, MAX_IMAGES)
     })
+    setUploading(false)
   }
 
   const removeImage = (i: number) => {
@@ -745,54 +750,9 @@ Returner KUN JSON, ingen annen tekst.` }
     return Object.keys(errs).length === 0
   }
 
-  const goToAccess = async () => {
+  const goToAccess = () => {
     if (!validate()) return
-    setSaving(true)
-    try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setSaving(false); return }
-
-      const imageUrl =
-        selectedImageSrc === 'suggested' && suggestedImageUrl
-          ? suggestedImageUrl
-          : imagePreviews[0] ?? null
-
-      const extraImages = imagePreviews.slice(1)
-
-      const { data: item, error } = await supabase
-        .from('items')
-        .insert({
-          owner_id:      user.id,
-          name:          name.trim(),
-          description:   description.trim() || null,
-          category:      categoryId,
-          subcategories: subcategoryIds,
-          location:      location.trim() || null,
-          gender:        gender || null,
-          size:          size || null,
-          age_ranges:    ageRanges.length ? ageRanges : null,
-          color:         color || null,
-          image_url:     imageUrl,
-          extra_images:  extraImages.length ? extraImages : null,
-          available:     true,
-        })
-        .select('id')
-        .single()
-
-      if (error || !item?.id) {
-        console.error('Insert failed:', error)
-        setSaving(false)
-        return
-      }
-
-      sessionStorage.removeItem(DRAFT_KEY)
-      track(Events.ITEM_PUBLISHED, { category: categoryId })
-      router.push(`/items/access?item=${item.id}&name=${encodeURIComponent(name.trim())}`)
-    } catch (e) {
-      console.error(e)
-      setSaving(false)
-    }
+    router.push('/items/access')
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -1636,8 +1596,8 @@ Returner KUN JSON, ingen annen tekst.` }
             </div>
 
             {/* NESTE */}
-            <button onClick={goToAccess} disabled={saving} className="btn-primary w-full mt-2 disabled:opacity-50">
-              Neste →
+            <button onClick={goToAccess} disabled={uploading} className="btn-primary w-full mt-2 disabled:opacity-50">
+              {uploading ? 'Laster opp bilder…' : 'Neste →'}
             </button>
           </>
         )}

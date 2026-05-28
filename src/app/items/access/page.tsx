@@ -1,835 +1,529 @@
-// Path of this file: src/app/items/[id]/page.tsx
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
-import Link from 'next/link'
-import ItemCalendar from '@/components/ItemCalendar'
-import LoanThread from '@/components/LoanThread'
-import { track, Events, startTimer } from '@/lib/track'
-import { normalizeCategory, getCategoryById } from '@/lib/categories'
+import { useRouter } from 'next/navigation'
+import { Suspense } from 'react'
+import { track } from '@/lib/track'
+import FirstTimeAddItemModal from '@/components/FirstTimeAddItemModal'
 
-const getCategoryGradient = (category?: string) => {
-  if (!category) return { gradient: 'linear-gradient(135deg, var(--terra) 0%, #8B3A1E 100%)', label: 'VILLAGE' }
-  const normalized = normalizeCategory(category)
-  const cat = getCategoryById(normalized)
-  if (cat) return { gradient: cat.gradient, label: cat.label }
-  return { gradient: 'linear-gradient(135deg, var(--terra-mid) 0%, #1A3542 100%)', label: category }
+// ─── Nøkkel for draft — må matche add/page.tsx ────────────────────────────────
+const DRAFT_KEY = 'village_add_draft'
+
+const ACCESS_LEVELS = [
+  { id: 'close_friends',      label: 'Nære venner',       emoji: '❤️',  description: 'Kun de du har merket som nære venner' },
+  { id: 'friends',            label: 'Venner',             emoji: '👥',  description: 'Alle du er venner med' },
+  { id: 'friends_of_friends', label: 'Venners venner',     emoji: '🌐',  description: 'Venner og deres venner' },
+  { id: 'community',          label: 'Spesifikke kretser', emoji: '🏘️', description: 'Velg hvilke kretser som kan låne' },
+  { id: 'public',             label: 'Alle',               emoji: '🌍',  description: 'Synlig for alle på Village' },
+]
+
+const PRICE_TYPES = [
+  { id: 'per_day',  label: 'per dag' },
+  { id: 'per_week', label: 'per uke' },
+  { id: 'fixed',    label: 'engangsbeløp' },
+]
+
+const LEVEL_ORDER = ['close_friends', 'friends', 'friends_of_friends', 'community', 'public']
+
+const INCLUDED_BY: Record<string, string> = {
+  close_friends: 'Venner',
+  friends: 'Venners venner',
+  friends_of_friends: 'Alle',
 }
 
-// Statuser som regnes som "aktivt" for tilgjengelighetsvisning
-const ACTIVE_STATUSES = ['confirmed', 'active', 'change_proposed', 'pending_return', 'overdue']
+type AccessEntry = {
+  access_type: string
+  community_id?: string
+  price?: number
+  price_type: string
+}
 
-export default function ItemPage() {
-  const [item, setItem]                     = useState<any>(null)
-  const [user, setUser]                     = useState<any>(null)
-  const [userProfile, setUserProfile]       = useState<any>(null)
-  const [loan, setLoan]                     = useState<any>(null)
-  const [carouselIdx, setCarouselIdx]       = useState(0)
-  const [allLoans, setAllLoans]             = useState<any[]>([])
-  const [pendingLoans, setPendingLoans]     = useState<any[]>([])
-  const [proposalLoanId, setProposalLoanId] = useState<string | null>(null)
-  const [blockedDates, setBlockedDates]     = useState<string[]>([])
-  const [blockRangeStart, setBlockRangeStart] = useState<string | null>(null)
-  const [message, setMessage]               = useState('')
-  const [startDate, setStartDate]           = useState('')
-  const [dueDate, setDueDate]               = useState('')
-  const [sent, setSent]                     = useState(false)
-  const [sentRange, setSentRange]           = useState<{ start: string; end: string } | null>(null)
-  const [accessRules, setAccessRules]       = useState<any[]>([])
+function PriceRow({ price, priceType, onPriceChange, onTypeChange, placeholder }: {
+  price?: number
+  priceType: string
+  onPriceChange: (val: string) => void
+  onTypeChange: (val: string) => void
+  placeholder?: string
+}) {
+  return (
+    <div className="pt-3 mt-3" style={{ borderTop: '1px solid rgba(46,98,113,0.12)' }}>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          placeholder={placeholder || '0'}
+          value={price || ''}
+          onChange={e => onPriceChange(e.target.value)}
+          className="glass flex-1 outline-none text-sm"
+          style={{ borderRadius: 10, padding: '8px 12px', color: 'var(--terra-dark)' }}
+        />
+        <span className="text-xs flex-shrink-0" style={{ color: 'var(--terra-mid)' }}>kr</span>
+        <select
+          value={priceType}
+          onChange={e => onTypeChange(e.target.value)}
+          className="glass outline-none text-xs flex-shrink-0"
+          style={{ borderRadius: 10, padding: '8px 10px', color: 'var(--terra-dark)' }}
+        >
+          {PRICE_TYPES.map(pt => (
+            <option key={pt.id} value={pt.id}>{pt.label}</option>
+          ))}
+        </select>
+      </div>
+      <p className="text-xs mt-1.5" style={{ color: 'var(--terra-mid)', opacity: 0.7 }}>
+        La stå tom for gratis
+      </p>
+    </div>
+  )
+}
+
+function AccessPageInner() {
+  const [communities, setCommunities]       = useState<any[]>([])
+  const [selectedLevels, setSelectedLevels] = useState<AccessEntry[]>([
+    { access_type: 'close_friends', price_type: 'per_day' },
+    { access_type: 'friends',       price_type: 'per_day' },
+  ])
+  const [allCommunities, setAllCommunities] = useState(false)
+  const [saving, setSaving]                 = useState(false)
+  const [saveError, setSaveError]           = useState<string | null>(null)
   const [loading, setLoading]               = useState(true)
+  const [draftName, setDraftName]           = useState<string | null>(null)
+  // Follow-up modal
+  const [showFollowUp, setShowFollowUp]     = useState(false)
+  const [savedItemId, setSavedItemId]       = useState<string | null>(null)
+  const [ownedItems, setOwnedItems]         = useState<string[]>([])
+  const [listedItems, setListedItems]       = useState<string[]>([])
+  const [hasCloseFriends, setHasCloseFriends] = useState(false)
+
   const router = useRouter()
-  const { id } = useParams()
 
   useEffect(() => {
     const load = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
-      setUser(user)
 
-      const { data: prof } = await supabase.from('profiles').select('id, name').eq('id', user.id).single()
-      setUserProfile(prof)
+      // Les draft — hvis ingen draft, send tilbake til add
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      if (!raw) { router.push('/add'); return }
 
-      const { data: item } = await supabase
-        .from('items')
-        .select('*, profiles!items_owner_id_fkey(id, name, email, avatar_url)')
-        .eq('id', id)
-        .single()
-      setItem(item)
-      setMessage(`Hei! Kan jeg låne «${item?.name}»? 😊`)
+      let draft: any = null
+      try { draft = JSON.parse(raw) } catch { router.push('/add'); return }
+      if (!draft?.name) { router.push('/add'); return }
 
-      // Hent alle ikke-avsluttede lån inkl. nye statuser
-      const { data: loans } = await supabase
-        .from('loans')
-        .select('*, profiles!loans_borrower_id_fkey(id, name, email, avatar_url)')
-        .eq('item_id', id)
-        .in('status', ['pending', 'confirmed', 'active', 'change_proposed', 'pending_return', 'overdue'])
-        .order('start_date', { ascending: true })
-      setAllLoans(loans || [])
+      setDraftName(draft.name)
 
-      const myLoan = (loans || []).find((l: any) => l.borrower_id === user.id)
-      setLoan(myLoan || null)
+      // Hent kretser brukeren er med i
+      const { data: memberships } = await supabase
+        .from('community_members')
+        .select('communities(id, name, avatar_emoji)')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+      setCommunities((memberships || []).map((m: any) => m.communities))
 
-      const hasAccess = item?.owner_id === user.id || item?.connected_profile_id === user.id
-      if (hasAccess) {
-        setPendingLoans((loans || []).filter((l: any) =>
-          l.status === 'pending' || l.status === 'change_proposed'
-        ))
-      }
+      // Sjekk om brukeren har nære venner
+      const { count } = await supabase
+        .from('close_friends')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+      setHasCloseFriends((count ?? 0) > 0)
 
-      const { data: blocked } = await supabase
-        .from('item_blocked_dates').select('date').eq('item_id', id)
-      setBlockedDates((blocked || []).map((b: any) => b.date))
+      // Hent allerede-listede gjenstander for follow-up modal
+      const { data: myItems } = await supabase
+        .from('items').select('name').eq('owner_id', user.id)
+      setListedItems((myItems || []).map((i: any) => i.name))
 
-      const { data: access } = await supabase
-        .from('item_access')
-        .select('access_type, community_id, communities(name)')
-        .eq('item_id', id)
-      setAccessRules(access || [])
+      try {
+        const raw = localStorage.getItem('village_owned_items')
+        if (raw) setOwnedItems(JSON.parse(raw))
+      } catch { /* ignore */ }
 
-      if (!hasAccess) track(Events.CALENDAR_OPENED, { item_id: item?.id })
-
+      track('access_page_viewed', { mode: 'new' })
       setLoading(false)
     }
     load()
-  }, [id])
+  }, [])
 
-  // Owner blocking: first tap sets range start, second tap blocks the full range
-  const toggleBlock = async (dateStr: string) => {
-    if (!blockRangeStart) {
-      // First tap — if date is already blocked, unblock it immediately; otherwise start a range
-      if (blockedDates.includes(dateStr)) {
-        const supabase = createClient()
-        await supabase.from('item_blocked_dates').delete().eq('item_id', id).eq('date', dateStr)
-        setBlockedDates(prev => prev.filter(d => d !== dateStr))
+  // ─── Hjelpefunksjoner ─────────────────────────────────────────────────────
+
+  const toggleNamedLevel = (levelId: string) => {
+    const idx = LEVEL_ORDER.indexOf(levelId)
+    if (idx === -1) return
+    const isSelected = selectedLevels.some(l => l.access_type === levelId && !l.community_id)
+    if (isSelected) {
+      // Fjern dette nivået og alle lavere
+      const toRemove = LEVEL_ORDER.slice(0, idx + 1)
+      setSelectedLevels(prev => prev.filter(l => l.community_id || !toRemove.includes(l.access_type)))
+    } else {
+      // Legg til dette nivået og alle høyere (inklusiv arv av tilgang, men IKKE pris)
+      const toAdd = LEVEL_ORDER.slice(0, idx + 1)
+      setSelectedLevels(prev => {
+        const existing      = prev.filter(l => l.community_id)
+        const namedExisting = prev.filter(l => !l.community_id)
+        const newEntries    = toAdd
+          .filter(id => !namedExisting.some(l => l.access_type === id))
+          .map(id => ({ access_type: id, price_type: 'per_day' as const }))
+          // NB: ingen price kopieres hit — kun tilgangs-arv, ikke pris-arv
+        return [...namedExisting, ...newEntries, ...existing]
+      })
+    }
+  }
+
+  const toggleCommunity = (communityId: string) => {
+    const exists = selectedLevels.find(l => l.community_id === communityId)
+    if (exists) {
+      setSelectedLevels(prev => prev.filter(l => l.community_id !== communityId))
+    } else {
+      // Ny community-entry starter helt tom — ingen pris, standard price_type
+      setSelectedLevels(prev => [...prev, {
+        access_type: 'community',
+        community_id: communityId,
+        price_type: 'per_day',
+      }])
+    }
+  }
+
+  const updatePrice = (levelId: string, communityId: string | undefined, val: string) => {
+    setSelectedLevels(prev => prev.map(l => {
+      const match = communityId ? l.community_id === communityId : l.access_type === levelId && !l.community_id
+      return match ? { ...l, price: val ? parseInt(val) : undefined } : l
+    }))
+  }
+
+  const updatePriceType = (levelId: string, communityId: string | undefined, val: string) => {
+    setSelectedLevels(prev => prev.map(l => {
+      const match = communityId ? l.community_id === communityId : l.access_type === levelId && !l.community_id
+      return match ? { ...l, price_type: val } : l
+    }))
+  }
+
+  const updateAllCommunitiesPrice     = (val: string) =>
+    setSelectedLevels(prev => prev.map(l => l.community_id ? { ...l, price: val ? parseInt(val) : undefined } : l))
+  const updateAllCommunitiesPriceType = (val: string) =>
+    setSelectedLevels(prev => prev.map(l => l.community_id ? { ...l, price_type: val } : l))
+
+  // ─── Lagre: les draft → insert item → insert access → rydd opp ───────────
+  const save = async () => {
+    setSaving(true)
+    setSaveError(null)
+    const supabase = createClient()
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Ikke innlogget')
+
+      // Les draft
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      if (!raw) throw new Error('Ingen draft funnet')
+      const draft = JSON.parse(raw)
+
+      // Bestem image_url: bruk eget opplastet bilde (allerede i Storage) eller foreslått bilde
+      let image_url: string | null = null
+      if (draft.selectedImageSrc === 'suggested' && draft.suggestedImageUrl) {
+        image_url = draft.suggestedImageUrl
+      } else if (draft.imagePreviews?.[0]) {
+        // imagePreviews[0] er allerede en Storage URL — bruk direkte
+        image_url = draft.imagePreviews[0]
+      }
+
+      // Insert item
+      const { data: item, error: itemError } = await supabase
+        .from('items')
+        .insert({
+          owner_id:    user.id,
+          name:        draft.name,
+          description: draft.description || null,
+          category:      draft.categoryId,
+          subcategories: draft.subcategoryIds || [],
+          image_url:   image_url || null,
+          available:   true,
+          location:    draft.location || null,
+          color:       draft.color || null,
+          size:        draft.size || null,
+          age_ranges:  draft.ageRanges || [],
+        })
+        .select()
+        .single()
+
+      if (itemError || !item?.id) {
+        console.error('Item insert failed:', JSON.stringify(itemError))
+        throw new Error('Kunne ikke lagre gjenstanden')
+      }
+
+      // Insert access-regler
+      const communitySelected = selectedLevels.some(l => l.access_type === 'community' && !l.community_id)
+      const rows: any[] = selectedLevels
+        .filter(l => !(l.access_type === 'community' && !l.community_id && allCommunities))
+        .map(l => ({
+          item_id:      item.id,
+          access_type:  l.access_type,
+          community_id: l.community_id || null,
+          price:        l.price || null,
+          price_type:   l.price_type,
+        }))
+
+      if (rows.length > 0) {
+        const { error: accessError } = await supabase.from('item_access').insert(rows)
+        if (accessError) throw accessError
+      }
+
+      track('item_published', {
+        item_id:      item.id,
+        category:     draft.categoryId,
+        access_types: selectedLevels.map(l => l.access_type),
+        has_price:    selectedLevels.some(l => !!l.price),
+      })
+
+      // Slett draft — gjenstanden er nå lagret
+      sessionStorage.removeItem(DRAFT_KEY)
+      setSavedItemId(item.id)
+
+      // Vis follow-up modal om brukeren har ulistede gjenstander fra onboarding
+      const remaining = ownedItems.filter(i => !listedItems.includes(i))
+      if (remaining.length > 0 || ownedItems.length > 0) {
+        setSaving(false)
+        setShowFollowUp(true)
       } else {
-        setBlockRangeStart(dateStr)
+        router.push(`/items/${item.id}`)
       }
-      return
+    } catch (err: any) {
+      console.error('Save error:', err)
+      setSaveError(err.message || 'Noe gikk galt. Prøv igjen.')
+      setSaving(false)
     }
-    // Second tap — block all dates in range
-    const [a, b] = [blockRangeStart, dateStr].sort()
-    const dates: string[] = []
-    const cur = new Date(a)
-    const end = new Date(b)
-    while (cur <= end) {
-      dates.push(cur.toISOString().split('T')[0])
-      cur.setDate(cur.getDate() + 1)
-    }
-    setBlockRangeStart(null)
-    const newDates = dates.filter(d => !blockedDates.includes(d))
-    if (newDates.length === 0) return
-    const supabase = createClient()
-    await supabase.from('item_blocked_dates').insert(newDates.map(date => ({ item_id: id, date })))
-    setBlockedDates(prev => [...prev, ...newDates])
   }
 
-  const handleSelectRange = (start: string, end: string) => {
-    setStartDate(start)
-    setDueDate(end)
-    setMessage(`Hei! Kan jeg låne «${item?.name}» fra ${fd(start)} til ${fd(end)}? 😊`)
-    track(Events.DATE_RANGE_SELECTED, {
-      item_id: item?.id,
-      days: Math.ceil((new Date(end).getTime() - new Date(start).getTime()) / 86400000),
-    })
+  const skip = () => {
+    // Hopp over tilgangsstyring — insert item med kun draft, ingen access-regler
+    // Brukeren kan sette tilgang fra gjenstandssiden senere
+    save() // Kaller save() som inserter item — access-regler blir bare tomme
   }
 
-  const handleStartDateChange = (val: string) => {
-    setStartDate(val)
-    if (val && dueDate) setMessage(`Hei! Kan jeg låne «${item?.name}» fra ${fd(val)} til ${fd(dueDate)}? 😊`)
+  const goBack = () => {
+    // Draft er intakt i sessionStorage — brukeren kommer tilbake til utfylt skjema
+    router.push('/add')
   }
 
-  const handleDueDateChange = (val: string) => {
-    setDueDate(val)
-    if (startDate && val) setMessage(`Hei! Kan jeg låne «${item?.name}» fra ${fd(startDate)} til ${fd(val)}? 😊`)
-  }
+  if (loading) return (
+    <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
+  )
 
-  const sendRequest = async () => {
-    if (!message.trim() || !startDate || !dueDate) return
-    const t = startTimer()
-    const supabase = createClient()
-
-    let notifyUserId = item.owner_id
-    if (item.connected_profile_id) {
-      const { data: friendWithOwner } = await supabase
-        .from('friendships').select('user_b')
-        .eq('user_a', user.id).eq('user_b', item.owner_id).maybeSingle()
-      if (!friendWithOwner) {
-        const { data: friendWithCoOwner } = await supabase
-          .from('friendships').select('user_b')
-          .eq('user_a', user.id).eq('user_b', item.connected_profile_id).maybeSingle()
-        if (friendWithCoOwner) notifyUserId = item.connected_profile_id
-      }
-    }
-
-    const { data: newLoan, error: loanError } = await supabase
-      .from('loans')
-      .insert({
-        item_id: id,
-        borrower_id: user.id,
-        owner_id: item.owner_id,
-        message,
-        start_date: startDate,
-        due_date: dueDate,
-        status: 'pending',
-        community_id: item.community_id || null,
-      })
-      .select().single()
-
-    if (loanError || !newLoan?.id) {
-      console.error('Loan insert failed:', loanError)
-      alert('Kunne ikke sende forespørsel. Sjekk at du er logget inn og prøv igjen.')
-      return
-    }
-
-    await supabase.from('loan_messages').insert({
-      loan_id: newLoan.id, sender_id: user.id, type: 'chat', body: message,
-    })
-
-    await supabase.from('notifications').insert({
-      user_id: notifyUserId, type: 'loan_request',
-      title: 'Ny låneforespørsel',
-      body: `${userProfile?.name || user.email?.split('@')[0]} vil låne «${item.name}»`,
-      loan_id: newLoan.id,
-    })
-
-    setSentRange({ start: startDate, end: dueDate })
-    setLoan(newLoan)
-    setSent(true)
-    track(Events.LOAN_REQUEST_SENT, {
-      item_id: item.id,
-      duration_ms: t(),
-      days_requested: Math.ceil((new Date(dueDate).getTime() - new Date(startDate).getTime()) / 86400000),
-    })
-  }
-
-  // Godta → setter nå 'confirmed' (ikke 'active')
-  const respondToLoan = async (loanId: string, accept: boolean) => {
-    const supabase = createClient()
-
-    const { data: updated } = await supabase
-      .from('loans')
-      .update({ status: accept ? 'confirmed' : 'declined' })
-      .eq('id', loanId)
-      .eq('status', 'pending')
-      .select().single()
-
-    if (!updated) {
-      alert('Denne forespørselen er allerede behandlet.')
-      const { data: fresh } = await supabase
-        .from('loans').select('*, profiles!loans_borrower_id_fkey(id, name, email, avatar_url)')
-        .eq('item_id', id).in('status', ['pending', 'change_proposed'])
-      setPendingLoans(fresh || [])
-      return
-    }
-
-    await supabase.from('notifications').update({ read: true })
-      .eq('loan_id', loanId).eq('type', 'loan_request').eq('user_id', user.id)
-
-    const targetLoan = pendingLoans.find(l => l.id === loanId)
-    const isCoOwner = user?.id === item.connected_profile_id
-    const actorName = userProfile?.name || user.email?.split('@')[0]
-
-    await supabase.from('loan_messages').insert({
-      loan_id: loanId, sender_id: user.id, type: 'system',
-      body: accept
-        ? `✅ Forespørsel godtatt – klar til henting ${targetLoan?.start_date ? fd(targetLoan.start_date) : ''}`
-        : `❌ Forespørsel avslått`,
-    })
-
-    await supabase.from('notifications').insert({
-      user_id: targetLoan?.borrower_id,
-      type: accept ? 'loan_accepted' : 'loan_declined',
-      title: accept ? '✓ Forespørsel godtatt!' : 'Forespørsel avslått',
-      body: accept ? `Lånet av «${item.name}» er godkjent – klar til henting` : `Forespørselen om «${item.name}» ble avslått`,
-      loan_id: loanId,
-    })
-
-    const nonActorId = isCoOwner ? item.owner_id : item.connected_profile_id
-    if (nonActorId) {
-      await supabase.from('notifications').insert({
-        user_id: nonActorId,
-        type: accept ? 'loan_accepted_coowner' : 'loan_declined_coowner',
-        title: accept ? `🔗 Forespørsel godtatt av ${actorName}` : `🔗 Forespørsel avslått av ${actorName}`,
-        body: `«${item.name}» – ${targetLoan?.profiles?.name || 'låntaker'}`,
-        loan_id: loanId,
-      })
-    }
-
-    setPendingLoans(prev => prev.filter(l => l.id !== loanId))
-    if (accept && targetLoan) {
-      setAllLoans(prev => prev.map(l => l.id === loanId ? { ...l, status: 'confirmed' } : l))
-    }
-    track(accept ? Events.LOAN_ACCEPTED : Events.LOAN_DECLINED, {
-      loan_id: loanId, item_id: item.id,
-      handled_by: isCoOwner ? 'co_owner' : 'owner',
-    })
-  }
-
-  const fd = (d: string) => new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
-
-  const isOverdue = (due: string) => due && new Date(due) < new Date()
-  const isDueSoon = (due: string) => {
-    if (!due) return false
-    const diff = (new Date(due).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-    return diff >= 0 && diff <= 3
-  }
-
-  if (loading) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
-  if (!item)   return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Fant ikke gjenstanden</div>
-
-  const ownerName      = item.profiles?.name || item.profiles?.email?.split('@')[0]
-  const isOwner        = user?.id === item.owner_id
-  const isCoOwner      = user?.id === item.connected_profile_id
-  const hasOwnerAccess = isOwner || isCoOwner
-  const activeLoan     = allLoans.find(l => ACTIVE_STATUSES.includes(l.status))
-  const categoryGfx    = getCategoryGradient(item.category)
+  const communitySelected  = selectedLevels.some(l => l.access_type === 'community' && !l.community_id)
+  const highestSelectedIdx = LEVEL_ORDER.reduce((max, id, i) =>
+    selectedLevels.some(l => l.access_type === id && !l.community_id) ? i : max, -1)
+  const namedLevels = ACCESS_LEVELS.filter(l => l.id !== 'community' && l.id !== 'public' && (l.id !== 'close_friends' || hasCloseFriends))
 
   return (
-    <div className="max-w-lg mx-auto pb-32">
+    <div className="max-w-lg mx-auto pb-48">
 
-      {/* ── Hero ── */}
-      <div className="relative">
-        <button onClick={() => router.back()}
-          className="btn-glass absolute top-6 left-4 z-10"
-          style={{ width: 36, height: 36, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          ←
+      <div className="page-header glass sticky top-0 z-40 px-4 pt-3 pb-4"
+        style={{ borderRadius: '0 0 20px 20px', flexDirection: 'column', alignItems: 'flex-start' }}>
+        <button
+          onClick={goBack}
+          className="btn-glass flex items-center gap-1.5 text-sm"
+          style={{ color: 'var(--terra)' }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5M12 5l-7 7 7 7" />
+          </svg>
+          Tilbake
         </button>
-        {(() => {
-          // Build ordered image list: primary first, then extras
-          const allImages: string[] = [
-            ...(item.image_url ? [item.image_url] : []),
-            ...(Array.isArray(item.extra_images) ? item.extra_images : []),
-          ]
-          if (allImages.length === 0) return (
-            <div className="w-full flex flex-col items-center justify-center gap-2"
-              style={{ height: 256, background: categoryGfx.gradient }}>
-              <span className="font-display text-white/90 font-semibold"
-                style={{ fontSize: 20, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                {categoryGfx.label}
-              </span>
-              <span className="text-white/60 text-sm">{item.name}</span>
-            </div>
-          )
-          return (
-            <div className="relative w-full overflow-hidden" style={{ height: 256 }}>
-              {/* Images */}
-              <div
-                className="flex h-full transition-transform"
-                style={{ transform: `translateX(-${carouselIdx * 100}%)`, transition: 'transform 0.3s ease' }}
-              >
-                {allImages.map((src, i) => (
-                  <img key={i} src={src} alt={item.name}
-                    className="flex-shrink-0 w-full h-full object-cover"
-                    style={{ minWidth: '100%' }} />
-                ))}
-              </div>
-              {/* Prev/Next buttons — only when multiple images */}
-              {allImages.length > 1 && (
-                <>
-                  <button
-                    onClick={() => setCarouselIdx(i => Math.max(0, i - 1))}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center"
-                    style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: 18, opacity: carouselIdx === 0 ? 0.3 : 1 }}
-                    aria-label="Forrige bilde"
-                  >‹</button>
-                  <button
-                    onClick={() => setCarouselIdx(i => Math.min(allImages.length - 1, i + 1))}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center"
-                    style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: 18, opacity: carouselIdx === allImages.length - 1 ? 0.3 : 1 }}
-                    aria-label="Neste bilde"
-                  >›</button>
-                  {/* Dots */}
-                  <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
-                    {allImages.map((_, i) => (
-                      <button key={i} onClick={() => setCarouselIdx(i)}
-                        style={{ width: 6, height: 6, borderRadius: '50%', background: i === carouselIdx ? '#fff' : 'rgba(255,255,255,0.45)', padding: 0, border: 'none' }}
-                        aria-label={`Bilde ${i + 1}`}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )
-        })()}
-        {!item.available && (
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-            <span className="text-white font-bold tracking-widest" style={{ fontSize: 18 }}>UTLÅNT</span>
-          </div>
-        )}
+        <h1 className="font-display font-bold mt-2"
+          style={{ fontSize: 20, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+          {draftName ? `Hvem kan låne ${draftName}?` : 'Hvem kan låne dette?'}
+        </h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
+          Velg én eller flere grupper og sett pris per gruppe
+        </p>
       </div>
 
-      <div className="px-4 pt-5 flex flex-col gap-4">
+      <div className="px-4 pt-5 flex flex-col gap-3">
 
-        {/* ── Tittel + pris ── */}
-        <div className="flex justify-between items-start">
-          <h1 className="font-display flex-1"
-            style={{ fontSize: 26, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-            {item.name}
-          </h1>
-          {item.price
-            ? <span className="status-pill pending ml-2">{item.price} kr/dag</span>
-            : <span className="status-pill active ml-2">Gratis</span>}
-        </div>
+        {namedLevels.map((level) => {
+          const entry              = selectedLevels.find(l => l.access_type === level.id && !l.community_id)
+          const selected           = !!entry
+          const levelOrderIdx      = LEVEL_ORDER.indexOf(level.id)
+          const implicitlySelected = !selected && highestSelectedIdx > levelOrderIdx
 
-        {/* Co-owner banner */}
-        {isCoOwner && (
-          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, border: '1px solid rgba(46,98,113,0.25)' }}>
-            <span style={{ fontSize: 18 }}>🔗</span>
-            <p className="text-sm" style={{ color: 'var(--terra-dark)' }}>
-              Denne gjenstanden tilhører <strong>{ownerName}</strong> – du administrerer den sammen
-            </p>
-          </div>
-        )}
-
-        {/* ── Tilgjengelighetsbanner ── */}
-        {item.available ? (
-          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
-            <span className="status-pill active">● Tilgjengelig nå</span>
-          </div>
-        ) : activeLoan ? (
-          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
-            <div className="flex items-center gap-3">
-              <Link href={`/profile/${activeLoan.profiles?.id}`}>
-                <div className="rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm"
-                  style={{ width: 36, height: 36, background: 'rgba(46,98,113,0.15)', color: 'var(--terra)' }}>
-                  {activeLoan.profiles?.avatar_url
-                    ? <img src={activeLoan.profiles.avatar_url} className="w-full h-full object-cover" />
-                    : (activeLoan.profiles?.name || activeLoan.profiles?.email)?.[0]?.toUpperCase()}
-                </div>
-              </Link>
-              <div className="flex-1">
-                <Link href={`/profile/${activeLoan.profiles?.id}`}
-                  className="text-sm font-medium hover:underline" style={{ color: 'var(--terra-dark)' }}>
-                  {activeLoan.status === 'confirmed' ? 'Godtatt — ' : 'Lånt av '}
-                  {activeLoan.profiles?.name || activeLoan.profiles?.email?.split('@')[0]}
-                </Link>
-                {activeLoan.due_date && (
-                  <p className="text-xs mt-0.5 font-medium"
-                    style={{ color: activeLoan.status === 'overdue' ? '#E24B4A' : isOverdue(activeLoan.due_date) ? '#ef4444' : isDueSoon(activeLoan.due_date) ? 'var(--terra)' : 'var(--terra-mid)' }}>
-                    {activeLoan.status === 'overdue'
-                      ? `⚠️ Forfalt — skulle vært returnert ${fd(activeLoan.due_date)}`
-                      : activeLoan.status === 'confirmed'
-                        ? `Hentes ${fd(activeLoan.start_date)}`
-                        : isOverdue(activeLoan.due_date)
-                          ? `⚠️ Skulle vært returnert ${fd(activeLoan.due_date)}`
-                          : isDueSoon(activeLoan.due_date)
-                            ? `⏰ Returneres snart – ${fd(activeLoan.due_date)}`
-                            : `Returneres ${fd(activeLoan.due_date)}`}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {item.description && (
-          <p style={{ color: 'var(--terra-dark)', letterSpacing: '-0.01em' }}>{item.description}</p>
-        )}
-
-        {item.location && (
-          <div className="flex items-center gap-2">
-            <span style={{ fontSize: 15 }}>📍</span>
-            <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>{item.location}</p>
-          </div>
-        )}
-
-        {/* ── Eier-kort ── */}
-        <Link href={`/profile/${item.profiles?.id}`}>
-          <div className="item-card" style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(46,98,113,0.18)' }}>
-            <div className="item-card-body glass-card"
-              style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div className="rounded-full overflow-hidden flex items-center justify-center font-bold text-white flex-shrink-0"
-                style={{ width: 40, height: 40, background: 'var(--terra)' }}>
-                {item.profiles?.avatar_url
-                  ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
-                  : ownerName?.[0]?.toUpperCase()}
-              </div>
-              <div>
-                <p className="font-medium" style={{ color: 'var(--terra-dark)' }}>
-                  {ownerName}
-                  {isCoOwner && <span className="ml-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>🔗 Tilkoblet</span>}
-                </p>
-                <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>Eier</p>
-              </div>
-            </div>
-          </div>
-        </Link>
-
-        {/* ── Tilgangsfelt ── */}
-        {(() => {
-          const accessLabels: Record<string, string> = {
-            public: '🌍 Alle kan se denne',
-            friends: '👥 Kun venner',
-            friends_of_friends: '👥👥 Venner av venner',
-            community: '🏘️ Krets',
-          }
-          const labels = accessRules.length === 0
-            ? ['🌍 Alle kan se denne']
-            : accessRules.map(r =>
-                r.access_type === 'community'
-                  ? `🏘️ ${r.communities?.name || 'Krets'}`
-                  : accessLabels[r.access_type] || r.access_type
-              )
           return (
-            <div className="glass" style={{ borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <div className="flex flex-col gap-0.5">
-                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Synlig for</p>
-                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>{labels.join(' · ')}</p>
-              </div>
-              {isOwner && (
-                <Link href={`/items/access?item=${item.id}`}
-                  className="text-xs font-medium flex-shrink-0"
-                  style={{ color: 'var(--terra)', textDecoration: 'underline' }}>
-                  Endre →
-                </Link>
-              )}
-            </div>
-          )
-        })()}
-
-        {/* ── Kalender ── */}
-        {hasOwnerAccess && (
-          <p className="text-xs px-1 mb-1" style={{ color: blockRangeStart ? 'var(--terra)' : 'var(--terra-mid)', fontWeight: blockRangeStart ? 500 : 400 }}>
-            {blockRangeStart
-              ? `Fra ${fd(blockRangeStart)} valgt — trykk på sluttdatoen for å blokkere perioden`
-              : 'Trykk én dag for å blokkere/fjerne den, eller velg to dager for å blokkere en periode'}
-          </p>
-        )}
-        <ItemCalendar
-          loans={allLoans}
-          blockedDates={blockedDates}
-          requestedRange={sentRange}
-          onToggleBlock={hasOwnerAccess ? toggleBlock : undefined}
-          onSelectRange={!hasOwnerAccess && !loan && item.available ? handleSelectRange : undefined}
-          isOwner={hasOwnerAccess}
-        />
-
-        {/* ── Kalender-forklaring ── */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-1" style={{ marginTop: -4 }}>
-          {(allLoans.some(l => ['confirmed', 'active', 'pending_return', 'overdue'].includes(l.status))) && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FEE2E2', display: 'inline-block', flexShrink: 0 }} />
-              Aktivt lån
-            </span>
-          )}
-          {(allLoans.some(l => ['pending', 'change_proposed'].includes(l.status))) && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FDE68A', display: 'inline-block', flexShrink: 0 }} />
-              Forespørsel
-            </span>
-          )}
-          {blockedDates.length > 0 && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#E8DDD0', display: 'inline-block', flexShrink: 0 }} />
-              Blokkert
-            </span>
-          )}
-          {sentRange && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FDE68A', display: 'inline-block', flexShrink: 0 }} />
-              Din forespørsel
-            </span>
-          )}
-          {!hasOwnerAccess && !loan && item.available && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--terra)', display: 'inline-block', flexShrink: 0 }} />
-              Valgt periode
-            </span>
-          )}
-        </div>
-
-        {/* ══ EIER / CO-EIER VISNINGER ══ */}
-
-        {/* ── Eier-handlinger: Rediger + Endre tilgang alltid synlig for isOwner ── */}
-        {isOwner && (
-          <div className="flex gap-2">
-            <Link href={`/items/${item.id}/edit`} className="flex-1">
-              <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-                <p className="text-sm">✏️</p>
-                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Rediger</p>
-              </div>
-            </Link>
-            <Link href={`/items/access?item=${item.id}`} className="flex-1">
-              <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-                <p className="text-sm">🔒</p>
-                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Endre tilgang</p>
-              </div>
-            </Link>
-            {item.available && pendingLoans.length === 0 && !activeLoan && (
-              <button
-                onClick={async () => {
-                  if (!confirm('Er du sikker på at du vil slette denne gjenstanden?')) return
-                  const supabase = createClient()
-                  await supabase.from('items').delete().eq('id', id)
-                  router.back()
-                }}
-                className="flex-1 glass"
-                style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center', border: '1px solid rgba(239,68,68,0.25)' }}>
-                <p className="text-sm">🗑️</p>
-                <p className="text-xs mt-1 font-medium" style={{ color: '#ef4444' }}>Slett gjenstand</p>
-              </button>
-            )}
-          </div>
-        )}
-        {isCoOwner && !isOwner && (
-          <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-            <p className="text-sm">🔗</p>
-            <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Delt gjenstand</p>
-          </div>
-        )}
-
-        {/* Aktivt lån eller bekreftet — vis meldingstråd */}
-        {hasOwnerAccess && activeLoan && ACTIVE_STATUSES.includes(activeLoan.status) && (
-          <div className="flex flex-col gap-2">
-            <LoanThread
-              loan={activeLoan} item={item} user={user} isOwner={true}
-              onLoanUpdated={updated => {
-                setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))
-                if (updated.status === 'returned') {
-                  setItem((i: any) => ({ ...i, available: true }))
-                  setAllLoans(prev => prev.filter(l => l.id !== updated.id))
-                }
-              }}
-            />
-          </div>
-        )}
-
-        {/* Innkommende forespørsler */}
-        {hasOwnerAccess && pendingLoans.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <h2 className="font-display font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-              Innkommende forespørsler{' '}
-              <span style={{ color: 'var(--terra)' }}>({pendingLoans.length})</span>
-            </h2>
-
-            {pendingLoans.map(l => (
-              <div key={l.id} className="flex flex-col">
-                <div className="glass" style={{ borderRadius: '16px 16px 0 0', padding: 16 }}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Link href={`/profile/${l.profiles?.id}`}>
-                      <div className="rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm"
-                        style={{ width: 36, height: 36, background: 'rgba(46,98,113,0.15)', color: 'var(--terra)' }}>
-                        {l.profiles?.avatar_url
-                          ? <img src={l.profiles.avatar_url} className="w-full h-full object-cover" />
-                          : (l.profiles?.name || l.profiles?.email)?.[0]?.toUpperCase()}
-                      </div>
-                    </Link>
-                    <div className="flex-1">
-                      <Link href={`/profile/${l.profiles?.id}`}
-                        className="font-medium text-sm hover:underline" style={{ color: 'var(--terra-dark)' }}>
-                        {l.profiles?.name || l.profiles?.email?.split('@')[0]}
-                      </Link>
-                    </div>
-                    <span className="text-xs" style={{ color: 'var(--terra-mid)' }}>
-                      {fd(l.start_date)}{l.due_date ? ` → ${fd(l.due_date)}` : ''}
-                    </span>
-                  </div>
-
-                  {l.status === 'change_proposed' ? (
-                    <div className="glass" style={{ borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: 12, border: '1px solid rgba(46,98,113,0.3)' }}>
-                      <div>
-                        <p className="text-sm font-semibold" style={{ color: 'var(--terra)' }}>Endringsforslag sendt</p>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Venter på svar fra låntaker – se meldingstråden</p>
-                      </div>
-                    </div>
+            <div key={level.id} className="glass" style={{ borderRadius: 16, padding: 16, opacity: implicitlySelected ? 0.6 : 1 }}>
+              <button onClick={() => toggleNamedLevel(level.id)} className="w-full flex items-center gap-3 text-left">
+                <span style={{ fontSize: 22 }}>{level.emoji}</span>
+                <div className="flex-1">
+                  <p className="font-semibold text-sm" style={{ color: 'var(--terra-dark)' }}>{level.label}</p>
+                  {implicitlySelected && INCLUDED_BY[level.id] ? (
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
+                      Inkludert fordi du valgte {INCLUDED_BY[level.id]}
+                    </p>
                   ) : (
-                    <div className="flex gap-2">
-                      <button onClick={() => respondToLoan(l.id, true)} className="btn-sm btn-accept flex-1">
-                        ✓ Godta
-                      </button>
-                      <button
-                        onClick={() => {
-                          setProposalLoanId(l.id)
-                          setTimeout(() => {
-                            document.getElementById(`proposal-${l.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                          }, 80)
-                        }}
-                        className="btn-glass btn-sm flex-1">
-                        Foreslå endring
-                      </button>
-                      <button onClick={() => respondToLoan(l.id, false)} className="btn-sm btn-decline flex-1">
-                        Avslå
-                      </button>
-                    </div>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>{level.description}</p>
                   )}
                 </div>
-
-                <div id={`proposal-${l.id}`} style={{ borderRadius: '0 0 16px 16px', overflow: 'hidden' }}>
-                  <LoanThread
-                    loan={l} item={item} user={user} isOwner={true}
-                    openProposal={proposalLoanId === l.id}
-                    onProposalOpened={() => setProposalLoanId(null)}
-                    onLoanUpdated={updated => {
-                      if (updated.status === 'confirmed') {
-                        setPendingLoans(prev => prev.filter(p => p.id !== updated.id))
-                      } else {
-                        setPendingLoans(prev => prev.map(p => p.id === updated.id ? updated : p))
-                      }
-                      setAllLoans(prev => prev.map(a => a.id === updated.id ? updated : a))
-                    }}
-                  />
+                <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
+                  style={{
+                    background: selected || implicitlySelected ? 'var(--terra)' : 'transparent',
+                    border: selected || implicitlySelected ? 'none' : '2px solid rgba(46,98,113,0.25)',
+                    opacity: implicitlySelected ? 0.5 : 1,
+                  }}>
+                  {(selected || implicitlySelected) && <span className="text-white text-xs">✓</span>}
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ══ LÅNTAKER VISNINGER ══ */}
-
-        {/* pending — venter på godkjenning */}
-        {!hasOwnerAccess && loan?.status === 'pending' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
-              <span className="status-pill pending">⏳ Venter på svar fra {ownerName}</span>
+              </button>
+              {selected && (
+                <PriceRow
+                  price={entry?.price}
+                  priceType={entry?.price_type || 'per_day'}
+                  onPriceChange={val => updatePrice(level.id, undefined, val)}
+                  onTypeChange={val => updatePriceType(level.id, undefined, val)}
+                />
+              )}
             </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
+          )
+        })}
 
-        {/* confirmed — godtatt, klar til henting */}
-        {!hasOwnerAccess && loan?.status === 'confirmed' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(56,138,221,0.3)', background: 'rgba(56,138,221,0.04)' }}>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: '#185FA5' }}>Godtatt — klar til henting!</p>
-                <p className="text-xs mt-0.5" style={{ color: '#378ADD' }}>
-                  {loan.start_date ? `Hentes ${fd(loan.start_date)}` : 'Avtal henting i tråden'}
-                </p>
-              </div>
+        {/* Spesifikke kretser */}
+        <div className="glass" style={{ borderRadius: 16, padding: 16 }}>
+          <button onClick={() => toggleNamedLevel('community')} className="w-full flex items-center gap-3 text-left">
+            <span style={{ fontSize: 22 }}>🏘️</span>
+            <div className="flex-1">
+              <p className="font-semibold text-sm" style={{ color: 'var(--terra-dark)' }}>Spesifikke kretser</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Velg hvilke kretser som kan låne</p>
             </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
-
-        {/* change_proposed */}
-        {!hasOwnerAccess && loan?.status === 'change_proposed' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(46,98,113,0.3)' }}>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--terra)' }}>Utleier har foreslått endring</p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Se meldingstråden og svar på forslaget</p>
-              </div>
+            <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
+              style={{ background: communitySelected ? 'var(--terra)' : 'transparent', border: communitySelected ? 'none' : '2px solid rgba(46,98,113,0.25)' }}>
+              {communitySelected && <span className="text-white text-xs">✓</span>}
             </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => {
-                setLoan(updated)
-                setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))
-              }} />
-          </div>
-        )}
+          </button>
 
-        {/* active */}
-        {!hasOwnerAccess && loan?.status === 'active' && (
-          <div className="flex flex-col gap-3">
+          {communitySelected && communities.length > 0 && (
+            <div className="mt-4 flex flex-col gap-3">
+              <button onClick={() => setAllCommunities(prev => !prev)} className="flex items-center gap-3 w-full">
+                <div className="w-10 rounded-full flex-shrink-0 transition-colors"
+                  style={{ height: 24, background: allCommunities ? 'var(--terra)' : 'rgba(46,98,113,0.15)', padding: 2, display: 'flex', alignItems: 'center' }}>
+                  <div className="rounded-full bg-white transition-transform"
+                    style={{ width: 20, height: 20, transform: allCommunities ? 'translateX(16px)' : 'translateX(0)', boxShadow: '0 1px 3px rgba(0,0,0,0.15)' }} />
+                </div>
+                <span className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Alle kretser</span>
+              </button>
+
+              {allCommunities && (
+                <PriceRow
+                  price={selectedLevels.find(l => l.community_id)?.price}
+                  priceType={selectedLevels.find(l => l.community_id)?.price_type || 'per_day'}
+                  onPriceChange={val => updateAllCommunitiesPrice(val)}
+                  onTypeChange={val => updateAllCommunitiesPriceType(val)}
+                />
+              )}
+
+              {!allCommunities && (
+                <div className="flex flex-col gap-2">
+                  {communities.map((c: any) => {
+                    const cEntry    = selectedLevels.find(l => l.community_id === c.id)
+                    const cSelected = !!cEntry
+                    return (
+                      <div key={c.id} className="glass" style={{ borderRadius: 12, padding: 12 }}>
+                        <button onClick={() => toggleCommunity(c.id)} className="w-full flex items-center gap-3 text-left">
+                          <span style={{ fontSize: 18 }}>{c.avatar_emoji}</span>
+                          <p className="flex-1 font-medium text-sm" style={{ color: 'var(--terra-dark)' }}>{c.name}</p>
+                          <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                            style={{ background: cSelected ? 'var(--terra)' : 'transparent', border: cSelected ? 'none' : '2px solid rgba(46,98,113,0.25)' }}>
+                            {cSelected && <span className="text-white text-xs">✓</span>}
+                          </div>
+                        </button>
+                        {cSelected && (
+                          <PriceRow
+                            price={cEntry?.price}
+                            priceType={cEntry?.price_type || 'per_day'}
+                            onPriceChange={val => updatePrice('community', c.id, val)}
+                            onTypeChange={val => updatePriceType('community', c.id, val)}
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {communitySelected && communities.length === 0 && (
+            <p className="text-xs mt-3" style={{ color: 'var(--terra-mid)' }}>Du er ikke med i noen kretser ennå</p>
+          )}
+        </div>
+
+        {/* Alle */}
+        {(() => {
+          const level    = ACCESS_LEVELS.find(l => l.id === 'public')!
+          const entry    = selectedLevels.find(l => l.access_type === 'public' && !l.community_id)
+          const selected = !!entry
+          return (
             <div className="glass" style={{ borderRadius: 16, padding: 16 }}>
-              <span className="status-pill active">✓ Du låner denne nå!</span>
-              {loan.due_date && (
-                <p className="text-sm mt-2" style={{ color: 'var(--terra-mid)' }}>Returner innen {fd(loan.due_date)}</p>
-              )}
-              {item.price && item.vipps_number && (
-                <a href={`https://qr.vipps.no/28/2/01/031/${item.vipps_number}?amount=${item.price}&message=Leie+${encodeURIComponent(item.name)}`}
-                  target="_blank"
-                  className="btn-primary mt-3 flex items-center justify-center gap-2 w-full"
-                  style={{ background: '#FF5B24' }}>
-                  Betal via Vipps 💸
-                </a>
-              )}
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
-
-        {/* pending_return — venter på utleiers bekreftelse */}
-        {!hasOwnerAccess && loan?.status === 'pending_return' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(56,138,221,0.3)', background: 'rgba(56,138,221,0.04)' }}>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: '#185FA5' }}>Levering registrert</p>
-                <p className="text-xs mt-0.5" style={{ color: '#378ADD' }}>Venter på at {ownerName} bekrefter mottak</p>
-              </div>
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
-
-        {/* overdue */}
-        {!hasOwnerAccess && loan?.status === 'overdue' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, border: '1px solid rgba(226,75,74,0.3)', background: 'rgba(226,75,74,0.04)' }}>
-              <span className="status-pill" style={{ background: '#FCEBEB', color: '#791F1F' }}>⚠️ Forfalt — returner snarest</span>
-              {loan.due_date && (
-                <p className="text-sm mt-2" style={{ color: '#E24B4A' }}>Skulle vært returnert {fd(loan.due_date)}</p>
-              )}
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
-
-        {/* Ikke lånt, tilgjengelig */}
-        {!hasOwnerAccess && !loan && item.available && (
-          <div className="flex flex-col gap-3">
-            <h2 className="font-display font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-              Send låneforespørsel
-            </h2>
-            {sent ? (
-              <div className="flex flex-col gap-3">
-                <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
-                  <span className="status-pill active">✓ Forespørsel sendt til {ownerName}!</span>
+              <button onClick={() => toggleNamedLevel('public')} className="w-full flex items-center gap-3 text-left">
+                <span style={{ fontSize: 22 }}>{level.emoji}</span>
+                <div className="flex-1">
+                  <p className="font-semibold text-sm" style={{ color: 'var(--terra-dark)' }}>{level.label}</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>{level.description}</p>
                 </div>
-                {loan && <LoanThread loan={loan} item={item} user={user} isOwner={false}
-                  onLoanUpdated={updated => setLoan(updated)} />}
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Fra</label>
-                    <input type="date" value={startDate} onChange={e => handleStartDateChange(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
-                      className="glass text-sm outline-none"
-                      style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)' }} />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Til</label>
-                    <input type="date" value={dueDate} onChange={e => handleDueDateChange(e.target.value)}
-                      min={startDate || new Date().toISOString().split('T')[0]}
-                      className="glass text-sm outline-none"
-                      style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)' }} />
-                  </div>
+                <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors"
+                  style={{ background: selected ? 'var(--terra)' : 'transparent', border: selected ? 'none' : '2px solid rgba(46,98,113,0.25)' }}>
+                  {selected && <span className="text-white text-xs">✓</span>}
                 </div>
-                {startDate && dueDate && (
-                  <div className="glass" style={{ borderRadius: 12, padding: '8px 12px' }}>
-                    <span className="status-pill active">✓ {fd(startDate)} → {fd(dueDate)}</span>
-                  </div>
-                )}
-                <textarea value={message} onChange={e => setMessage(e.target.value)} rows={3}
-                  className="glass outline-none resize-none"
-                  style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)', fontSize: 15 }} />
-                <button onClick={sendRequest} disabled={!startDate || !dueDate}
-                  className="btn-primary disabled:opacity-40">
-                  Send forespørsel
-                </button>
-              </>
-            )}
+              </button>
+              {selected && (
+                <PriceRow
+                  price={entry?.price}
+                  priceType={entry?.price_type || 'per_day'}
+                  onPriceChange={val => updatePrice('public', undefined, val)}
+                  onTypeChange={val => updatePriceType('public', undefined, val)}
+                />
+              )}
+            </div>
+          )
+        })()}
+
+        {saveError && (
+          <div className="glass" style={{ borderRadius: 12, padding: '12px 16px' }}>
+            <p className="text-sm" style={{ color: '#ef4444' }}>{saveError}</p>
           </div>
         )}
-
-        {/* Ikke lånt, utilgjengelig */}
-        {!hasOwnerAccess && !loan && !item.available && (
-          <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
-            <span className="status-pill declined">Utlånt akkurat nå</span>
-          </div>
-        )}
-
       </div>
+
+      {/* Bunn-CTA */}
+      <div className="fixed bottom-16 left-0 right-0 px-4 py-4 flex gap-3"
+        style={{
+          background: 'rgba(250,247,242,0.85)',
+          borderTop: '1px solid rgba(46,98,113,0.12)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+        }}>
+        <button onClick={skip} disabled={saving} className="btn-glass flex-1 disabled:opacity-50">
+          Hopp over
+        </button>
+        <button onClick={save} disabled={saving} className="btn-primary flex-grow disabled:opacity-50">
+          {saving ? 'Lagrer…' : 'Lagre tilgang'}
+        </button>
+      </div>
+
+      {/* Follow-up modal */}
+      {showFollowUp && savedItemId && (
+        <FirstTimeAddItemModal
+          ownedItems={ownedItems}
+          listedItems={listedItems}
+          isFollowUp
+          onDismiss={() => {
+            setShowFollowUp(false)
+            router.push(`/items/${savedItemId}`)
+          }}
+          onSelectItems={(items) => {
+            setShowFollowUp(false)
+            router.push(`/add?name=${encodeURIComponent(items[0]?.name ?? "")}`)  
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+export default function AccessPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>}>
+      <AccessPageInner />
+    </Suspense>
   )
 }

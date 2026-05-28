@@ -53,7 +53,7 @@ export function buildSmsText(item: any, ownerName: string) {
   return `${ownerName} deler ${item.name} på Village (${available}). Se her: https://village-jade.vercel.app/p/item/${item.id}`
 }
 
-export default async function PublicItemPage({ params }: { params: { id: string } }) {
+export default async function PublicItemPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const { data: item } = await supabaseAdmin
     .from('items')
     .select(`

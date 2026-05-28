@@ -38,7 +38,7 @@ function initials(name?: string, email?: string) {
   return src.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?'
 }
 
-export default async function PublicProfilePage({ params }: { params: { userId: string } }) {
+export default async function PublicProfilePage({ params: paramsPromise }: { params: Promise<{ userId: string }> }) {
   const { data: profile } = await supabaseAdmin
     .from('profiles')
     .select('id, name, email, avatar_url, city, bio')

@@ -41,7 +41,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
   'baby-og-barn': '🍼', 'klar-og-mote': '👗', 'boker': '📚', 'annet': '📦',
 }
 
-export default async function PublicCommunityPage({ params }: { params: { id: string } }) {
+export default async function PublicCommunityPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const { data: community } = await supabaseAdmin
     .from('communities')
     .select('id, name, description, avatar_emoji, avatar_url, is_public, invite_code')

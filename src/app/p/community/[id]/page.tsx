@@ -42,6 +42,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
 }
 
 export default async function PublicCommunityPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await paramsPromise
   const { data: community } = await supabaseAdmin
     .from('communities')
     .select('id, name, description, avatar_emoji, avatar_url, is_public, invite_code')

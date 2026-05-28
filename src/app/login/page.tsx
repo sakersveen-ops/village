@@ -37,9 +37,9 @@ export default function LoginPage() {
       .eq('id', user!.id)
       .single()
     const redirect = sessionStorage.getItem('redirectAfterLogin')
-    if (redirect) {
+    if (redirect && redirect.startsWith('/')) {
       sessionStorage.removeItem('redirectAfterLogin')
-      window.location.href = redirect
+      router.push(redirect)
     } else if (!profile?.name) {
       router.push('/onboarding')
     } else {

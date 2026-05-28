@@ -13,21 +13,23 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-export async function generateMetadata({ params }: { params: { id: string } }) {
+export async function generateMetadata({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await paramsPromise;
   const { data: item } = await supabaseAdmin
     .from('items')
     .select('name, description, image_url, profiles(name)')
-    .eq('id', params.id)
+    .eq('id', resolvedParams.id)
     .single()
   if (!item) return { title: 'Village' }
   const owner = (item.profiles as any)?.name || 'noen'
   return {
+    metadataBase: new URL('https://village-jade.vercel.app'),
     title: `${item.name} — lån av ${owner} på Village`,
     description: item.description || `${owner} deler ${item.name} på Village, appen for nabodeling.`,
     openGraph: {
       title: `${item.name} — lån av ${owner}`,
       description: item.description || `Lån ${item.name} av ${owner} på Village.`,
-      images: [`/api/og/item/${params.id}`],
+      images: [`/api/og/item/${resolvedParams.id}`],
     },
     twitter: { card: 'summary_large_image' },
   }
@@ -59,7 +61,7 @@ export default async function PublicItemPage({ params }: { params: { id: string 
       location, color, size, age_group,
       profiles(id, name, email, avatar_url, city)
     `)
-    .eq('id', params.id)
+    .eq('id', resolvedParams.id)
     .single()
 
   if (!item) notFound()

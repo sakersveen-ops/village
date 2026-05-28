@@ -376,8 +376,8 @@ async function renderCommunity(id: string) {
 }
 
 // ─── Route handler ─────────────────────────────────────────────────────────────
-export async function GET(req: NextRequest, { params }: { params: { slug: string[] } }) {
-  const [type, id] = params.slug   // ['item', id] | ['profile', id] | ['community', id]
+export async function GET(req: NextRequest, { params }: { params: Promise<{ slug: string[] }> }) {
+  const { slug } = await params; const [type, id] = slug   // ['item', id] | ['profile', id] | ['community', id]
 
   try {
     let element: React.ReactElement | null = null

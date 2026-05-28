@@ -11,21 +11,23 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-export async function generateMetadata({ params }: { params: { userId: string } }) {
+export async function generateMetadata({ params: paramsPromise }: { params: Promise<{ userId: string }> }) {
+  const resolvedParams = await paramsPromise;
   const { data: profile } = await supabaseAdmin
     .from('profiles')
     .select('name, email, city, avatar_url')
-    .eq('id', params.userId)
+    .eq('id', resolvedParams.userId)
     .single()
   if (!profile) return { title: 'Village' }
   const name = profile.name || profile.email?.split('@')[0] || 'Bruker'
   return {
+    metadataBase: new URL('https://village-jade.vercel.app'),
     title: `${name} deler på Village`,
     description: `Se hva ${name} deler på Village — appen for nabodeling.`,
     openGraph: {
       title: `${name} deler på Village`,
       description: `Se hva ${name} deler i nabolaget ditt.`,
-      images: [`/api/og/profile/${params.userId}`],
+      images: [`/api/og/profile/${resolvedParams.userId}`],
     },
     twitter: { card: 'summary_large_image' },
   }
@@ -40,7 +42,7 @@ export default async function PublicProfilePage({ params }: { params: { userId: 
   const { data: profile } = await supabaseAdmin
     .from('profiles')
     .select('id, name, email, avatar_url, city, bio')
-    .eq('id', params.userId)
+    .eq('id', resolvedParams.userId)
     .single()
 
   if (!profile) notFound()
@@ -49,7 +51,7 @@ export default async function PublicProfilePage({ params }: { params: { userId: 
   const { data: items } = await supabaseAdmin
     .from('items')
     .select('id, name, image_url, category, available')
-    .eq('owner_id', params.userId)
+    .eq('owner_id', resolvedParams.userId)
     .eq('available', true)
     .limit(12)
 
@@ -73,12 +75,12 @@ export default async function PublicProfilePage({ params }: { params: { userId: 
   const { count: friendCount } = await supabaseAdmin
     .from('friendships')
     .select('*', { count: 'exact', head: true })
-    .eq('user_a', params.userId)
+    .eq('user_a', resolvedParams.userId)
 
   const name = profile.name || profile.email?.split('@')[0] || 'Bruker'
   const ownerInitials = initials(profile.name, profile.email)
   const hue = (profile.name || '').split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) % 360
-  const appDeepLink = `https://village-jade.vercel.app/profile/${params.userId}`
+  const appDeepLink = `https://village-jade.vercel.app/profile/${resolvedParams.userId}`
 
   const CATEGORY_EMOJI: Record<string, string> = {
     'baby-og-barn': '🍼', 'klar-og-mote': '👗', 'boker': '📚', 'annet': '📦'

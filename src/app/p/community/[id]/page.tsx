@@ -11,20 +11,22 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-export async function generateMetadata({ params }: { params: { id: string } }) {
+export async function generateMetadata({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await paramsPromise;
   const { data: community } = await supabaseAdmin
     .from('communities')
     .select('name, description, avatar_emoji')
-    .eq('id', params.id)
+    .eq('id', resolvedParams.id)
     .single()
   if (!community) return { title: 'Village' }
   return {
+    metadataBase: new URL('https://village-jade.vercel.app'),
     title: `${community.avatar_emoji || '🏘️'} ${community.name} — Village`,
     description: community.description || `Bli med i ${community.name} på Village — appen for nabodeling.`,
     openGraph: {
       title: `${community.name} på Village`,
       description: community.description || `Del og lån i ${community.name}.`,
-      images: [`/api/og/community/${params.id}`],
+      images: [`/api/og/community/${resolvedParams.id}`],
     },
     twitter: { card: 'summary_large_image' },
   }
@@ -43,7 +45,7 @@ export default async function PublicCommunityPage({ params }: { params: { id: st
   const { data: community } = await supabaseAdmin
     .from('communities')
     .select('id, name, description, avatar_emoji, avatar_url, is_public, invite_code')
-    .eq('id', params.id)
+    .eq('id', resolvedParams.id)
     .single()
 
   if (!community) notFound()
@@ -52,7 +54,7 @@ export default async function PublicCommunityPage({ params }: { params: { id: st
   const { data: membersRaw } = await supabaseAdmin
     .from('community_members')
     .select('user_id, profiles(name, email, avatar_url)')
-    .eq('community_id', params.id)
+    .eq('community_id', resolvedParams.id)
     .eq('status', 'active')
     .limit(50)
 
@@ -62,7 +64,7 @@ export default async function PublicCommunityPage({ params }: { params: { id: st
   const { data: items } = await supabaseAdmin
     .from('items')
     .select('id, name, image_url, category, available, owner_id, profiles(name, avatar_url)')
-    .eq('community_id', params.id)
+    .eq('community_id', resolvedParams.id)
     .eq('available', true)
     .limit(20)
 
@@ -82,8 +84,8 @@ export default async function PublicCommunityPage({ params }: { params: { id: st
 
   const sortedItems = [...(items || [])].sort((a: any, b: any) => (loanCounts[b.id] || 0) - (loanCounts[a.id] || 0))
 
-  const appDeepLink = `https://village-jade.vercel.app/community/${params.id}`
-  const registerDeepLink = `https://village-jade.vercel.app/register?redirect=/community/${params.id}`
+  const appDeepLink = `https://village-jade.vercel.app/community/${resolvedParams.id}`
+  const registerDeepLink = `https://village-jade.vercel.app/register?redirect=/community/${resolvedParams.id}`
 
   // Show up to 5 member avatars
   const previewMembers = members.slice(0, 5)

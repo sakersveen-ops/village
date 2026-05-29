@@ -10,7 +10,7 @@ import StoryCreator from '@/components/StoryCreator'
 import ItemRequestCard from '@/components/ItemRequestCard'
 import FirstTimeShareModal from '@/components/FirstTimeShareModal'
 import InviteComposer from '@/components/InviteComposer'
-import ShareButton from '@/components/ShareButton'
+import ShareLinkButton from '@/components/ShareLinkButton'
 
 function IconBtn({
   onClick, href, label, children,
@@ -409,7 +409,7 @@ export default function ProfilePage() {
               </button>
             )}
           </div>
-          <ShareButton
+          <ShareLinkButton
             variant="own-profile"
             profileName={displayName}
             profileUsername={profile?.username}

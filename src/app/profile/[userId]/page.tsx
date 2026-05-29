@@ -6,7 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import ItemRequestCard from '@/components/ItemRequestCard'
 import StoryRing from '@/components/StoryRing'
-import ShareButton from '@/components/ShareButton'
+import ShareLinkButton from '@/components/ShareLinkButton'
 
 const CATEGORIES = [
   { id: 'hjem-og-hage',          label: 'Hjem & hage',        emoji: '🏠' },
@@ -233,7 +233,7 @@ export default function UserProfilePage() {
             <button onClick={toggleStar} className="mt-3 text-xl" aria-label={isStarred ? 'Slutt å følge' : 'Følg'}>
               {isStarred ? '❤️' : '🤍'}
             </button>
-            <ShareButton
+            <ShareLinkButton
               variant="other-profile"
               profileName={displayName(profile)}
               profileUsername={profile.username}
@@ -292,7 +292,7 @@ export default function UserProfilePage() {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0 mt-1">
-            <ShareButton
+            <ShareLinkButton
               variant="other-profile"
               profileName={displayName(profile)}
               profileUsername={profile.username}

@@ -22,15 +22,14 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { track } from '@/lib/track'
 
-// ─── Item catalogue (mirrors onboarding) ─────────────────────────────────────
+// ─── Item catalogue — konkrete, navngitte gjenstander kun ────────────────────
 const ITEM_CATALOGUE: Record<string, string[]> = {
   Barn: ['Bedside crib', 'Babynest', 'Reiseseng', 'Babybilstol (gruppe 0/1)', 'Bilstol gruppe 2/3', 'Sykkelvogn', 'Trille', 'Bæresjal/sele', 'Babygym', 'Badebalje med nyfødtstøtte', 'Stellebord'],
   Verktøy: ['Drill', 'Sirkelsag', 'Sliper', 'Høytrykkspyler', 'Gressklipper', 'Stige', 'Trillebår'],
   Sport: ['Ski (voksen)', 'Skistøvler', 'Sykkel', 'Telt', 'Sovepose', 'Ryggsekk', 'Kajakk'],
-  Bøker: ['Brettspill', 'Puslespill', 'Fagbøker', 'Romaner', 'Kokebøker', 'Barnebøker'],
   Matlaging: ['Kjøkkenmaskin', 'Sous vide', 'Vaffelsjern', 'Iskremmaskin', 'Espressomaskin'],
-  Musikk: ['Gitar', 'Piano/keyboard', 'Mikrofon', 'Høyttaler', 'Forsterker'],
-  Hage: ['Hagesett', 'Paraply/paviljong', 'Bord og stoler (uteplass)', 'Hengekøye', 'Gressklipper'],
+  Musikk: ['Gitar', 'Piano/keyboard'],
+  Hage: ['Høytrykkspyler', 'Paraply/paviljong', 'Bord og stoler (uteplass)', 'Hengekøye'],
 }
 
 const SESSION_KEY = 'village_wishlist_banner_snoozed'

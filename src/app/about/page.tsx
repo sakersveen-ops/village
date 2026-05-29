@@ -214,7 +214,7 @@ export default function AboutPage() {
             "For oss småbarnsforeldre er det helt nødvendig å kunne låne utstyr av venner og bekjente."
           </p>
           <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>
-            — Sverre, grunnlegger av Village
+            — Anne Marit
           </p>
         </div>
       </section>

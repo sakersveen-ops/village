@@ -210,6 +210,24 @@ export default function LoginPage() {
             <a href="/terms" className="underline">vilkår</a> og{' '}
             <a href="/privacy" className="underline">personvernpolicy</a>.
           </p>
+
+          {/* Discreet public page links */}
+          <div className="flex justify-center gap-5 mt-6 pt-5" style={{ borderTop: '1px solid var(--glass-border)' }}>
+            <a
+              href="/about"
+              className="text-xs transition-colors hover:underline"
+              style={{ color: 'var(--terra-mid)' }}
+            >
+              Om Village
+            </a>
+            <a
+              href="/popular"
+              className="text-xs transition-colors hover:underline"
+              style={{ color: 'var(--terra-mid)' }}
+            >
+              Populært nå →
+            </a>
+          </div>
         </div>{/* ── End Right column ── */}
 
       </div>

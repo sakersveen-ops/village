@@ -7,6 +7,7 @@ import Link from 'next/link'
 import ItemCalendar from '@/components/ItemCalendar'
 import LoanThread from '@/components/LoanThread'
 import { track, Events, startTimer } from '@/lib/track'
+import ShareButton from '@/components/ShareButton'
 import { normalizeCategory, getCategoryById } from '@/lib/categories'
 
 const getCategoryGradient = (category?: string) => {
@@ -296,6 +297,13 @@ export default function ItemPage() {
           style={{ width: 36, height: 36, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           ←
         </button>
+        <ShareButton
+          variant="item"
+          itemName={item?.name}
+          itemId={item?.id}
+          className="btn-glass absolute top-6 right-4 z-10"
+          style={{ width: 36, height: 36, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        />
         {(() => {
           // Build ordered image list: primary first, then extras
           const allImages: string[] = [

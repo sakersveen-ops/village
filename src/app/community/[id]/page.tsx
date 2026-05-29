@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
+import ShareButton from '@/components/ShareButton'
 import Link from 'next/link'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -500,6 +501,11 @@ export default function CommunityPage() {
                   Rediger
                 </button>
               )}
+              <ShareButton
+                variant="community"
+                communityName={community?.name}
+                communityId={id as string}
+              />
             </div>
           )}
 

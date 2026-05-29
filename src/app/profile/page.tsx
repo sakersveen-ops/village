@@ -10,6 +10,7 @@ import StoryCreator from '@/components/StoryCreator'
 import ItemRequestCard from '@/components/ItemRequestCard'
 import FirstTimeShareModal from '@/components/FirstTimeShareModal'
 import InviteComposer from '@/components/InviteComposer'
+import ShareButton from '@/components/ShareButton'
 
 function IconBtn({
   onClick, href, label, children,
@@ -408,6 +409,12 @@ export default function ProfilePage() {
               </button>
             )}
           </div>
+          <ShareButton
+            variant="own-profile"
+            profileName={displayName}
+            profileUsername={profile?.username}
+            profileId={user?.id}
+          />
         </div>
 
         {/* Stats-bokser */}

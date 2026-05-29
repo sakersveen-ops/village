@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import ItemRequestCard from '@/components/ItemRequestCard'
 import StoryRing from '@/components/StoryRing'
+import ShareButton from '@/components/ShareButton'
 
 const CATEGORIES = [
   { id: 'hjem-og-hage',          label: 'Hjem & hage',        emoji: '🏠' },
@@ -232,6 +233,14 @@ export default function UserProfilePage() {
             <button onClick={toggleStar} className="mt-3 text-xl" aria-label={isStarred ? 'Slutt å følge' : 'Følg'}>
               {isStarred ? '❤️' : '🤍'}
             </button>
+            <ShareButton
+              variant="other-profile"
+              profileName={displayName(profile)}
+              profileUsername={profile.username}
+              profileId={userId as string}
+              className="mt-3 w-9 h-9 flex items-center justify-center rounded-full"
+              style={{ background: 'rgba(46,98,113,0.10)', border: '1px solid rgba(46,98,113,0.15)', color: 'var(--terra-dark)' }}
+            />
           </div>
           <div className="mt-6">
             {!friendRequestSent ? (
@@ -283,6 +292,12 @@ export default function UserProfilePage() {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+            <ShareButton
+              variant="other-profile"
+              profileName={displayName(profile)}
+              profileUsername={profile.username}
+              profileId={userId as string}
+            />
             <Link href={`/messages/${userId}`} aria-label="Send melding"
               className="w-9 h-9 flex items-center justify-center rounded-full"
               style={{ background: 'rgba(46,98,113,0.10)', border: '1px solid rgba(46,98,113,0.15)', color: 'var(--terra-dark)' }}>

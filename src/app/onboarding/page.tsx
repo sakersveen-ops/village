@@ -1,10 +1,9 @@
-// Path of this file: src/app/onboarding/page.tsx
+// Path: src/app/onboarding/page.tsx
 'use client'
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { track } from '@/lib/track'
-import FinnImporter from '@/components/FinnImporter'
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 const IconShare = () => (
@@ -24,29 +23,9 @@ const IconShield = () => (
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
   </svg>
 )
-const IconHeart = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-  </svg>
-)
-const IconHeartFilled = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-  </svg>
-)
 const IconSearch = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-  </svg>
-)
-const IconInfo = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-  </svg>
-)
-const IconBell = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
   </svg>
 )
 const IconChevronLeft = () => (
@@ -55,51 +34,7 @@ const IconChevronLeft = () => (
   </svg>
 )
 
-// ─── Item catalogue (full + equal list for share and wishlist) ────────────────
-const ITEM_CATALOGUE: Record<string, { label: string; items: string[] }[]> = {
-  Barn: [
-    { label: 'Sove', items: ['Bedside crib', 'Babynest', 'Reiseseng', 'Junior-dyne', 'Sengehest til juniorseng', 'Vippestol', 'Lydmaskin/nattlampe'] },
-    { label: 'Reise', items: ['Babybilstol (gruppe 0/1)', 'Bilstol gruppe 2/3', 'Sykkelvogn', 'Trille', 'Bæresjal/sele', 'Bæremeis', 'Vognpose (vår/vinter)'] },
-    { label: 'Spise', items: ['Babysete til høystol', 'Matprosessor/blender', 'Brystpumpe', 'Sterilisator', 'Flaskevarmer'] },
-    { label: 'Leke & aktivitet', items: ['Babygym', 'Aktivitetstablett/-bord', 'Brettspill', 'Trehjulsykkel', 'Balansesykkel', 'Sykkel med pedaler', 'Sparkesykkel', 'Sandkassesett', 'Skiutstyr (barn)', 'Skøyteutstyr (barn)'] },
-    { label: 'Bade & stelle', items: ['Badebalje med nyfødtstøtte', 'Babybadestol', 'Stellebord'] },
-    { label: 'Ha på', items: ['Omslagsbodyer (str. 50–68)', 'Tynne ullsett (str. 50–68)', 'Parkdress til krabbing', 'Regntøy og skallbekledning', 'Vinterdress', 'Store ytterklær', 'Pensko til spesielle anledninger', 'Første par med sko'] },
-    { label: 'Skole & barnehage', items: ['Barnehagesekk', 'Termos', 'Sitteunderlag', 'Tegnesaker og hobbyutstyr'] },
-  ],
-  Verktøy: [{ label: 'Hage & bygg', items: ['Drill', 'Sirkelsag', 'Sliper', 'Høytrykkspyler', 'Gressklipper', 'Hagesaks', 'Trillebår', 'Stige', 'Hakke/spade', 'Murpistol'] }],
-  Sport: [{ label: 'Friluft & trening', items: ['Ski (voksen)', 'Skistøvler', 'Skistaver', 'Sykkel', 'Telt', 'Sovepose', 'Ryggsekk', 'Kajakk', 'Padleåre', 'Rulleskøyter', 'Isøks', 'Klatresele'] }],
-  Bøker: [{ label: 'Bøker & spill', items: ['Brettspill', 'Puslespill', 'Fagbøker', 'Romaner', 'Kokebøker', 'Barnebøker', 'Tegneserier', 'Lydbøker'] }],
-  Matlaging: [{ label: 'Kjøkken', items: ['Kjøkkenmaskin', 'Is-maskin', 'Sous vide', 'Vaffelsjern', 'Iskremmaskin', 'Espressomaskin', 'Deigkrok', 'Mandolin/ostehøvel', 'Grillspyd/-sett'] }],
-  Musikk: [{ label: 'Instrumenter & utstyr', items: ['Gitar', 'Piano/keyboard', 'Ukulele', 'Trommer/pad', 'Mikrofon', 'Høyttaler', 'Forsterker', 'Stativ', 'Kabel/adaptere'] }],
-  Hage: [{ label: 'Hage & uteplass', items: ['Hagesett', 'Paraply/paviljong', 'Bord og stoler (uteplass)', 'Hengekøye', 'Kompostbeholder', 'Vatningsanlegg', 'Plantekasser', 'Markduk', 'Utendørslampe'] }],
-}
-
-const ALL_CATEGORIES = Object.keys(ITEM_CATALOGUE)
-const TOTAL_STEPS = 7 // 1 Welcome · 2 Profile · 3 Friends · 4 Categories · 5 Share · 6 Wishlist · 7 Finn
-
-// ─── Wish confirmation modal ──────────────────────────────────────────────────
-function WishConfirmModal({ count, onConfirm }: { count: number; onConfirm: () => void }) {
-  return (
-    <div className="fixed inset-0 z-60 flex items-end justify-center px-4 pb-6">
-      <div className="modal-backdrop absolute inset-0" />
-      <div className="glass-heavy relative w-full max-w-sm flex flex-col gap-4 p-6" style={{ borderRadius: 24, zIndex: 61 }}>
-        <div className="text-center">
-          <span className="text-4xl">♥</span>
-          <h2 className="font-display text-xl font-bold mt-3" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-            {count > 0 ? `${count} ønsker lagt til` : 'Ønskelisten din'}
-          </h2>
-          <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--terra-mid)' }}>
-            Ønskene dine er synlige for vennene dine på profilen din. De vil se hva du ønsker å låne, og du får varsel hvis noen legger det ut.
-          </p>
-        </div>
-        <button onClick={onConfirm} className="btn-primary w-full"
-          style={{ borderRadius: 14, padding: '14px 0', fontSize: 15, fontWeight: 600 }}>
-          Forstått, gå videre →
-        </button>
-      </div>
-    </div>
-  )
-}
+const TOTAL_STEPS = 4 // 1 Welcome · 2 Profile · 3 Friends · 4 Categories
 
 // ─── Shared NavButtons ────────────────────────────────────────────────────────
 type NavButtonsProps = {
@@ -156,7 +91,7 @@ function ProfileRow({ profile, sent, onAdd }: { profile: any; sent: boolean; onA
   )
 }
 
-// ─── Step 2: Profile (hoisted to avoid focus loss) ────────────────────────────
+// ─── Step 2: Profile ──────────────────────────────────────────────────────────
 type ProfileStepProps = {
   name: string; setName: (v: string) => void
   username: string; setUsername: (v: string) => void
@@ -279,7 +214,7 @@ function ProfileStep({ name, setName, username, setUsername, usernameError, setU
   )
 }
 
-// ─── Step 3: Friends (hoisted) ────────────────────────────────────────────────
+// ─── Step 3: Friends ──────────────────────────────────────────────────────────
 type FriendsStepProps = {
   inviter: any; friendSuggestions: any[]; currentUserId: string
   sentFriendRequests: Set<string>; onSendRequest: (id: string) => void
@@ -307,8 +242,7 @@ function FriendsStep({ inviter, friendSuggestions, currentUserId, sentFriendRequ
     }, 400)
   }, [query, currentUserId])
 
-  const shown = (query.length >= 2 ? results : friendSuggestions)
-    .filter((p: any) => p.id !== currentUserId)
+  const shown = (query.length >= 2 ? results : friendSuggestions).filter((p: any) => p.id !== currentUserId)
 
   return (
     <div className="flex flex-col gap-5 flex-1">
@@ -321,11 +255,12 @@ function FriendsStep({ inviter, friendSuggestions, currentUserId, sentFriendRequ
         <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Søk på navn eller @brukernavn"
           className="glass w-full pl-10 pr-4 py-3 outline-none"
           style={{ borderRadius: 14, color: 'var(--terra-dark)', fontSize: 15 }} />
-        {searching && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--terra-mid)' }}>…</span>}
       </div>
       {inviter && query.length < 2 && (
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--terra-mid)' }}>Invitert av</p>
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--terra-mid)' }}>
+            Invitert av
+          </p>
           <ProfileRow profile={inviter} sent={sentFriendRequests.has(inviter.id)} onAdd={() => onSendRequest(inviter.id)} />
         </div>
       )}
@@ -357,220 +292,8 @@ function FriendsStep({ inviter, friendSuggestions, currentUserId, sentFriendRequ
   )
 }
 
-// ─── Finn onboarding step ─────────────────────────────────────────────────────
-function FinnOnboardingStep({ onNext, onBack }: { onNext: () => void; onBack: () => void }) {
-  const [answer, setAnswer] = useState<'yes' | 'no' | null>(null)
-
-  return (
-    <div className="flex flex-col gap-5 flex-1">
-      <div>
-        <h1 className="font-display text-2xl font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-          Leier du ut noe på Finn?
-        </h1>
-        <p className="text-sm mt-2 leading-relaxed" style={{ color: 'var(--terra-mid)' }}>
-          Vi ELSKER Finn! Men ikke til utleie. Har du ting på Finn som du også kunne tenkt deg å dele med venner og naboer?
-        </p>
-      </div>
-
-      {/* Yes / No choice */}
-      {answer === null && (
-        <div className="flex flex-col gap-3">
-          <button
-            onClick={() => setAnswer('yes')}
-            className="glass flex items-center gap-4 px-5 py-4 text-left"
-            style={{ borderRadius: 16 }}
-          >
-            <span className="text-2xl">👍</span>
-            <div>
-              <p className="font-semibold text-sm" style={{ color: 'var(--terra-dark)' }}>Ja, jeg har ting på Finn</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Importer annonsene dine automatisk</p>
-            </div>
-          </button>
-          <button
-            onClick={() => { setAnswer('no'); onNext() }}
-            className="glass flex items-center gap-4 px-5 py-4 text-left"
-            style={{ borderRadius: 16 }}
-          >
-            <span className="text-2xl">👎</span>
-            <div>
-              <p className="font-semibold text-sm" style={{ color: 'var(--terra-dark)' }}>Nei, ikke akkurat nå</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Hopp videre – du kan legge ut ting manuelt senere</p>
-            </div>
-          </button>
-        </div>
-      )}
-
-      {/* Show importer only if they said yes */}
-      {answer === 'yes' && (
-        <>
-          <FinnImporter
-            communityId={undefined}
-            onImported={(count) => {
-              track('onboarding_finn_imported', { count })
-            }}
-          />
-          <NavButtons
-            onNext={onNext}
-            onBack={() => setAnswer(null)}
-            nextLabel="Kom i gang 🏡"
-            onSkip={onNext}
-            skipLabel="Hopp over, kom i gang →"
-          />
-        </>
-      )}
-
-      {answer === null && (
-        <NavButtons
-          onNext={onNext}
-          onBack={onBack}
-          nextLabel="Kom i gang 🏡"
-          hideSkip
-        />
-      )}
-    </div>
-  )
-}
-
-// ─── Step 5b: Add-item loop ───────────────────────────────────────────────────
-type AddItemLoopProps = {
-  items: string[]
-  currentIndex: number
-  onNext: () => void
-  onSkipAll: () => void
-}
-function AddItemLoopStep({ items, currentIndex, onNext, onSkipAll }: AddItemLoopProps) {
-  const supabase = createClient()
-  const item = items[currentIndex]
-  const total = items.length
-  const [description, setDescription] = useState('')
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  // Reset form when item changes
-  useEffect(() => {
-    setDescription('')
-    setImageFile(null)
-    setImagePreview('')
-  }, [currentIndex])
-
-  const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setImageFile(file)
-    setImagePreview(URL.createObjectURL(file))
-  }
-
-  const handleSave = async () => {
-    setSaving(true)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { onNext(); return }
-      let image_url = ''
-      if (imageFile) {
-        const ext = imageFile.name.split('.').pop()
-        const path = `items/${user.id}_${Date.now()}.${ext}`
-        await supabase.storage.from('item-images').upload(path, imageFile, { upsert: true })
-        const { data } = supabase.storage.from('item-images').getPublicUrl(path)
-        image_url = data.publicUrl
-      }
-      await supabase.from('items').insert({
-        owner_id: user.id,
-        name: item,
-        description: description || null,
-        image_url: image_url || null,
-        available: true,
-      })
-      track('onboarding_item_registered', { item_name: item })
-    } catch {
-      // continue even on error
-    }
-    setSaving(false)
-    onNext()
-  }
-
-  return (
-    <div className="flex flex-col gap-5 flex-1">
-      {/* Progress within loop */}
-      <div className="flex items-center gap-3">
-        <div className="flex gap-1">
-          {items.map((_, i) => (
-            <div key={i} className="h-1.5 rounded-full transition-all"
-              style={{ width: 24, background: i <= currentIndex ? 'var(--terra)' : 'rgba(46,98,113,0.15)' }} />
-          ))}
-        </div>
-        <span className="text-xs" style={{ color: 'var(--terra-mid)' }}>{currentIndex + 1} av {total}</span>
-      </div>
-
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: 'var(--terra-mid)' }}>
-          Legg ut gjenstand
-        </p>
-        <h1 className="font-display text-2xl font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-          {item}
-        </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
-          Legg gjerne til et bilde og en kort beskrivelse – da er det lettere for venner å se hva du tilbyr.
-        </p>
-      </div>
-
-      {/* Image upload */}
-      <label className="cursor-pointer">
-        <div className="w-full aspect-video rounded-2xl overflow-hidden flex items-center justify-center"
-          style={{ background: 'rgba(46,98,113,0.08)', border: '2px dashed rgba(46,98,113,0.25)' }}>
-          {imagePreview
-            ? <img src={imagePreview} className="w-full h-full object-cover" alt="" />
-            : (
-              <div className="flex flex-col items-center gap-2 text-center p-4">
-                <span className="text-3xl">📷</span>
-                <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>Trykk for å legge til bilde</p>
-              </div>
-            )}
-        </div>
-        <input type="file" accept="image/*" onChange={handleImage} className="hidden" />
-      </label>
-
-      {/* Description */}
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
-          Beskrivelse <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(valgfritt)</span>
-        </label>
-        <textarea
-          value={description}
-          onChange={e => setDescription(e.target.value)}
-          placeholder={`Eks: "Brukes 1–2 ganger, god stand. Kan hentes i Frogner."`}
-          rows={3}
-          className="glass px-4 py-3 outline-none w-full resize-none"
-          style={{ borderRadius: 14, color: 'var(--terra-dark)', fontSize: 14 }}
-        />
-      </div>
-
-      <div className="flex flex-col gap-2 mt-2">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="btn-primary w-full"
-          style={{ borderRadius: 14, padding: '14px 0', fontSize: 15, fontWeight: 600, opacity: saving ? 0.6 : 1 }}>
-          {saving ? 'Lagrer…' : currentIndex < total - 1 ? `Lagre og gå til neste →` : 'Lagre og fortsett →'}
-        </button>
-        <button
-          onClick={onNext}
-          className="text-sm py-2 text-center"
-          style={{ color: 'var(--terra-mid)' }}>
-          Hopp over denne
-        </button>
-        {total > 2 && currentIndex < total - 1 && (
-          <button
-            onClick={onSkipAll}
-            className="text-sm py-1 text-center"
-            style={{ color: 'var(--terra-mid)', opacity: 0.7 }}>
-            Hopp over alle gjenværende
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}
+// ─── Item catalogue (for category seeding into interests) ─────────────────────
+const ALL_CATEGORIES = ['Barn', 'Verktøy', 'Sport', 'Bøker', 'Matlaging', 'Musikk', 'Hage']
 
 // ─── Main component ───────────────────────────────────────────────────────────
 function OnboardingContent() {
@@ -597,15 +320,7 @@ function OnboardingContent() {
   const [sentFriendRequests, setSentFriendRequests] = useState<Set<string>>(new Set())
 
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [ownedItems, setOwnedItems] = useState<Set<string>>(new Set())
-  const [wantedItems, setWantedItems] = useState<Set<string>>(new Set())
 
-  // Add-item loop: after step 5, loop through selected items for proper registration
-  const [addItemQueue, setAddItemQueue] = useState<string[]>([])
-  const [addItemIndex, setAddItemIndex] = useState(0)
-  const [addItemPhase, setAddItemPhase] = useState(false)
-
-  const [showWishModal, setShowWishModal] = useState(false)
   const [showCongrats, setShowCongrats] = useState(false)
 
   // Guard: redirect if already onboarded
@@ -615,8 +330,6 @@ function OnboardingContent() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setCurrentUserId(user.id)
-      // Guard: only redirect if user has explicitly finished onboarding before.
-      // Checking profile.name is unreliable — Supabase may auto-populate it from auth metadata.
       const doneKey = 'village_onboarding_done_' + user.id
       if (localStorage.getItem(doneKey)) { router.push('/'); return }
     })()
@@ -642,7 +355,6 @@ function OnboardingContent() {
   const goBack = () => setStep(s => Math.max(1, s - 1))
   const goSkip = () => {
     track('onboarding_step_skipped', { step })
-    // Always mark onboarding done when skipping — user may skip at any point
     if (currentUserId) localStorage.setItem('village_onboarding_done_' + currentUserId, '1')
     if (step >= TOTAL_STEPS) {
       router.push('/')
@@ -687,37 +399,19 @@ function OnboardingContent() {
     setSentFriendRequests(prev => new Set(prev).add(toId))
   }
 
-  const toggleOwned = (item: string) => {
-    setOwnedItems(prev => { const n = new Set(prev); n.has(item) ? n.delete(item) : n.add(item); return n })
-    setWantedItems(prev => { const n = new Set(prev); n.delete(item); return n })
-  }
-  const toggleWanted = (item: string) => {
-    setWantedItems(prev => { const n = new Set(prev); n.has(item) ? n.delete(item) : n.add(item); return n })
-  }
-
-  const finishWishlist = () => setShowWishModal(true)
-  const confirmWishModal = () => {
-    setShowWishModal(false)
-    track('onboarding_wishlist_confirmed', { count: wantedItems.size })
-    goNext()
-  }
-
   const saveAndFinish = async () => {
-    track('onboarding_completed', { owned_count: ownedItems.size, wanted_count: wantedItems.size })
-    if (ownedItems.size > 0) {
-      localStorage.setItem('village_owned_items', JSON.stringify([...ownedItems]))
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user && selectedCategories.length > 0) {
+      // Persist selected categories as interests on the profile
+      await supabase.from('profiles').update({ interests: selectedCategories }).eq('id', user.id)
     }
+    track('onboarding_completed', { categories: selectedCategories })
     if (currentUserId) localStorage.setItem('village_onboarding_done_' + currentUserId, '1')
     setShowCongrats(true)
-    // Redirect after splash animation
     setTimeout(() => router.push('/'), 2800)
   }
 
-  const activeCatalogue = selectedCategories.flatMap(cat => ITEM_CATALOGUE[cat] ?? [])
-  const wishGroups = activeCatalogue.map(g => ({ ...g, items: g.items.filter(i => !ownedItems.has(i)) })).filter(g => g.items.length > 0)
-
-
-  // ── Step map ────────────────────────────────────────────────────────────────
   const steps: Record<number, React.ReactNode> = {
     1: (
       <div className="flex flex-col gap-6 flex-1">
@@ -762,7 +456,9 @@ function OnboardingContent() {
       <div className="flex flex-col gap-6 flex-1">
         <div>
           <h1 className="font-display text-2xl font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>Hva er du interessert i?</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>Velg kategoriene som passer deg – vi bruker det til å foreslå ting å dele og låne</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
+            Vi bruker dette til å foreslå ting å dele og låne – du kan endre det når som helst i innstillinger.
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {ALL_CATEGORIES.map(cat => (
@@ -773,99 +469,15 @@ function OnboardingContent() {
             </button>
           ))}
         </div>
-        <NavButtons onNext={goNext} onBack={goBack} nextLabel="Videre →"
-          nextDisabled={selectedCategories.length === 0} onSkip={goSkip} skipLabel="Hopp over" />
+        <NavButtons
+          onNext={saveAndFinish}
+          onBack={goBack}
+          nextLabel="Kom i gang 🏡"
+          nextDisabled={selectedCategories.length === 0}
+          onSkip={saveAndFinish}
+          skipLabel="Hopp over"
+        />
       </div>
-    ),
-    5: (
-      <div className="flex flex-col gap-5 flex-1">
-        <div>
-          <h1 className="font-display text-2xl font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>Hva kan du dele?</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
-            For å komme i gang har vi listet gjenstander som typisk etterspørres på Village. Velg det du har – du kan gjøre dem tilgjengelige for vennene dine nå eller legge til detaljer senere.
-          </p>
-        </div>
-        <div className="glass px-4 py-3 flex items-start gap-3" style={{ borderRadius: 14 }}>
-          <span className="shrink-0 mt-0.5" style={{ color: 'var(--terra)' }}><IconInfo /></span>
-          <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>
-            Ingenting deles uten at du legger det ut i en krets, og hvert utlån krever din godkjenning. Behovene varierer fra person til person – marker bare det som er aktuelt.
-          </p>
-        </div>
-        {activeCatalogue.map(group => (
-          <div key={group.label} className="mb-2">
-            <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: 'var(--terra-mid)' }}>{group.label}</p>
-            <div className="flex flex-col gap-2">
-              {group.items.map(item => (
-                <div key={item} className="glass flex items-center justify-between px-4 py-2.5" style={{ borderRadius: 12 }}>
-                  <span style={{ fontSize: 14, color: 'var(--terra-dark)' }}>{item}</span>
-                  <button onClick={() => toggleOwned(item)} className="text-xs px-3 py-1 rounded-full border transition-colors shrink-0"
-                    style={ownedItems.has(item)
-                      ? { background: 'var(--terra)', borderColor: 'transparent', color: '#fff' }
-                      : { borderColor: 'rgba(46,98,113,0.3)', color: 'var(--terra)' }}>
-                    {ownedItems.has(item) ? '✓ Ja' : 'Ja'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-        <NavButtons onNext={() => {
-          if (ownedItems.size > 0) {
-            setAddItemQueue([...ownedItems])
-            setAddItemIndex(0)
-            setAddItemPhase(true)
-          } else {
-            goNext()
-          }
-        }} onBack={goBack}
-          nextLabel={ownedItems.size > 0 ? `Registrer ${ownedItems.size} gjenstand${ownedItems.size > 1 ? 'er' : ''} →` : 'Videre →'}
-          onSkip={goSkip} skipLabel="Hopp over" />
-      </div>
-    ),
-    6: (
-      <div className="flex flex-col gap-5 flex-1">
-        <div>
-          <h1 className="font-display text-2xl font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>Hva ønsker du å låne?</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
-            For å komme i gang har vi listet ting som typisk lånes ut på Village. Hjertemerk det du ikke har – du får varsel hvis noen i nettverket ditt begynner å tilby det.
-          </p>
-        </div>
-        <div className="glass px-4 py-3 flex items-start gap-3" style={{ borderRadius: 14 }}>
-          <span className="shrink-0 mt-0.5" style={{ color: 'var(--terra-green)' }}><IconBell /></span>
-          <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>
-            Ønskene dine legges til på profilen din og er synlige for vennene dine.
-          </p>
-        </div>
-        {wishGroups.map(group => (
-          <div key={group.label} className="mb-2">
-            <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ color: 'var(--terra-mid)' }}>{group.label}</p>
-            <div className="flex flex-col gap-2">
-              {group.items.map(item => (
-                <div key={item} className="glass flex items-center justify-between px-4 py-2.5" style={{ borderRadius: 12 }}>
-                  <span style={{ fontSize: 14, color: 'var(--terra-dark)' }}>{item}</span>
-                  <button onClick={() => toggleWanted(item)}
-                    className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border transition-colors shrink-0"
-                    style={wantedItems.has(item)
-                      ? { background: 'var(--terra-green)', borderColor: 'transparent', color: '#fff' }
-                      : { borderColor: 'rgba(74,124,89,0.4)', color: 'var(--terra-green)' }}>
-                    {wantedItems.has(item) ? <IconHeartFilled /> : <IconHeart />}
-                    {wantedItems.has(item) ? 'Ønsket' : 'Ønsker'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-        <NavButtons onNext={finishWishlist} onBack={goBack}
-          nextLabel={wantedItems.size > 0 ? `Videre (${wantedItems.size} ønsket)` : 'Videre →'}
-          onSkip={goSkip} skipLabel="Hopp over" />
-      </div>
-    ),
-    7: (
-      <FinnOnboardingStep
-        onNext={saveAndFinish}
-        onBack={goBack}
-      />
     ),
   }
 
@@ -877,28 +489,13 @@ function OnboardingContent() {
             style={{ background: i < step ? 'var(--terra)' : 'rgba(46,98,113,0.15)' }} />
         ))}
       </div>
-      {addItemPhase ? (
-        <AddItemLoopStep
-          items={addItemQueue}
-          currentIndex={addItemIndex}
-          onNext={() => {
-            if (addItemIndex < addItemQueue.length - 1) {
-              setAddItemIndex(i => i + 1)
-            } else {
-              setAddItemPhase(false)
-              goNext()
-            }
-          }}
-          onSkipAll={() => { setAddItemPhase(false); goNext() }}
-        />
-      ) : steps[step]}
-      {showWishModal && <WishConfirmModal count={wantedItems.size} onConfirm={confirmWishModal} />}
+      {steps[step]}
 
       {/* Gratulerer-splash */}
       {showCongrats && (
         <div
           className="fixed inset-0 z-[100] flex flex-col items-center justify-center px-8 text-center"
-          style={{ background: 'linear-gradient(160deg, #FFF5EE 0%, #F5E6D8 50%, #EDD5C0 100%)' }}
+          style={{ background: 'linear-gradient(160deg, #f0f7f9 0%, #e0eef2 50%, #cde3ea 100%)' }}
         >
           <div className="text-7xl mb-6" style={{ animation: 'popIn 0.5s cubic-bezier(0.175,0.885,0.32,1.275) both' }}>
             🏡
@@ -914,27 +511,13 @@ function OnboardingContent() {
           <div className="flex gap-2" style={{ animation: 'fadeUp 0.5s 0.5s both' }}>
             {[...Array(3)].map((_, i) => (
               <div key={i} className="rounded-full"
-                style={{
-                  width: 8, height: 8,
-                  background: 'var(--terra)',
-                  opacity: 0.3,
-                  animation: `pulse 1.2s ${i * 0.2}s infinite`,
-                }} />
+                style={{ width: 8, height: 8, background: 'var(--terra)', opacity: 0.3, animation: `pulse 1.2s ${i * 0.2}s infinite` }} />
             ))}
           </div>
           <style>{`
-            @keyframes popIn {
-              from { transform: scale(0.5); opacity: 0; }
-              to   { transform: scale(1);   opacity: 1; }
-            }
-            @keyframes fadeUp {
-              from { transform: translateY(16px); opacity: 0; }
-              to   { transform: translateY(0);    opacity: 1; }
-            }
-            @keyframes pulse {
-              0%, 100% { opacity: 0.3; transform: scale(1); }
-              50%       { opacity: 1;   transform: scale(1.3); }
-            }
+            @keyframes popIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+            @keyframes fadeUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+            @keyframes pulse { 0%, 100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.3); } }
           `}</style>
         </div>
       )}

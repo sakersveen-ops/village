@@ -29,6 +29,23 @@ const AGE_LABEL: Record<string, string> = {
   '5-8ar': '5–8 år', '8-12ar': '8–12 år',
 }
 
+// Returns a human-readable label + icon for item_access rules
+function getAccessLabel(itemAccess: any[]): { icon: string; label: string } | null {
+  if (!itemAccess || itemAccess.length === 0) {
+    return { icon: '🌍', label: 'Alle' }
+  }
+  const types = itemAccess.map((r: any) => r.access_type)
+  if (types.includes('public')) return { icon: '🌍', label: 'Alle' }
+  if (types.includes('friends_of_friends')) return { icon: '👥', label: 'Venners venner' }
+  if (types.includes('friends')) {
+    // Check if also community-restricted
+    if (types.includes('community')) return { icon: '🏘️', label: 'Venner & krets' }
+    return { icon: '👫', label: 'Venner' }
+  }
+  if (types.includes('community')) return { icon: '🏘️', label: 'Krets' }
+  return { icon: '🔒', label: 'Privat' }
+}
+
 export default function ManageItemsPage() {
   const [user, setUser] = useState<any>(null)
   const [items, setItems] = useState<any[]>([])
@@ -45,7 +62,10 @@ export default function ManageItemsPage() {
       if (!user) { router.push('/login'); return }
       setUser(user)
       const { data } = await supabase
-        .from('items').select('*').eq('owner_id', user.id).order('created_at', { ascending: false })
+        .from('items')
+        .select('*, item_access(*)')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: false })
       setItems(data || [])
       setLoading(false)
     }
@@ -128,9 +148,9 @@ export default function ManageItemsPage() {
             {sorted.map(item => {
               const ages: string[] = item.age_ranges ?? []
               const isBaby = item.category === 'baby-og-barn'
+              const access = getAccessLabel(item.item_access ?? [])
               return (
                 <div key={item.id}>
-                  {/* FIX: Wrap card in Link so items are tappable, except action buttons */}
                   <Link href={`/items/${item.id}`} className="block">
                     <div className="rounded-2xl px-4 py-3 shadow-sm" style={{ background: '#fff' }}>
                       <div className="flex items-center gap-3">
@@ -144,8 +164,11 @@ export default function ManageItemsPage() {
                         }
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
-                          <p className="text-xs mt-0.5 capitalize" style={{ color: 'var(--terra-mid)' }}>
-                            {item.category?.replace(/-/g, ' ')}
+                          {/* Access label row */}
+                          <p className="text-xs mt-0.5 flex items-center gap-1" style={{ color: 'var(--terra-mid)' }}>
+                            {access && (
+                              <span>{access.icon} {access.label}</span>
+                            )}
                           </p>
                         </div>
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
@@ -155,7 +178,7 @@ export default function ManageItemsPage() {
                           }>
                           {item.available ? 'Ledig' : 'Utlånt'}
                         </span>
-                        {/* FIX: Rediger links to /items/[id]/edit */}
+                        {/* Rediger */}
                         <Link href={`/items/${item.id}/edit`} aria-label="Rediger"
                           onClick={e => e.stopPropagation()}
                           className="w-8 h-8 flex items-center justify-center rounded-full flex-shrink-0 text-sm"

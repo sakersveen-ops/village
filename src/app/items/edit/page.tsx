@@ -1,13 +1,11 @@
 // Path of this file: src/app/items/edit/page.tsx
 'use client'
-export const dynamic = 'force-dynamic'
-import { useEffect, useState, useRef } from 'react'
+import { Suspense, useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { CATEGORIES, getCategoryLabel } from '@/lib/categories'
+import { CATEGORIES } from '@/lib/categories'
 
-// Age ranges matching the baby-og-barn taxonomy
 const AGE_RANGES = [
   { id: '0-3mnd', label: '0–3 mnd' },
   { id: '3-6mnd', label: '3–6 mnd' },
@@ -19,7 +17,7 @@ const AGE_RANGES = [
   { id: '8-12ar', label: '8–12 år' },
 ]
 
-export default function EditItemPage() {
+function EditItemForm() {
   const searchParams = useSearchParams()
   const itemId = searchParams.get('item') ?? ''
   const router = useRouter()
@@ -29,7 +27,6 @@ export default function EditItemPage() {
   const [error, setError] = useState<string | null>(null)
   const [user, setUser] = useState<any>(null)
 
-  // Form fields
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('')
@@ -38,7 +35,6 @@ export default function EditItemPage() {
   const [price, setPrice] = useState('')
   const [ageRanges, setAgeRanges] = useState<string[]>([])
 
-  // Image state
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -48,11 +44,11 @@ export default function EditItemPage() {
   const isBabyCategory = category === 'baby-og-barn'
 
   useEffect(() => {
+    if (!itemId) return
     const load = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
-      console.log('itemId:', itemId)
       setUser(user)
 
       const { data: item, error } = await supabase
@@ -62,7 +58,6 @@ export default function EditItemPage() {
         .single()
 
       if (error || !item) { router.push('/profile'); return }
-      // Only owner can edit
       if (item.owner_id !== user.id) { router.push(`/items/${itemId}`); return }
 
       setName(item.name ?? '')
@@ -165,7 +160,7 @@ export default function EditItemPage() {
         <h1 className="page-header-title font-display" style={{ flex: 1, textAlign: 'center' }}>
           Rediger gjenstand
         </h1>
-        <div className="w-9" /> {/* spacer */}
+        <div className="w-9" />
       </header>
 
       <div className="px-4 pt-4 flex flex-col gap-4">
@@ -173,52 +168,34 @@ export default function EditItemPage() {
         {/* Bilde */}
         <div className="rounded-2xl p-4" style={{ background: '#fff' }}>
           <p className="text-sm font-medium mb-3" style={{ color: 'var(--terra-dark)' }}>Bilde</p>
-
           {currentImage ? (
             <div className="relative">
-              <img
-                src={currentImage}
-                alt="Forhåndsvisning"
-                className="w-full rounded-xl object-cover"
-                style={{ maxHeight: 240 }}
-              />
-              <button
-                onClick={removeImage}
+              <img src={currentImage} alt="Forhåndsvisning"
+                className="w-full rounded-xl object-cover" style={{ maxHeight: 240 }} />
+              <button onClick={removeImage}
                 className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold"
                 style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid var(--glass-border)', color: 'var(--terra)' }}
-                aria-label="Fjern bilde"
-              >
+                aria-label="Fjern bilde">
                 ✕
               </button>
             </div>
           ) : (
-            <button
-              onClick={() => fileInputRef.current?.click()}
+            <button onClick={() => fileInputRef.current?.click()}
               className="w-full rounded-xl flex flex-col items-center justify-center gap-2 py-8 transition-colors"
-              style={{ border: '1.5px dashed var(--glass-border)', background: 'var(--glass-bg)' }}
-            >
+              style={{ border: '1.5px dashed var(--glass-border)', background: 'var(--glass-bg)' }}>
               <span className="text-2xl">📷</span>
               <span className="text-sm" style={{ color: 'var(--terra-mid)' }}>Legg til bilde</span>
             </button>
           )}
-
           {currentImage && (
-            <button
-              onClick={() => fileInputRef.current?.click()}
+            <button onClick={() => fileInputRef.current?.click()}
               className="mt-3 w-full text-center text-sm py-2 rounded-xl"
-              style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-mid)', background: 'var(--glass-bg)' }}
-            >
+              style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-mid)', background: 'var(--glass-bg)' }}>
               Bytt bilde
             </button>
           )}
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleImageChange}
-          />
+          <input ref={fileInputRef} type="file" accept="image/*"
+            className="hidden" onChange={handleImageChange} />
         </div>
 
         {/* Navn */}
@@ -226,18 +203,10 @@ export default function EditItemPage() {
           <label className="text-sm font-medium block mb-2" style={{ color: 'var(--terra-dark)' }}>
             Navn <span style={{ color: 'var(--terra)' }}>*</span>
           </label>
-          <input
-            type="text"
-            value={name}
-            onChange={e => setName(e.target.value)}
+          <input type="text" value={name} onChange={e => setName(e.target.value)}
             placeholder="Hva heter gjenstanden?"
             className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-            style={{
-              border: '1px solid var(--glass-border)',
-              background: 'var(--glass-bg)',
-              color: 'var(--terra-dark)',
-            }}
-          />
+            style={{ border: '1px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--terra-dark)' }} />
         </div>
 
         {/* Beskrivelse */}
@@ -245,18 +214,10 @@ export default function EditItemPage() {
           <label className="text-sm font-medium block mb-2" style={{ color: 'var(--terra-dark)' }}>
             Beskrivelse
           </label>
-          <textarea
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            placeholder="Tilstand, størrelse, ekstra info…"
-            rows={3}
+          <textarea value={description} onChange={e => setDescription(e.target.value)}
+            placeholder="Tilstand, størrelse, ekstra info…" rows={3}
             className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none"
-            style={{
-              border: '1px solid var(--glass-border)',
-              background: 'var(--glass-bg)',
-              color: 'var(--terra-dark)',
-            }}
-          />
+            style={{ border: '1px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--terra-dark)' }} />
         </div>
 
         {/* Kategori */}
@@ -264,17 +225,10 @@ export default function EditItemPage() {
           <label className="text-sm font-medium block mb-2" style={{ color: 'var(--terra-dark)' }}>
             Kategori
           </label>
-          <select
-            value={category}
+          <select value={category}
             onChange={e => { setCategory(e.target.value); setSubcategory(''); setAgeRanges([]) }}
             className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-            style={{
-              border: '1px solid var(--glass-border)',
-              background: 'var(--glass-bg)',
-              color: 'var(--terra-dark)',
-              appearance: 'none',
-            }}
-          >
+            style={{ border: '1px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--terra-dark)', appearance: 'none' }}>
             <option value="">Velg kategori</option>
             {CATEGORIES.map(cat => (
               <option key={cat.id} value={cat.id}>{cat.label}</option>
@@ -282,7 +236,7 @@ export default function EditItemPage() {
           </select>
         </div>
 
-        {/* Aldersgrupper — vises kun for baby-og-barn */}
+        {/* Aldersgrupper */}
         {isBabyCategory && (
           <div className="rounded-2xl p-4" style={{ background: '#fff' }}>
             <label className="text-sm font-medium block mb-1" style={{ color: 'var(--terra-dark)' }}>
@@ -295,16 +249,12 @@ export default function EditItemPage() {
               {AGE_RANGES.map(range => {
                 const active = ageRanges.includes(range.id)
                 return (
-                  <button
-                    key={range.id}
-                    type="button"
-                    onClick={() => toggleAgeRange(range.id)}
+                  <button key={range.id} type="button" onClick={() => toggleAgeRange(range.id)}
                     className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
                     style={active
                       ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
                       : { background: '#fff', color: '#1A3542', border: '1px solid var(--glass-border)' }
-                    }
-                  >
+                    }>
                     {range.label}
                   </button>
                 )
@@ -319,21 +269,11 @@ export default function EditItemPage() {
             <label className="text-sm font-medium block mb-2" style={{ color: 'var(--terra-dark)' }}>
               Pris per dag (kr)
             </label>
-            <input
-              type="number"
-              value={price}
-              onChange={e => setPrice(e.target.value)}
-              placeholder="0 = gratis"
-              min={0}
+            <input type="number" value={price} onChange={e => setPrice(e.target.value)}
+              placeholder="0 = gratis" min={0}
               className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-              style={{
-                border: '1px solid var(--glass-border)',
-                background: 'var(--glass-bg)',
-                color: 'var(--terra-dark)',
-              }}
-            />
+              style={{ border: '1px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--terra-dark)' }} />
           </div>
-
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Tilgjengelighet</p>
@@ -341,47 +281,36 @@ export default function EditItemPage() {
                 {available ? 'Ledig for utlån' : 'Ikke tilgjengelig nå'}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setAvailable(v => !v)}
+            <button type="button" onClick={() => setAvailable(v => !v)}
               className="relative w-12 h-6 rounded-full transition-colors"
               style={{ background: available ? 'var(--terra)' : 'var(--glass-border)' }}
-              aria-label="Endre tilgjengelighet"
-            >
-              <span
-                className="absolute top-0.5 w-5 h-5 rounded-full shadow-sm transition-transform"
-                style={{
-                  background: '#fff',
-                  left: available ? 'calc(100% - 22px)' : '2px',
-                  transition: 'left 0.15s ease',
-                }}
-              />
+              aria-label="Endre tilgjengelighet">
+              <span className="absolute top-0.5 w-5 h-5 rounded-full shadow-sm"
+                style={{ background: '#fff', left: available ? 'calc(100% - 22px)' : '2px', transition: 'left 0.15s ease' }} />
             </button>
           </div>
         </div>
 
-        {/* Feilmelding */}
         {error && (
           <p className="text-sm px-1" style={{ color: 'var(--terra)' }}>{error}</p>
         )}
 
-        {/* Lagre */}
-        <button
-          onClick={handleSave}
-          disabled={saving || uploadingImage}
+        <button onClick={handleSave} disabled={saving || uploadingImage}
           className="w-full py-3.5 rounded-2xl text-sm font-semibold transition-opacity"
-          style={{
-            background: 'var(--terra)',
-            color: '#fff',
-            opacity: (saving || uploadingImage) ? 0.6 : 1,
-          }}
-        >
+          style={{ background: 'var(--terra)', color: '#fff', opacity: (saving || uploadingImage) ? 0.6 : 1 }}>
           {uploadingImage ? 'Laster opp bilde…' : saving ? 'Lagrer…' : 'Lagre endringer'}
         </button>
 
       </div>
-
       <div className="nav-spacer" />
     </div>
+  )
+}
+
+export default function EditItemPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>}>
+      <EditItemForm />
+    </Suspense>
   )
 }

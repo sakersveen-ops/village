@@ -1,858 +1,344 @@
-// Path of this file: src/app/items/[id]/page.tsx
+// Path of this file: src/app/items/edit/page.tsx
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { Suspense, useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import ItemCalendar from '@/components/ItemCalendar'
-import LoanThread from '@/components/LoanThread'
-import { track, Events, startTimer } from '@/lib/track'
-import ShareLinkButton from '@/components/ShareLinkButton'
-import { normalizeCategory, getCategoryById } from '@/lib/categories'
+import { CATEGORIES } from '@/lib/categories'
 
-const getCategoryGradient = (category?: string) => {
-  if (!category) return { gradient: 'linear-gradient(135deg, var(--terra) 0%, #8B3A1E 100%)', label: 'VILLAGE' }
-  const normalized = normalizeCategory(category)
-  const cat = getCategoryById(normalized)
-  if (cat) return { gradient: cat.gradient, label: cat.label }
-  return { gradient: 'linear-gradient(135deg, var(--terra-mid) 0%, #1A3542 100%)', label: category }
-}
+const AGE_RANGES = [
+  { id: '0-3mnd', label: '0–3 mnd' },
+  { id: '3-6mnd', label: '3–6 mnd' },
+  { id: '6-12mnd', label: '6–12 mnd' },
+  { id: '1-2ar', label: '1–2 år' },
+  { id: '2-3ar', label: '2–3 år' },
+  { id: '3-5ar', label: '3–5 år' },
+  { id: '5-8ar', label: '5–8 år' },
+  { id: '8-12ar', label: '8–12 år' },
+]
 
-// Statuser som regnes som "aktivt" for tilgjengelighetsvisning
-const ACTIVE_STATUSES = ['confirmed', 'active', 'change_proposed', 'pending_return', 'overdue']
-
-export default function ItemPage() {
-  const [item, setItem]                     = useState<any>(null)
-  const [user, setUser]                     = useState<any>(null)
-  const [userProfile, setUserProfile]       = useState<any>(null)
-  const [loan, setLoan]                     = useState<any>(null)
-  const [carouselIdx, setCarouselIdx]       = useState(0)
-  const [allLoans, setAllLoans]             = useState<any[]>([])
-  const [pendingLoans, setPendingLoans]     = useState<any[]>([])
-  const [proposalLoanId, setProposalLoanId] = useState<string | null>(null)
-  const [blockedDates, setBlockedDates]     = useState<string[]>([])
-  const [blockRangeStart, setBlockRangeStart] = useState<string | null>(null)
-  const [message, setMessage]               = useState('')
-  const [startDate, setStartDate]           = useState('')
-  const [dueDate, setDueDate]               = useState('')
-  const [sent, setSent]                     = useState(false)
-  const [sentRange, setSentRange]           = useState<{ start: string; end: string } | null>(null)
-  const [accessRules, setAccessRules]       = useState<any[]>([])
-  const [loading, setLoading]               = useState(true)
+function EditItemForm() {
+  const searchParams = useSearchParams()
+  const itemId = searchParams.get('item') ?? ''
   const router = useRouter()
-  const { id } = useParams()
+
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [user, setUser] = useState<any>(null)
+
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [category, setCategory] = useState('')
+  const [subcategory, setSubcategory] = useState('')
+  const [available, setAvailable] = useState(true)
+  const [price, setPrice] = useState('')
+  const [priceType, setPriceType] = useState('per_day')
+  const [ageRanges, setAgeRanges] = useState<string[]>([])
+
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const isBabyCategory = category === 'baby-og-barn'
 
   useEffect(() => {
+    if (!itemId) return
     const load = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setUser(user)
 
-      const { data: prof } = await supabase.from('profiles').select('id, name').eq('id', user.id).single()
-      setUserProfile(prof)
-
-      const { data: item } = await supabase
+      const { data: item, error } = await supabase
         .from('items')
-        .select('*, profiles!items_owner_id_fkey(id, name, email, avatar_url)')
-        .eq('id', id)
+        .select('*')
+        .eq('id', itemId)
         .single()
-      setItem(item)
-      setMessage(`Hei! Kan jeg låne «${item?.name}»? 😊`)
 
-      // Hent alle ikke-avsluttede lån inkl. nye statuser
-      const { data: loans } = await supabase
-        .from('loans')
-        .select('*, profiles!loans_borrower_id_fkey(id, name, email, avatar_url)')
-        .eq('item_id', id)
-        .in('status', ['pending', 'confirmed', 'active', 'change_proposed', 'pending_return', 'overdue'])
-        .order('start_date', { ascending: true })
-      setAllLoans(loans || [])
+      if (error || !item) { router.push('/profile'); return }
+      if (item.owner_id !== user.id) { router.push(`/items/${itemId}`); return }
 
-      const myLoan = (loans || []).find((l: any) => l.borrower_id === user.id)
-      setLoan(myLoan || null)
-
-      const hasAccess = item?.owner_id === user.id || item?.connected_profile_id === user.id
-      if (hasAccess) {
-        setPendingLoans((loans || []).filter((l: any) =>
-          l.status === 'pending' || l.status === 'change_proposed'
-        ))
-      }
-
-      const { data: blocked } = await supabase
-        .from('item_blocked_dates').select('date').eq('item_id', id)
-      setBlockedDates((blocked || []).map((b: any) => b.date))
-
-      const { data: access } = await supabase
-        .from('item_access')
-        .select('access_type, community_id, communities(name)')
-        .eq('item_id', id)
-      setAccessRules(access || [])
-
-      if (!hasAccess) track(Events.CALENDAR_OPENED, { item_id: item?.id })
-
+      setName(item.name ?? '')
+      setDescription(item.description ?? '')
+      setCategory(item.category ?? '')
+      setSubcategory(item.subcategory ?? '')
+      setAvailable(item.available ?? true)
+      setPrice(item.price ? String(item.price) : '')
+      setPriceType(item.price_type ?? 'per_day')
+      setImageUrl(item.image_url ?? null)
+      setAgeRanges(item.age_ranges ?? [])
       setLoading(false)
     }
     load()
-  }, [id])
+  }, [itemId])
 
-  // Owner blocking: first tap sets range start, second tap blocks the full range
-  const toggleBlock = async (dateStr: string) => {
-    if (!blockRangeStart) {
-      // First tap — if date is already blocked, unblock it immediately; otherwise start a range
-      if (blockedDates.includes(dateStr)) {
-        const supabase = createClient()
-        await supabase.from('item_blocked_dates').delete().eq('item_id', id).eq('date', dateStr)
-        setBlockedDates(prev => prev.filter(d => d !== dateStr))
-      } else {
-        setBlockRangeStart(dateStr)
-      }
-      return
-    }
-    // Second tap — block all dates in range
-    const [a, b] = [blockRangeStart, dateStr].sort()
-    const dates: string[] = []
-    const cur = new Date(a)
-    const end = new Date(b)
-    while (cur <= end) {
-      dates.push(cur.toISOString().split('T')[0])
-      cur.setDate(cur.getDate() + 1)
-    }
-    setBlockRangeStart(null)
-    const newDates = dates.filter(d => !blockedDates.includes(d))
-    if (newDates.length === 0) return
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
+  }
+
+  const uploadImage = async (): Promise<string | null> => {
+    if (!imageFile) return imageUrl
+    setUploadingImage(true)
     const supabase = createClient()
-    await supabase.from('item_blocked_dates').insert(newDates.map(date => ({ item_id: id, date })))
-    setBlockedDates(prev => [...prev, ...newDates])
+    const ext = imageFile.name.split('.').pop()
+    const path = `items/${user.id}/${itemId}_${Date.now()}.${ext}`
+    const { error } = await supabase.storage
+      .from('item-images')
+      .upload(path, imageFile, { upsert: true })
+    if (error) { setUploadingImage(false); return imageUrl }
+    const { data } = supabase.storage.from('item-images').getPublicUrl(path)
+    setUploadingImage(false)
+    return data.publicUrl
   }
 
-  const handleSelectRange = (start: string, end: string) => {
-    setStartDate(start)
-    setDueDate(end)
-    setMessage(`Hei! Kan jeg låne «${item?.name}» fra ${fd(start)} til ${fd(end)}? 😊`)
-    track(Events.DATE_RANGE_SELECTED, {
-      item_id: item?.id,
-      days: Math.ceil((new Date(end).getTime() - new Date(start).getTime()) / 86400000),
-    })
+  const removeImage = () => {
+    setImageFile(null)
+    setImagePreview(null)
+    setImageUrl(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const handleStartDateChange = (val: string) => {
-    setStartDate(val)
-    if (val && dueDate) setMessage(`Hei! Kan jeg låne «${item?.name}» fra ${fd(val)} til ${fd(dueDate)}? 😊`)
+  const toggleAgeRange = (id: string) => {
+    setAgeRanges(prev =>
+      prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
+    )
   }
 
-  const handleDueDateChange = (val: string) => {
-    setDueDate(val)
-    if (startDate && val) setMessage(`Hei! Kan jeg låne «${item?.name}» fra ${fd(startDate)} til ${fd(val)}? 😊`)
-  }
+  const handleSave = async () => {
+    if (!name.trim()) { setError('Navn er påkrevd'); return }
+    setSaving(true)
+    setError(null)
 
-  const sendRequest = async () => {
-    if (!message.trim() || !startDate || !dueDate) return
-    const t = startTimer()
+    const finalImageUrl = await uploadImage()
     const supabase = createClient()
 
-    let notifyUserId = item.owner_id
-    if (item.connected_profile_id) {
-      const { data: friendWithOwner } = await supabase
-        .from('friendships').select('user_b')
-        .eq('user_a', user.id).eq('user_b', item.owner_id).maybeSingle()
-      if (!friendWithOwner) {
-        const { data: friendWithCoOwner } = await supabase
-          .from('friendships').select('user_b')
-          .eq('user_a', user.id).eq('user_b', item.connected_profile_id).maybeSingle()
-        if (friendWithCoOwner) notifyUserId = item.connected_profile_id
-      }
+    const updates: Record<string, any> = {
+      name: name.trim(),
+      description: description.trim() || null,
+      category,
+      subcategory: subcategory || null,
+      available,
+      price: price ? Number(price) : null,
+      price_type: price && Number(price) > 0 ? priceType : null,
+      image_url: finalImageUrl,
+      age_ranges: isBabyCategory ? ageRanges : [],
     }
 
-    const { data: newLoan, error: loanError } = await supabase
-      .from('loans')
-      .insert({
-        item_id: id,
-        borrower_id: user.id,
-        owner_id: item.owner_id,
-        message,
-        start_date: startDate,
-        due_date: dueDate,
-        status: 'pending',
-        community_id: item.community_id || null,
-      })
-      .select().single()
+    const { error } = await supabase
+      .from('items')
+      .update(updates)
+      .eq('id', itemId)
 
-    if (loanError || !newLoan?.id) {
-      console.error('Loan insert failed:', loanError)
-      alert('Kunne ikke sende forespørsel. Sjekk at du er logget inn og prøv igjen.')
+    if (error) {
+      setError('Noe gikk galt. Prøv igjen.')
+      setSaving(false)
       return
     }
 
-    await supabase.from('loan_messages').insert({
-      loan_id: newLoan.id, sender_id: user.id, type: 'chat', body: message,
-    })
-
-    await supabase.from('notifications').insert({
-      user_id: notifyUserId, type: 'loan_request',
-      title: 'Ny låneforespørsel',
-      body: `${userProfile?.name || user.email?.split('@')[0]} vil låne «${item.name}»`,
-      loan_id: newLoan.id,
-    })
-
-    setSentRange({ start: startDate, end: dueDate })
-    setLoan(newLoan)
-    setSent(true)
-    track(Events.LOAN_REQUEST_SENT, {
-      item_id: item.id,
-      duration_ms: t(),
-      days_requested: Math.ceil((new Date(dueDate).getTime() - new Date(startDate).getTime()) / 86400000),
-    })
+    router.push(`/items/${itemId}`)
   }
 
-  // Godta → setter nå 'confirmed' (ikke 'active')
-  const respondToLoan = async (loanId: string, accept: boolean) => {
-    const supabase = createClient()
+  const currentImage = imagePreview || imageUrl
 
-    const { data: updated } = await supabase
-      .from('loans')
-      .update({ status: accept ? 'confirmed' : 'declined' })
-      .eq('id', loanId)
-      .eq('status', 'pending')
-      .select().single()
-
-    if (!updated) {
-      alert('Denne forespørselen er allerede behandlet.')
-      const { data: fresh } = await supabase
-        .from('loans').select('*, profiles!loans_borrower_id_fkey(id, name, email, avatar_url)')
-        .eq('item_id', id).in('status', ['pending', 'change_proposed'])
-      setPendingLoans(fresh || [])
-      return
-    }
-
-    await supabase.from('notifications').update({ read: true })
-      .eq('loan_id', loanId).eq('type', 'loan_request').eq('user_id', user.id)
-
-    const targetLoan = pendingLoans.find(l => l.id === loanId)
-    const isCoOwner = user?.id === item.connected_profile_id
-    const actorName = userProfile?.name || user.email?.split('@')[0]
-
-    await supabase.from('loan_messages').insert({
-      loan_id: loanId, sender_id: user.id, type: 'system',
-      body: accept
-        ? `✅ Forespørsel godtatt – klar til henting ${targetLoan?.start_date ? fd(targetLoan.start_date) : ''}`
-        : `❌ Forespørsel avslått`,
-    })
-
-    await supabase.from('notifications').insert({
-      user_id: targetLoan?.borrower_id,
-      type: accept ? 'loan_accepted' : 'loan_declined',
-      title: accept ? '✓ Forespørsel godtatt!' : 'Forespørsel avslått',
-      body: accept ? `Lånet av «${item.name}» er godkjent – klar til henting` : `Forespørselen om «${item.name}» ble avslått`,
-      loan_id: loanId,
-    })
-
-    const nonActorId = isCoOwner ? item.owner_id : item.connected_profile_id
-    if (nonActorId) {
-      await supabase.from('notifications').insert({
-        user_id: nonActorId,
-        type: accept ? 'loan_accepted_coowner' : 'loan_declined_coowner',
-        title: accept ? `🔗 Forespørsel godtatt av ${actorName}` : `🔗 Forespørsel avslått av ${actorName}`,
-        body: `«${item.name}» – ${targetLoan?.profiles?.name || 'låntaker'}`,
-        loan_id: loanId,
-      })
-    }
-
-    setPendingLoans(prev => prev.filter(l => l.id !== loanId))
-    if (accept && targetLoan) {
-      setAllLoans(prev => prev.map(l => l.id === loanId ? { ...l, status: 'confirmed' } : l))
-    }
-    track(accept ? Events.LOAN_ACCEPTED : Events.LOAN_DECLINED, {
-      loan_id: loanId, item_id: item.id,
-      handled_by: isCoOwner ? 'co_owner' : 'owner',
-    })
-  }
-
-  const fd = (d: string) => new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
-
-  const isOverdue = (due: string) => due && new Date(due) < new Date()
-  const isDueSoon = (due: string) => {
-    if (!due) return false
-    const diff = (new Date(due).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-    return diff >= 0 && diff <= 3
-  }
-
-  if (loading) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
-  if (!item)   return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Fant ikke gjenstanden</div>
-
-  const ownerName      = item.profiles?.name || item.profiles?.email?.split('@')[0]
-  const isOwner        = user?.id === item.owner_id
-  const isCoOwner      = user?.id === item.connected_profile_id
-  const hasOwnerAccess = isOwner || isCoOwner
-  const activeLoan     = allLoans.find(l => ACTIVE_STATUSES.includes(l.status))
-  const categoryGfx    = getCategoryGradient(item.category)
+  if (loading) return (
+    <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
+  )
 
   return (
-    <div className="max-w-lg mx-auto pb-32">
+    <div className="max-w-lg mx-auto pb-24">
 
-      {/* ── Hero ── */}
-      <div className="relative">
-        {(() => {
-          // Build ordered image list: primary first, then extras
-          const allImages: string[] = [
-            ...(item.image_url ? [item.image_url] : []),
-            ...(Array.isArray(item.extra_images) ? item.extra_images : []),
-          ]
+      <header className="page-header glass" style={{ borderRadius: '0 0 20px 20px' }}>
+        <Link href={`/items/${itemId}`} aria-label="Avbryt">
+          <span className="w-9 h-9 flex items-center justify-center rounded-full shadow-sm"
+            style={{ background: '#fff', border: '1px solid var(--glass-border)', color: '#1A3542' }}>
+            ←
+          </span>
+        </Link>
+        <h1 className="page-header-title font-display" style={{ flex: 1, textAlign: 'center' }}>
+          Rediger gjenstand
+        </h1>
+        <button onClick={handleSave} disabled={saving || uploadingImage}
+          aria-label="Lagre endringer"
+          className="w-9 h-9 flex items-center justify-center rounded-full shadow-sm transition-opacity"
+          style={{ background: 'var(--terra)', border: '1px solid transparent', color: '#fff', opacity: (saving || uploadingImage) ? 0.5 : 1 }}>
+          {saving || uploadingImage ? '…' : '✓'}
+        </button>
+      </header>
 
-          // Shared nav buttons — rendered inside whichever container is used
-          const navButtons = (
-            <>
-              <button onClick={() => router.back()}
-                className="btn-glass absolute top-6 left-4 z-10"
-                style={{ width: 36, height: 36, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                ←
+      <div className="px-4 pt-4 flex flex-col gap-4">
+
+        {/* Bilde */}
+        <div className="rounded-2xl p-4" style={{ background: '#fff' }}>
+          <p className="text-sm font-medium mb-3" style={{ color: 'var(--terra-dark)' }}>Bilde</p>
+          {currentImage ? (
+            <div className="relative">
+              <img src={currentImage} alt="Forhåndsvisning"
+                className="w-full rounded-xl object-cover" style={{ maxHeight: 240 }} />
+              <button onClick={removeImage}
+                className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold"
+                style={{ background: 'rgba(255,255,255,0.9)', border: '1px solid var(--glass-border)', color: 'var(--terra)' }}
+                aria-label="Fjern bilde">
+                ✕
               </button>
-              <ShareLinkButton
-                variant="item"
-                itemName={item?.name}
-                itemId={item?.id}
-                className="btn-glass absolute top-6 right-4 z-10"
-                style={{ width: 36, height: 36, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              />
-            </>
-          )
-
-          if (allImages.length === 0) return (
-            <div className="relative w-full flex flex-col items-center justify-center gap-2"
-              style={{ height: 256, background: categoryGfx.gradient }}>
-              {navButtons}
-              <span className="font-display text-white/90 font-semibold"
-                style={{ fontSize: 20, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                {categoryGfx.label}
-              </span>
-              <span className="text-white/60 text-sm">{item.name}</span>
             </div>
-          )
+          ) : (
+            <button onClick={() => fileInputRef.current?.click()}
+              className="w-full rounded-xl flex flex-col items-center justify-center gap-2 py-8 transition-colors"
+              style={{ border: '1.5px dashed var(--glass-border)', background: 'var(--glass-bg)' }}>
+              <span className="text-2xl">📷</span>
+              <span className="text-sm" style={{ color: 'var(--terra-mid)' }}>Legg til bilde</span>
+            </button>
+          )}
+          {currentImage && (
+            <button onClick={() => fileInputRef.current?.click()}
+              className="mt-3 w-full text-center text-sm py-2 rounded-xl"
+              style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-mid)', background: 'var(--glass-bg)' }}>
+              Bytt bilde
+            </button>
+          )}
+          <input ref={fileInputRef} type="file" accept="image/*"
+            className="hidden" onChange={handleImageChange} />
+        </div>
 
-          return (
-            <div className="relative w-full overflow-hidden" style={{ height: 256 }}>
-              {navButtons}
-              {/* Images */}
-              <div
-                className="flex h-full transition-transform"
-                style={{ transform: `translateX(-${carouselIdx * 100}%)`, transition: 'transform 0.3s ease' }}
-              >
-                {allImages.map((src, i) => (
-                  <img key={i} src={src} alt={item.name}
-                    className="flex-shrink-0 w-full h-full object-cover"
-                    style={{ minWidth: '100%' }} />
+        {/* Navn */}
+        <div className="rounded-2xl p-4" style={{ background: '#fff' }}>
+          <label className="text-sm font-medium block mb-2" style={{ color: 'var(--terra-dark)' }}>
+            Navn <span style={{ color: 'var(--terra)' }}>*</span>
+          </label>
+          <input type="text" value={name} onChange={e => setName(e.target.value)}
+            placeholder="Hva heter gjenstanden?"
+            className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+            style={{ border: '1px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--terra-dark)' }} />
+        </div>
+
+        {/* Beskrivelse */}
+        <div className="rounded-2xl p-4" style={{ background: '#fff' }}>
+          <label className="text-sm font-medium block mb-2" style={{ color: 'var(--terra-dark)' }}>
+            Beskrivelse
+          </label>
+          <textarea value={description} onChange={e => setDescription(e.target.value)}
+            placeholder="Tilstand, størrelse, ekstra info…" rows={3}
+            className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none"
+            style={{ border: '1px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--terra-dark)' }} />
+        </div>
+
+        {/* Kategori */}
+        <div className="rounded-2xl p-4" style={{ background: '#fff' }}>
+          <label className="text-sm font-medium block mb-2" style={{ color: 'var(--terra-dark)' }}>
+            Kategori
+          </label>
+          <select value={category}
+            onChange={e => { setCategory(e.target.value); setSubcategory(''); setAgeRanges([]) }}
+            className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+            style={{ border: '1px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--terra-dark)', appearance: 'none' }}>
+            <option value="">Velg kategori</option>
+            {CATEGORIES.map(cat => (
+              <option key={cat.id} value={cat.id}>{cat.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Aldersgrupper */}
+        {isBabyCategory && (
+          <div className="rounded-2xl p-4" style={{ background: '#fff' }}>
+            <label className="text-sm font-medium block mb-1" style={{ color: 'var(--terra-dark)' }}>
+              Aldersgrupper
+            </label>
+            <p className="text-xs mb-3" style={{ color: 'var(--terra-mid)' }}>
+              Velg alle som passer — f.eks. passer en tripp trapp til mange aldre
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {AGE_RANGES.map(range => {
+                const active = ageRanges.includes(range.id)
+                return (
+                  <button key={range.id} type="button" onClick={() => toggleAgeRange(range.id)}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                    style={active
+                      ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
+                      : { background: '#fff', color: '#1A3542', border: '1px solid var(--glass-border)' }
+                    }>
+                    {range.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Pris + tilgjengelighet */}
+        <div className="rounded-2xl p-4 flex flex-col gap-4" style={{ background: '#fff' }}>
+          <div>
+            <label className="text-sm font-medium block mb-2" style={{ color: 'var(--terra-dark)' }}>
+              Pris (kr)
+            </label>
+            <input type="number" value={price} onChange={e => setPrice(e.target.value)}
+              placeholder="0 = gratis" min={0}
+              className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+              style={{ border: '1px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--terra-dark)' }} />
+            {price && Number(price) > 0 && (
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {[
+                  { value: 'per_day',   label: 'per dag' },
+                  { value: 'per_week',  label: 'per uke' },
+                  { value: 'per_month', label: 'per måned' },
+                  { value: 'flat',      label: 'fast pris' },
+                ].map(opt => (
+                  <button key={opt.value} type="button"
+                    onClick={() => setPriceType(opt.value)}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                    style={priceType === opt.value
+                      ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
+                      : { background: 'var(--glass-bg)', color: 'var(--terra-dark)', border: '1px solid var(--glass-border)' }
+                    }>
+                    {opt.label}
+                  </button>
                 ))}
               </div>
-              {/* Prev/Next buttons — only when multiple images */}
-              {allImages.length > 1 && (
-                <>
-                  <button
-                    onClick={() => setCarouselIdx(i => Math.max(0, i - 1))}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center"
-                    style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: 18, opacity: carouselIdx === 0 ? 0.3 : 1 }}
-                    aria-label="Forrige bilde"
-                  >‹</button>
-                  <button
-                    onClick={() => setCarouselIdx(i => Math.min(allImages.length - 1, i + 1))}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center"
-                    style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: 18, opacity: carouselIdx === allImages.length - 1 ? 0.3 : 1 }}
-                    aria-label="Neste bilde"
-                  >›</button>
-                  {/* Dots */}
-                  <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
-                    {allImages.map((_, i) => (
-                      <button key={i} onClick={() => setCarouselIdx(i)}
-                        style={{ width: 6, height: 6, borderRadius: '50%', background: i === carouselIdx ? '#fff' : 'rgba(255,255,255,0.45)', padding: 0, border: 'none' }}
-                        aria-label={`Bilde ${i + 1}`}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )
-        })()}
-        {!item.available && (
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-            <span className="text-white font-bold tracking-widest" style={{ fontSize: 18 }}>UTLÅNT</span>
-          </div>
-        )}
-      </div>
-
-      <div className="px-4 pt-5 flex flex-col gap-4">
-
-        {/* ── Tittel + pris ── */}
-        <div className="flex justify-between items-start">
-          <h1 className="font-display flex-1"
-            style={{ fontSize: 26, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-            {item.name}
-          </h1>
-          {item.price
-            ? <span className="status-pill pending ml-2">{item.price} kr {
-                item.price_type === 'per_week'  ? '/ uke'    :
-                item.price_type === 'per_month' ? '/ mnd'    :
-                item.price_type === 'flat'      ? '(fast)'   :
-                '/ dag'
-              }</span>
-            : <span className="status-pill active ml-2">Gratis</span>}
-        </div>
-
-        {/* Co-owner banner */}
-        {isCoOwner && (
-          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, border: '1px solid rgba(46,98,113,0.25)' }}>
-            <span style={{ fontSize: 18 }}>🔗</span>
-            <p className="text-sm" style={{ color: 'var(--terra-dark)' }}>
-              Denne gjenstanden tilhører <strong>{ownerName}</strong> – du administrerer den sammen
-            </p>
-          </div>
-        )}
-
-        {/* ── Tilgjengelighetsbanner ── */}
-        {item.available ? (
-          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
-            <span className="status-pill active">● Tilgjengelig nå</span>
-          </div>
-        ) : activeLoan ? (
-          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
-            <div className="flex items-center gap-3">
-              <Link href={`/profile/${activeLoan.profiles?.id}`}>
-                <div className="rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm"
-                  style={{ width: 36, height: 36, background: 'rgba(46,98,113,0.15)', color: 'var(--terra)' }}>
-                  {activeLoan.profiles?.avatar_url
-                    ? <img src={activeLoan.profiles.avatar_url} className="w-full h-full object-cover" />
-                    : (activeLoan.profiles?.name || activeLoan.profiles?.email)?.[0]?.toUpperCase()}
-                </div>
-              </Link>
-              <div className="flex-1">
-                <Link href={`/profile/${activeLoan.profiles?.id}`}
-                  className="text-sm font-medium hover:underline" style={{ color: 'var(--terra-dark)' }}>
-                  {activeLoan.status === 'confirmed' ? 'Godtatt — ' : 'Lånt av '}
-                  {activeLoan.profiles?.name || activeLoan.profiles?.email?.split('@')[0]}
-                </Link>
-                {activeLoan.due_date && (
-                  <p className="text-xs mt-0.5 font-medium"
-                    style={{ color: activeLoan.status === 'overdue' ? '#E24B4A' : isOverdue(activeLoan.due_date) ? '#ef4444' : isDueSoon(activeLoan.due_date) ? 'var(--terra)' : 'var(--terra-mid)' }}>
-                    {activeLoan.status === 'overdue'
-                      ? `⚠️ Forfalt — skulle vært returnert ${fd(activeLoan.due_date)}`
-                      : activeLoan.status === 'confirmed'
-                        ? `Hentes ${fd(activeLoan.start_date)}`
-                        : isOverdue(activeLoan.due_date)
-                          ? `⚠️ Skulle vært returnert ${fd(activeLoan.due_date)}`
-                          : isDueSoon(activeLoan.due_date)
-                            ? `⏰ Returneres snart – ${fd(activeLoan.due_date)}`
-                            : `Returneres ${fd(activeLoan.due_date)}`}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {item.description && (
-          <p style={{ color: 'var(--terra-dark)', letterSpacing: '-0.01em' }}>{item.description}</p>
-        )}
-
-        {item.location && (
-          <div className="flex items-center gap-2">
-            <span style={{ fontSize: 15 }}>📍</span>
-            <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>{item.location}</p>
-          </div>
-        )}
-
-        {/* ── Eier-kort ── */}
-        <Link href={`/profile/${item.profiles?.id}`}>
-          <div className="item-card" style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(46,98,113,0.18)' }}>
-            <div className="item-card-body glass-card"
-              style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div className="rounded-full overflow-hidden flex items-center justify-center font-bold text-white flex-shrink-0"
-                style={{ width: 40, height: 40, background: 'var(--terra)' }}>
-                {item.profiles?.avatar_url
-                  ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
-                  : ownerName?.[0]?.toUpperCase()}
-              </div>
-              <div>
-                <p className="font-medium" style={{ color: 'var(--terra-dark)' }}>
-                  {ownerName}
-                  {isCoOwner && <span className="ml-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>🔗 Tilkoblet</span>}
-                </p>
-                <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>Eier</p>
-              </div>
-            </div>
-          </div>
-        </Link>
-
-        {/* ── Tilgangsfelt ── */}
-        {(() => {
-          const accessLabels: Record<string, string> = {
-            public: '🌍 Alle kan se denne',
-            friends: '👥 Kun venner',
-            friends_of_friends: '👥👥 Venner av venner',
-            community: '🏘️ Krets',
-          }
-          const labels = accessRules.length === 0
-            ? ['👥 Kun venner']
-            : accessRules.map(r =>
-                r.access_type === 'community'
-                  ? `🏘️ ${r.communities?.name || 'Krets'}`
-                  : accessLabels[r.access_type] || r.access_type
-              )
-          return (
-            <div className="glass" style={{ borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <div className="flex flex-col gap-0.5">
-                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Synlig for</p>
-                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>{labels.join(' · ')}</p>
-              </div>
-              {isOwner && (
-                <Link href={`/items/access?item=${item.id}`}
-                  className="text-xs font-medium flex-shrink-0"
-                  style={{ color: 'var(--terra)', textDecoration: 'underline' }}>
-                  Endre →
-                </Link>
-              )}
-            </div>
-          )
-        })()}
-
-        {/* ── Kalender ── */}
-        {hasOwnerAccess && (
-          <p className="text-xs px-1 mb-1" style={{ color: blockRangeStart ? 'var(--terra)' : 'var(--terra-mid)', fontWeight: blockRangeStart ? 500 : 400 }}>
-            {blockRangeStart
-              ? `Fra ${fd(blockRangeStart)} valgt — trykk på sluttdatoen for å blokkere perioden`
-              : 'Trykk én dag for å blokkere/fjerne den, eller velg to dager for å blokkere en periode'}
-          </p>
-        )}
-        <ItemCalendar
-          loans={allLoans}
-          blockedDates={blockedDates}
-          requestedRange={sentRange}
-          onToggleBlock={hasOwnerAccess ? toggleBlock : undefined}
-          onSelectRange={!hasOwnerAccess && !loan && item.available ? handleSelectRange : undefined}
-          isOwner={hasOwnerAccess}
-        />
-
-        {/* ── Kalender-forklaring ── */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-1" style={{ marginTop: -4 }}>
-          {(allLoans.some(l => ['confirmed', 'active', 'pending_return', 'overdue'].includes(l.status))) && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FEE2E2', display: 'inline-block', flexShrink: 0 }} />
-              Aktivt lån
-            </span>
-          )}
-          {(allLoans.some(l => ['pending', 'change_proposed'].includes(l.status))) && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FDE68A', display: 'inline-block', flexShrink: 0 }} />
-              Forespørsel
-            </span>
-          )}
-          {blockedDates.length > 0 && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#E8DDD0', display: 'inline-block', flexShrink: 0 }} />
-              Blokkert
-            </span>
-          )}
-          {sentRange && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FDE68A', display: 'inline-block', flexShrink: 0 }} />
-              Din forespørsel
-            </span>
-          )}
-          {!hasOwnerAccess && !loan && item.available && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--terra)', display: 'inline-block', flexShrink: 0 }} />
-              Valgt periode
-            </span>
-          )}
-        </div>
-
-        {/* ══ EIER / CO-EIER VISNINGER ══ */}
-
-        {/* ── Eier-handlinger: Rediger + Endre tilgang alltid synlig for isOwner ── */}
-        {isOwner && (
-          <div className="flex gap-2">
-            <Link href={`/items/edit?item=${item.id}`} className="flex-1">
-              <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-                <p className="text-sm">✏️</p>
-                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Rediger</p>
-              </div>
-            </Link>
-            <Link href={`/items/access?item=${item.id}`} className="flex-1">
-              <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-                <p className="text-sm">🔒</p>
-                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Endre tilgang</p>
-              </div>
-            </Link>
-            {item.available && pendingLoans.length === 0 && !activeLoan && (
-              <button
-                onClick={async () => {
-                  if (!confirm('Er du sikker på at du vil slette denne gjenstanden?')) return
-                  const supabase = createClient()
-                  await supabase.from('items').delete().eq('id', id)
-                  router.back()
-                }}
-                className="flex-1 glass"
-                style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center', border: '1px solid rgba(239,68,68,0.25)' }}>
-                <p className="text-sm">🗑️</p>
-                <p className="text-xs mt-1 font-medium" style={{ color: '#ef4444' }}>Slett gjenstand</p>
-              </button>
             )}
           </div>
-        )}
-        {isCoOwner && !isOwner && (
-          <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-            <p className="text-sm">🔗</p>
-            <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Delt gjenstand</p>
-          </div>
-        )}
-
-        {/* Aktivt lån eller bekreftet — vis meldingstråd */}
-        {hasOwnerAccess && activeLoan && ACTIVE_STATUSES.includes(activeLoan.status) && (
-          <div className="flex flex-col gap-2">
-            <LoanThread
-              loan={activeLoan} item={item} user={user} isOwner={true}
-              onLoanUpdated={updated => {
-                setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))
-                if (updated.status === 'returned') {
-                  setItem((i: any) => ({ ...i, available: true }))
-                  setAllLoans(prev => prev.filter(l => l.id !== updated.id))
-                }
-              }}
-            />
-          </div>
-        )}
-
-        {/* Innkommende forespørsler */}
-        {hasOwnerAccess && pendingLoans.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <h2 className="font-display font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-              Innkommende forespørsler{' '}
-              <span style={{ color: 'var(--terra)' }}>({pendingLoans.length})</span>
-            </h2>
-
-            {pendingLoans.map(l => (
-              <div key={l.id} className="flex flex-col">
-                <div className="glass" style={{ borderRadius: '16px 16px 0 0', padding: 16 }}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Link href={`/profile/${l.profiles?.id}`}>
-                      <div className="rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm"
-                        style={{ width: 36, height: 36, background: 'rgba(46,98,113,0.15)', color: 'var(--terra)' }}>
-                        {l.profiles?.avatar_url
-                          ? <img src={l.profiles.avatar_url} className="w-full h-full object-cover" />
-                          : (l.profiles?.name || l.profiles?.email)?.[0]?.toUpperCase()}
-                      </div>
-                    </Link>
-                    <div className="flex-1">
-                      <Link href={`/profile/${l.profiles?.id}`}
-                        className="font-medium text-sm hover:underline" style={{ color: 'var(--terra-dark)' }}>
-                        {l.profiles?.name || l.profiles?.email?.split('@')[0]}
-                      </Link>
-                    </div>
-                    <span className="text-xs" style={{ color: 'var(--terra-mid)' }}>
-                      {fd(l.start_date)}{l.due_date ? ` → ${fd(l.due_date)}` : ''}
-                    </span>
-                  </div>
-
-                  {l.status === 'change_proposed' ? (
-                    <div className="glass" style={{ borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: 12, border: '1px solid rgba(46,98,113,0.3)' }}>
-                      <div>
-                        <p className="text-sm font-semibold" style={{ color: 'var(--terra)' }}>Endringsforslag sendt</p>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Venter på svar fra låntaker – se meldingstråden</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button onClick={() => respondToLoan(l.id, true)} className="btn-sm btn-accept flex-1">
-                        ✓ Godta
-                      </button>
-                      <button
-                        onClick={() => {
-                          setProposalLoanId(l.id)
-                          setTimeout(() => {
-                            document.getElementById(`proposal-${l.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                          }, 80)
-                        }}
-                        className="btn-glass btn-sm flex-1">
-                        Foreslå endring
-                      </button>
-                      <button onClick={() => respondToLoan(l.id, false)} className="btn-sm btn-decline flex-1">
-                        Avslå
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div id={`proposal-${l.id}`} style={{ borderRadius: '0 0 16px 16px', overflow: 'hidden' }}>
-                  <LoanThread
-                    loan={l} item={item} user={user} isOwner={true}
-                    openProposal={proposalLoanId === l.id}
-                    onProposalOpened={() => setProposalLoanId(null)}
-                    onLoanUpdated={updated => {
-                      if (updated.status === 'confirmed') {
-                        setPendingLoans(prev => prev.filter(p => p.id !== updated.id))
-                      } else {
-                        setPendingLoans(prev => prev.map(p => p.id === updated.id ? updated : p))
-                      }
-                      setAllLoans(prev => prev.map(a => a.id === updated.id ? updated : a))
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ══ LÅNTAKER VISNINGER ══ */}
-
-        {/* pending — venter på godkjenning */}
-        {!hasOwnerAccess && loan?.status === 'pending' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
-              <span className="status-pill pending">⏳ Venter på svar fra {ownerName}</span>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>Tilgjengelighet</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
+                {available ? 'Ledig for utlån' : 'Ikke tilgjengelig nå'}
+              </p>
             </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
+            <button type="button" onClick={() => setAvailable(v => !v)}
+              className="relative w-12 h-6 rounded-full transition-colors"
+              style={{ background: available ? 'var(--terra)' : 'var(--glass-border)' }}
+              aria-label="Endre tilgjengelighet">
+              <span className="absolute top-0.5 w-5 h-5 rounded-full shadow-sm"
+                style={{ background: '#fff', left: available ? 'calc(100% - 22px)' : '2px', transition: 'left 0.15s ease' }} />
+            </button>
           </div>
+        </div>
+
+        {error && (
+          <p className="text-sm px-1" style={{ color: 'var(--terra)' }}>{error}</p>
         )}
 
-        {/* confirmed — godtatt, klar til henting */}
-        {!hasOwnerAccess && loan?.status === 'confirmed' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(56,138,221,0.3)', background: 'rgba(56,138,221,0.04)' }}>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: '#185FA5' }}>Godtatt — klar til henting!</p>
-                <p className="text-xs mt-0.5" style={{ color: '#378ADD' }}>
-                  {loan.start_date ? `Hentes ${fd(loan.start_date)}` : 'Avtal henting i tråden'}
-                </p>
-              </div>
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
-
-        {/* change_proposed */}
-        {!hasOwnerAccess && loan?.status === 'change_proposed' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(46,98,113,0.3)' }}>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--terra)' }}>Utleier har foreslått endring</p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Se meldingstråden og svar på forslaget</p>
-              </div>
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => {
-                setLoan(updated)
-                setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))
-              }} />
-          </div>
-        )}
-
-        {/* active */}
-        {!hasOwnerAccess && loan?.status === 'active' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16 }}>
-              <span className="status-pill active">✓ Du låner denne nå!</span>
-              {loan.due_date && (
-                <p className="text-sm mt-2" style={{ color: 'var(--terra-mid)' }}>Returner innen {fd(loan.due_date)}</p>
-              )}
-              {item.price && item.vipps_number && (
-                <a href={`https://qr.vipps.no/28/2/01/031/${item.vipps_number}?amount=${item.price}&message=Leie+${encodeURIComponent(item.name)}+${item.price_type === 'per_week' ? 'per+uke' : item.price_type === 'per_month' ? 'per+mnd' : item.price_type === 'flat' ? 'fast+pris' : 'per+dag'}`}
-                  target="_blank"
-                  className="btn-primary mt-3 flex items-center justify-center gap-2 w-full"
-                  style={{ background: '#FF5B24' }}>
-                  Betal via Vipps 💸
-                </a>
-              )}
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
-
-        {/* pending_return — venter på utleiers bekreftelse */}
-        {!hasOwnerAccess && loan?.status === 'pending_return' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(56,138,221,0.3)', background: 'rgba(56,138,221,0.04)' }}>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: '#185FA5' }}>Levering registrert</p>
-                <p className="text-xs mt-0.5" style={{ color: '#378ADD' }}>Venter på at {ownerName} bekrefter mottak</p>
-              </div>
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
-
-        {/* overdue */}
-        {!hasOwnerAccess && loan?.status === 'overdue' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, border: '1px solid rgba(226,75,74,0.3)', background: 'rgba(226,75,74,0.04)' }}>
-              <span className="status-pill" style={{ background: '#FCEBEB', color: '#791F1F' }}>⚠️ Forfalt — returner snarest</span>
-              {loan.due_date && (
-                <p className="text-sm mt-2" style={{ color: '#E24B4A' }}>Skulle vært returnert {fd(loan.due_date)}</p>
-              )}
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
-
-        {/* Ikke lånt, tilgjengelig */}
-        {!hasOwnerAccess && !loan && item.available && (
-          <div className="flex flex-col gap-3">
-            <h2 className="font-display font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-              Send låneforespørsel
-            </h2>
-            {sent ? (
-              <div className="flex flex-col gap-3">
-                <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
-                  <span className="status-pill active">✓ Forespørsel sendt til {ownerName}!</span>
-                </div>
-                {loan && <LoanThread loan={loan} item={item} user={user} isOwner={false}
-                  onLoanUpdated={updated => setLoan(updated)} />}
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Fra</label>
-                    <input type="date" value={startDate} onChange={e => handleStartDateChange(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
-                      className="glass text-sm outline-none"
-                      style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)' }} />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Til</label>
-                    <input type="date" value={dueDate} onChange={e => handleDueDateChange(e.target.value)}
-                      min={startDate || new Date().toISOString().split('T')[0]}
-                      className="glass text-sm outline-none"
-                      style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)' }} />
-                  </div>
-                </div>
-                {startDate && dueDate && (
-                  <div className="glass" style={{ borderRadius: 12, padding: '8px 12px' }}>
-                    <span className="status-pill active">✓ {fd(startDate)} → {fd(dueDate)}</span>
-                  </div>
-                )}
-                <textarea value={message} onChange={e => setMessage(e.target.value)} rows={3}
-                  className="glass outline-none resize-none"
-                  style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)', fontSize: 15 }} />
-                <button onClick={sendRequest} disabled={!startDate || !dueDate}
-                  className="btn-primary disabled:opacity-40">
-                  Send forespørsel
-                </button>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Ikke lånt, utilgjengelig */}
-        {!hasOwnerAccess && !loan && !item.available && (
-          <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
-            <span className="status-pill declined">Utlånt akkurat nå</span>
-          </div>
-        )}
+        <button onClick={handleSave} disabled={saving || uploadingImage}
+          className="w-full py-3.5 rounded-2xl text-sm font-semibold transition-opacity"
+          style={{ background: 'var(--terra)', color: '#fff', opacity: (saving || uploadingImage) ? 0.6 : 1 }}>
+          {uploadingImage ? 'Laster opp bilde…' : saving ? 'Lagrer…' : 'Lagre endringer'}
+        </button>
 
       </div>
+      <div className="nav-spacer" />
     </div>
+  )
+}
+
+export default function EditItemPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>}>
+      <EditItemForm />
+    </Suspense>
   )
 }

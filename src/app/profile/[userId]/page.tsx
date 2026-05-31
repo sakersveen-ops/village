@@ -6,7 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import ItemRequestCard from '@/components/ItemRequestCard'
 import StoryRing from '@/components/StoryRing'
-import ShareButton from '@/components/ShareButton'
+import ShareButton from "@/components/ShareLinkButton"
 
 const CATEGORIES = [
   { id: 'hjem-og-hage',          label: 'Hjem & hage',        emoji: '🏠' },

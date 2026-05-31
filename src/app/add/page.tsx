@@ -618,6 +618,8 @@ Returner KUN JSON, ingen annen tekst.` }
       }
     }
 
+
+  const analyzeUrl = async () => {
     if (!urlInput.trim()) return
     setUrlLoading(true)
     setUrlAnalyzed(false)

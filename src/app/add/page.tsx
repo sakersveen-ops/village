@@ -340,6 +340,61 @@ export default function AddPage() {
 
     // 10s timeout
     let timedOut = false
+  // ─── Helpers ──────────────────────────────────────────────────────────────
+  const toBase64 = (file: File): Promise<string> =>
+    new Promise((res, rej) => {
+      const r = new FileReader()
+      r.onload = () => res((r.result as string).split(',')[1])
+      r.onerror = () => rej(new Error('Read failed'))
+      r.readAsDataURL(file)
+    })
+
+  const selectedCat = getCategoryById(categoryId)
+  const isBook = categoryId === 'boker'
+
+  // ─── SHELF: resultater ────────────────────────────────────────────────────
+  if (shelfStep === 'results') {
+    return (
+      <div className="max-w-lg mx-auto pb-24">
+        <div className="page-header glass sticky top-0 z-10 px-4 pt-4 pb-4" style={{ borderRadius: '0 0 20px 20px' }}>
+          <button onClick={() => { setShelfStep('idle'); setShelfBooks([]) }}
+            className="btn-glass text-sm mb-2 block" style={{ color: 'var(--terra)' }}>← Tilbake</button>
+          <h1 className="font-display font-bold" style={{ fontSize: 20, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
+            Velg bøker å legge ut
+          </h1>
+          <p className="text-xs mt-1" style={{ color: 'var(--terra-mid)' }}>
+            {shelfBooks.filter(b => b.selected).length} av {shelfBooks.length} valgt
+          </p>
+        </div>
+        <div className="px-4 pt-4 flex flex-col gap-3">
+          {shelfBooks.map((book, i) => (
+            <div key={i}
+              onClick={() => setShelfBooks(prev => prev.map((b, idx) => idx === i ? { ...b, selected: !b.selected } : b))}
+              className={`glass rounded-2xl p-4 flex gap-3 cursor-pointer transition-all ${book.selected ? 'ring-2' : 'opacity-50'}`}
+              style={book.selected ? { '--tw-ring-color': 'var(--terra)' } as React.CSSProperties : {}}>
+              {book.image_url
+                ? <img src={book.image_url} alt={book.title} className="w-12 h-16 object-cover rounded-lg flex-shrink-0" />
+                : <div className="w-12 h-16 rounded-lg flex items-center justify-center text-xl flex-shrink-0" style={{ background: 'rgba(46,98,113,0.12)' }}>📚</div>}
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm leading-tight" style={{ color: 'var(--terra-dark)' }}>{book.title}</p>
+                {book.author && <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>{book.author}</p>}
+                {book.genre  && <p className="text-xs mt-0.5" style={{ color: 'var(--terra)' }}>{book.genre}</p>}
+                {book.description && <p className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--terra-dark)' }}>{book.description}</p>}
+              </div>
+              <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center"
+                style={{ background: book.selected ? 'var(--terra)' : 'transparent', border: book.selected ? 'none' : '2px solid rgba(46,98,113,0.25)' }}>
+                {book.selected && <span className="text-white text-xs">✓</span>}
+              </div>
+            </div>
+          ))}
+          <button onClick={saveShelfBooks} disabled={shelfBooks.filter(b => b.selected).length === 0}
+            className="btn-primary w-full mt-2 disabled:opacity-50">
+            Legg ut {shelfBooks.filter(b => b.selected).length} bøker
+          </button>
+        </div>
+      </div>
+    )
+
     const timeoutId = setTimeout(async () => {
       timedOut = true
       clearInterval(textTimer)
@@ -712,60 +767,6 @@ Returner KUN JSON, ingen annen tekst.` }
     router.push('/items/access')
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
-  const toBase64 = (file: File): Promise<string> =>
-    new Promise((res, rej) => {
-      const r = new FileReader()
-      r.onload = () => res((r.result as string).split(',')[1])
-      r.onerror = () => rej(new Error('Read failed'))
-      r.readAsDataURL(file)
-    })
-
-  const selectedCat = getCategoryById(categoryId)
-  const isBook = categoryId === 'boker'
-
-  // ─── SHELF: resultater ────────────────────────────────────────────────────
-  if (shelfStep === 'results') {
-    return (
-      <div className="max-w-lg mx-auto pb-24">
-        <div className="page-header glass sticky top-0 z-10 px-4 pt-4 pb-4" style={{ borderRadius: '0 0 20px 20px' }}>
-          <button onClick={() => { setShelfStep('idle'); setShelfBooks([]) }}
-            className="btn-glass text-sm mb-2 block" style={{ color: 'var(--terra)' }}>← Tilbake</button>
-          <h1 className="font-display font-bold" style={{ fontSize: 20, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-            Velg bøker å legge ut
-          </h1>
-          <p className="text-xs mt-1" style={{ color: 'var(--terra-mid)' }}>
-            {shelfBooks.filter(b => b.selected).length} av {shelfBooks.length} valgt
-          </p>
-        </div>
-        <div className="px-4 pt-4 flex flex-col gap-3">
-          {shelfBooks.map((book, i) => (
-            <div key={i}
-              onClick={() => setShelfBooks(prev => prev.map((b, idx) => idx === i ? { ...b, selected: !b.selected } : b))}
-              className={`glass rounded-2xl p-4 flex gap-3 cursor-pointer transition-all ${book.selected ? 'ring-2' : 'opacity-50'}`}
-              style={book.selected ? { '--tw-ring-color': 'var(--terra)' } as React.CSSProperties : {}}>
-              {book.image_url
-                ? <img src={book.image_url} alt={book.title} className="w-12 h-16 object-cover rounded-lg flex-shrink-0" />
-                : <div className="w-12 h-16 rounded-lg flex items-center justify-center text-xl flex-shrink-0" style={{ background: 'rgba(46,98,113,0.12)' }}>📚</div>}
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm leading-tight" style={{ color: 'var(--terra-dark)' }}>{book.title}</p>
-                {book.author && <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>{book.author}</p>}
-                {book.genre  && <p className="text-xs mt-0.5" style={{ color: 'var(--terra)' }}>{book.genre}</p>}
-                {book.description && <p className="text-xs mt-1 line-clamp-2" style={{ color: 'var(--terra-dark)' }}>{book.description}</p>}
-              </div>
-              <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center"
-                style={{ background: book.selected ? 'var(--terra)' : 'transparent', border: book.selected ? 'none' : '2px solid rgba(46,98,113,0.25)' }}>
-                {book.selected && <span className="text-white text-xs">✓</span>}
-              </div>
-            </div>
-          ))}
-          <button onClick={saveShelfBooks} disabled={shelfBooks.filter(b => b.selected).length === 0}
-            className="btn-primary w-full mt-2 disabled:opacity-50">
-            Legg ut {shelfBooks.filter(b => b.selected).length} bøker
-          </button>
-        </div>
-      </div>
-    )
   }
 
   if (shelfStep === 'saving') {

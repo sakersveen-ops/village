@@ -91,7 +91,7 @@ export default function UserProfilePage() {
         .from('community_members')
         .select('community_id, communities(id, name, avatar_emoji, is_public)')
         .eq('user_id', userId as string).eq('status', 'active')
-      const myComIds = new Set((myMemberships || []).map((m: any) => m.community_id))
+      const myComIds = new Set<string>((myMemberships || []).map((m: any) => m.community_id as string))
       setMyComIds(myComIds)
       const shared = (theirMemberships || []).filter((m: any) => myComIds.has(m.community_id))
       setSharedCommunities(shared)

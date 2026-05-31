@@ -139,6 +139,29 @@ const NotifIcon = ({ type }: { type: string }) => {
   )
 }
 
+// Notification types where we show a person avatar instead of the generic icon
+const AVATAR_TYPES = new Set([
+  'starred', 'near_friend_marked', 'near_friend_post',
+  'friend_request', 'friend_accepted',
+  'connection_request', 'connection_accepted', 'connection_disconnected',
+  'item_request_response',
+])
+
+const NotifAvatar = ({ n }: { n: any }) => {
+  const avatarUrl: string | null = n.metadata?.avatar_url ?? null
+  const initials: string = (n.metadata?.from_name || n.metadata?.name || '?')
+    .split(' ').slice(0, 2).map((w: string) => w[0]).join('').toUpperCase()
+  return (
+    <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+      background: 'rgba(46,98,113,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 13, fontWeight: 700, color: 'var(--terra)', border: '1.5px solid var(--glass-border)' }}>
+      {avatarUrl
+        ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        : initials}
+    </div>
+  )
+}
+
 const btnAccept: React.CSSProperties = {
   fontSize: 11, fontWeight: 600, padding: '5px 12px', borderRadius: 99,
   background: 'var(--terra-green)', color: 'white', border: 'none', cursor: 'pointer',
@@ -267,7 +290,7 @@ export default function NotificationsPage() {
       ], { onConflict: 'user_a,user_b', ignoreDuplicates: true })
       await supabase.from('notifications').insert({
         user_id: req.from_id, type: 'friend_accepted',
-        title: 'Venneforespørsel godtatt!', body: 'Dere er nå venner',
+        title: 'Venner nå', body: 'Venneforespørselen ble godtatt',
       })
     }
     track(Events.FRIEND_REQUEST_HANDLED, { accepted: accept })
@@ -294,7 +317,7 @@ export default function NotificationsPage() {
       await supabase.from('items').update({ connected_profile_id: user.id }).eq('owner_id', conn.initiated_by)
       await supabase.from('notifications').insert({
         user_id: conn.initiated_by, type: 'connection_accepted',
-        title: 'Tilkobling godtatt!',
+        title: 'Tilkobling godtatt',
         body: `${currentProfile?.name || currentUser?.email?.split('@')[0]} koblet til profilen din`,
         action_url: '/settings',
       })
@@ -323,7 +346,7 @@ export default function NotificationsPage() {
             .insert({ user_id: req.user_id, community_id: req.community_id })
           await supabase.from('notifications').insert({
             user_id: req.user_id, type: 'join_accepted',
-            title: 'Du er med i kretsen!', body: 'Forespørselen din ble godtatt',
+            title: 'Du er med i kretsen', body: 'Forespørselen ble godtatt',
           })
         }
       }
@@ -382,11 +405,14 @@ export default function NotificationsPage() {
       </div>
     )
 
+    const showAvatar = AVATAR_TYPES.has(n.type)
+    const LeadIcon = () => showAvatar ? <NotifAvatar n={n} /> : <NotifIcon type={n.type} />
+
     // Receipt card (just handled this session)
     if (n._receipt) return (
       <div ref={el => observeCard(el, n.id, false)} style={outer}>
         <div className="glass" style={inner}>
-          <NotifIcon type={n.type} />
+          <LeadIcon />
           <Meta />
           <span style={{
             fontSize: 11, fontWeight: 600, flexShrink: 0,
@@ -402,7 +428,7 @@ export default function NotificationsPage() {
     if (isAction) return (
       <div style={outer}>
         <div className="glass" style={{ ...inner, flexWrap: 'wrap' as const }}>
-          <NotifIcon type={n.type} />
+          <LeadIcon />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--terra-dark)', margin: 0, lineHeight: 1.3 }}>{n.title}</p>
@@ -440,7 +466,7 @@ export default function NotificationsPage() {
       <Link href={href}>
         <div ref={el => observeCard(el, n.id, false)} style={outer}>
           <div className="glass" style={inner}>
-            <NotifIcon type={n.type} />
+            <LeadIcon />
             <Meta />
             {dot}
           </div>

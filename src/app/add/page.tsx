@@ -609,60 +609,15 @@ Returner KUN JSON, ingen annen tekst.` }
 
       // Sett access basert på brukervalg i modal
       if (inserted?.id) {
-        await supabase.from('item_access').insert({
+        const { error: accessErr } = await supabase.from('item_access').insert({
           item_id:     inserted.id,
           access_type: item.access ?? 'friends',
+          price_type:  'per_day',
         })
+        if (accessErr) console.error('item_access insert failed:', accessErr)
       }
     }
 
-    if (importDraft?.id) {
-      // Merk draft som brukt
-      await supabase
-        .from('item_import_drafts')
-        .update({ used_at: new Date().toISOString() })
-        .eq('id', importDraft.id)
-
-      // Fjern import_ready-varselet fra notification center
-      await supabase
-        .from('notifications')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('type', 'import_ready')
-        .like('action_url', `%${importDraft.id}%`)
-
-      // Fjern slettede items fra parsed_items i draften
-      if (deletedIndices.length > 0) {
-        const { data: draft } = await supabase
-          .from('item_import_drafts')
-          .select('parsed_items')
-          .eq('id', importDraft.id)
-          .single()
-        if (draft?.parsed_items) {
-          const remaining = (draft.parsed_items as any[]).filter((_, i) => !deletedIndices.includes(i))
-          await supabase
-            .from('item_import_drafts')
-            .update({ parsed_items: remaining })
-            .eq('id', importDraft.id)
-        }
-      }
-    }
-
-    track(Events.RECEIPT_IMPORT_PUBLISHED, {
-      source: importDraft?.source,
-      item_count: items.length,
-      store: importDraft?.store ?? undefined,
-      categories: [...new Set(items.map(i => i.category))],
-    })
-
-    setImportDraft(null)
-    sessionStorage.removeItem(DRAFT_KEY)
-    sessionStorage.removeItem(IMPORT_EDIT_KEY)
-    router.push('/')
-  }
-
-  // ─── URL-analyse ──────────────────────────────────────────────────────────
-  const analyzeUrl = async () => {
     if (!urlInput.trim()) return
     setUrlLoading(true)
     setUrlAnalyzed(false)

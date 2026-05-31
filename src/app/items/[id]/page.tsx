@@ -475,7 +475,7 @@ export default function ItemPage() {
             community: '🏘️ Krets',
           }
           const labels = accessRules.length === 0
-            ? ['🌍 Alle kan se denne']
+            ? ['👥 Kun venner']
             : accessRules.map(r =>
                 r.access_type === 'community'
                   ? `🏘️ ${r.communities?.name || 'Krets'}`
@@ -554,7 +554,7 @@ export default function ItemPage() {
         {/* ── Eier-handlinger: Rediger + Endre tilgang alltid synlig for isOwner ── */}
         {isOwner && (
           <div className="flex gap-2">
-            <Link href={`/items/${item.id}/edit`} className="flex-1">
+            <Link href={`/items/edit?item=${item.id}`} className="flex-1">
               <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
                 <p className="text-sm">✏️</p>
                 <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Rediger</p>

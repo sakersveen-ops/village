@@ -23,7 +23,7 @@ export async function generateMetadata({ params: paramsPromise }: { params: Prom
   if (!item) return { title: 'Village' }
   const owner = (item.profiles as any)?.name || 'noen'
   return {
-    metadataBase: new URL('https://villageapp.no'),
+    metadataBase: new URL('https://www.villageapp.no'),
     title: `${item.name} — lån av ${owner} på Village`,
     description: item.description || `${owner} deler ${item.name} på Village, appen for nabodeling.`,
     openGraph: {

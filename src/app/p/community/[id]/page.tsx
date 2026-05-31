@@ -20,7 +20,7 @@ export async function generateMetadata({ params: paramsPromise }: { params: Prom
     .single()
   if (!community) return { title: 'Village' }
   return {
-    metadataBase: new URL('https://villageapp.no'),
+    metadataBase: new URL('https://www.villageapp.no'),
     title: `${community.avatar_emoji || '🏘️'} ${community.name} — Village`,
     description: community.description || `Bli med i ${community.name} på Village — appen for nabodeling.`,
     openGraph: {

@@ -21,7 +21,7 @@ export async function generateMetadata({ params: paramsPromise }: { params: Prom
   if (!profile) return { title: 'Village' }
   const name = profile.name || profile.email?.split('@')[0] || 'Bruker'
   return {
-    metadataBase: new URL('https://villageapp.no'),
+    metadataBase: new URL('https://www.villageapp.no'),
     title: `${name} deler på Village`,
     description: `Se hva ${name} deler på Village — appen for nabodeling.`,
     openGraph: {

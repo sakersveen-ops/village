@@ -2,7 +2,7 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { CATEGORIES, getCategoryLabel } from '@/lib/categories'
 
@@ -19,8 +19,8 @@ const AGE_RANGES = [
 ]
 
 export default function EditItemPage() {
-  const params = useParams()
-  const itemId = params?.id as string
+  const searchParams = useSearchParams()
+  const itemId = searchParams.get('item') ?? ''
   const router = useRouter()
 
   const [loading, setLoading] = useState(true)

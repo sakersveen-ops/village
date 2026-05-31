@@ -9,36 +9,29 @@ export async function GET(request: Request) {
   const token_hash = searchParams.get('token_hash')
   const type = searchParams.get('type')
 
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options))
-        },
-      },
-    }
-  )
-
+  // Recovery flow: pass token_hash to client-side reset page
   if (token_hash && type === 'recovery') {
-    // Strip pkce_ prefix if present
-    const cleanHash = token_hash.startsWith('pkce_') ? token_hash.slice(5) : token_hash
-    const { error } = await supabase.auth.verifyOtp({
-      token_hash: cleanHash,
-      type: 'recovery',
-    })
-    if (!error) {
-      return NextResponse.redirect(`${origin}/reset-password`)
-    }
-    // Log error to help debug
-    console.error('verifyOtp error:', error)
+    return NextResponse.redirect(
+      `${origin}/reset-password?token_hash=${token_hash}&type=recovery`
+    )
   }
 
+  // OAuth / magic link code flow
   if (code) {
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() { return cookieStore.getAll() },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options))
+          },
+        },
+      }
+    )
     const { data } = await supabase.auth.exchangeCodeForSession(code)
     if (data.user) {
       await supabase.from('profiles').upsert({

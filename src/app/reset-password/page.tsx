@@ -11,31 +11,41 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
   const [validSession, setValidSession] = useState(false)
+  const [checking, setChecking] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    const supabase = createClient()
-
-    // PKCE flow: exchange the `code` param for a session
-    const exchangeCode = async () => {
+    const verify = async () => {
+      const supabase = createClient()
       const params = new URLSearchParams(window.location.search)
-      const code = params.get('code')
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
+      const token_hash = params.get('token_hash')
+      const type = params.get('type')
+
+      if (token_hash && type === 'recovery') {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash,
+          type: 'recovery',
+        })
         if (!error) {
           setValidSession(true)
+          setChecking(false)
           return
         }
       }
-      // Fallback: implicit flow via hash (PASSWORD_RECOVERY event)
+
+      // Fallback: check if already have a valid session (PASSWORD_RECOVERY event)
       supabase.auth.onAuthStateChange((event) => {
         if (event === 'PASSWORD_RECOVERY') {
           setValidSession(true)
         }
+        setChecking(false)
       })
+
+      // If no token_hash, check existing session after short delay
+      setTimeout(() => setChecking(false), 1500)
     }
 
-    exchangeCode()
+    verify()
   }, [])
 
   const handleReset = async (e: React.FormEvent) => {
@@ -68,7 +78,6 @@ export default function ResetPasswordPage() {
       style={{ background: 'linear-gradient(160deg, #0D1E25 0%, #1A3542 50%, #2E6271 100%)' }}
     >
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="flex items-center gap-3 mb-8 justify-center">
           <div style={{
             width: 44, height: 44, borderRadius: 12, flexShrink: 0,
@@ -92,7 +101,11 @@ export default function ResetPasswordPage() {
         </div>
 
         <div className="glass-heavy rounded-3xl px-6 pt-8 pb-10">
-          {done ? (
+          {checking ? (
+            <div className="text-center py-4">
+              <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>Verifiserer…</p>
+            </div>
+          ) : done ? (
             <div className="text-center py-4">
               <div className="text-4xl mb-3">✓</div>
               <h2 className="font-display text-2xl mb-2" style={{ color: 'var(--terra-dark)' }}>
@@ -105,11 +118,14 @@ export default function ResetPasswordPage() {
           ) : !validSession ? (
             <div className="text-center py-4">
               <h2 className="font-display text-2xl mb-2" style={{ color: 'var(--terra-dark)' }}>
-                Laster…
+                Ugyldig lenke
               </h2>
-              <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>
-                Verifiserer lenken din.
+              <p className="text-sm mb-6" style={{ color: 'var(--terra-mid)' }}>
+                Lenken er utløpt eller allerede brukt.
               </p>
+              <a href="/login" className="btn-primary block text-center">
+                Gå til innlogging
+              </a>
             </div>
           ) : (
             <>

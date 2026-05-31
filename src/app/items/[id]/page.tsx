@@ -1,46 +1,95 @@
-// Path of this file: src/app/items/[id]/page.tsx
+// Path of this file: src/app/profile/page.tsx
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import ItemCalendar from '@/components/ItemCalendar'
-import LoanThread from '@/components/LoanThread'
-import { track, Events, startTimer } from '@/lib/track'
+import { track } from '@/lib/track'
+import StoryRing from '@/components/StoryRing'
+import StoryCreator from '@/components/StoryCreator'
+import ItemRequestCard from '@/components/ItemRequestCard'
+import FirstTimeShareModal from '@/components/FirstTimeShareModal'
+import InviteComposer from '@/components/InviteComposer'
 import ShareLinkButton from '@/components/ShareLinkButton'
-import { normalizeCategory, getCategoryById } from '@/lib/categories'
 
-const getCategoryGradient = (category?: string) => {
-  if (!category) return { gradient: 'linear-gradient(135deg, var(--terra) 0%, #8B3A1E 100%)', label: 'VILLAGE' }
-  const normalized = normalizeCategory(category)
-  const cat = getCategoryById(normalized)
-  if (cat) return { gradient: cat.gradient, label: cat.label }
-  return { gradient: 'linear-gradient(135deg, var(--terra-mid) 0%, #1A3542 100%)', label: category }
+function IconBtn({
+  onClick, href, label, children,
+}: {
+  onClick?: () => void
+  href?: string
+  label: string
+  children: React.ReactNode
+}) {
+  const cls = "w-9 h-9 flex items-center justify-center rounded-full shadow-sm flex-shrink-0"
+  const style = { background: '#fff', border: '1px solid var(--glass-border)', color: '#1A3542' }
+  if (href) return (
+    <Link href={href} aria-label={label}>
+      <span className={cls} style={style}>{children}</span>
+    </Link>
+  )
+  return (
+    <button onClick={onClick} aria-label={label} className={cls} style={style}>
+      {children}
+    </button>
+  )
 }
 
-// Statuser som regnes som "aktivt" for tilgjengelighetsvisning
-const ACTIVE_STATUSES = ['confirmed', 'active', 'change_proposed', 'pending_return', 'overdue']
+const CATEGORIES = [
+  { id: 'all',                   label: 'Alle',               emoji: '' },
+  { id: 'hjem-og-hage',          label: 'Hjem & hage',        emoji: '🏠' },
+  { id: 'baby-og-barn',          label: 'Baby & barn',        emoji: '🧸' },
+  { id: 'fest-og-arrangement',   label: 'Fest & arrangement', emoji: '🎉' },
+  { id: 'friluft-og-sport',      label: 'Friluft & sport',    emoji: '⛷️' },
+  { id: 'klar-og-mote',          label: 'Klær & mote',        emoji: '👗' },
+  { id: 'boker',                 label: 'Bøker',              emoji: '📚' },
+]
 
-export default function ItemPage() {
-  const [item, setItem]                     = useState<any>(null)
-  const [user, setUser]                     = useState<any>(null)
-  const [userProfile, setUserProfile]       = useState<any>(null)
-  const [loan, setLoan]                     = useState<any>(null)
-  const [carouselIdx, setCarouselIdx]       = useState(0)
-  const [allLoans, setAllLoans]             = useState<any[]>([])
-  const [pendingLoans, setPendingLoans]     = useState<any[]>([])
-  const [proposalLoanId, setProposalLoanId] = useState<string | null>(null)
-  const [blockedDates, setBlockedDates]     = useState<string[]>([])
-  const [blockRangeStart, setBlockRangeStart] = useState<string | null>(null)
-  const [message, setMessage]               = useState('')
-  const [startDate, setStartDate]           = useState('')
-  const [dueDate, setDueDate]               = useState('')
-  const [sent, setSent]                     = useState(false)
-  const [sentRange, setSentRange]           = useState<{ start: string; end: string } | null>(null)
-  const [accessRules, setAccessRules]       = useState<any[]>([])
-  const [loading, setLoading]               = useState(true)
+const CATEGORY_EMOJI: Record<string, string> = {
+  'hjem-og-hage':        '🏠',
+  'baby-og-barn':        '🧸',
+  'fest-og-arrangement': '🎉',
+  'friluft-og-sport':    '⛷️',
+  'klar-og-mote':        '👗',
+  'boker':               '📚',
+}
+
+const ACCESS_LABEL: Record<string, { label: string; icon: string }> = {
+  public:             { label: 'Alle',           icon: '🌍' },
+  friends:            { label: 'Venner',         icon: '👥' },
+  friends_of_friends: { label: 'Venners venner', icon: '🤝' },
+  community:          { label: 'Krets',          icon: '🏘️' },
+}
+
+export default function ProfilePage() {
+  const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<any>(null)
+  const [myItems, setMyItems] = useState<any[]>([])
+  const [itemAccessMap, setItemAccessMap] = useState<Record<string, string>>({})
+  const [friends, setFriends] = useState<any[]>([])
+  const [activeLoansCount, setActiveLoansCount] = useState(0)
+  const [pendingRequests, setPendingRequests] = useState<any[]>([])
+  const [sentRequests, setSentRequests] = useState<any[]>([])
+  const [friendSearch, setFriendSearch] = useState('')
+  const [friendSearchOpen, setFriendSearchOpen] = useState(false)
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [mutualMap, setMutualMap] = useState<Record<string, any[]>>({})
+  const [expandedMutual, setExpandedMutual] = useState<string | null>(null)
+  const [itemSearchOpen, setItemSearchOpen] = useState(false)
+  const [itemSearch, setItemSearch] = useState('')
+  const [activeCategory, setActiveCategory] = useState('all')
+  const [showStoryCreator, setShowStoryCreator] = useState(false)
+  const [storyRefreshKey, setStoryRefreshKey] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [starred, setStarred] = useState<Set<string>>(new Set())
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [showInviteComposer, setShowInviteComposer] = useState(false)
+  const [onboardingOwnedItems, setOnboardingOwnedItems] = useState<string[]>([])
+  const [editingCity, setEditingCity] = useState(false)
+  const [cityInput, setCityInput] = useState('')
+  const [editingBio, setEditingBio] = useState(false)
+  const [bioInput, setBioInput] = useState('')
   const router = useRouter()
-  const { id } = useParams()
 
   useEffect(() => {
     const load = async () => {
@@ -49,805 +98,734 @@ export default function ItemPage() {
       if (!user) { router.push('/login'); return }
       setUser(user)
 
-      const { data: prof } = await supabase.from('profiles').select('id, name').eq('id', user.id).single()
-      setUserProfile(prof)
+      const { data: profile } = await supabase
+        .from('profiles').select('*').eq('id', user.id).single()
+      setProfile(profile)
+      setCityInput(profile?.city || '')
+      setBioInput(profile?.bio || '')
 
-      const { data: item } = await supabase
+      const { data: ownItems } = await supabase
         .from('items')
-        .select('*, profiles!items_owner_id_fkey(id, name, email, avatar_url)')
-        .eq('id', id)
-        .single()
-      setItem(item)
-      setMessage(`Hei! Kan jeg låne «${item?.name}»? 😊`)
+        .select('*, profiles!items_owner_id_fkey(id, name, avatar_url)')
+        .eq('owner_id', user.id)
+        .order('created_at', { ascending: false })
 
-      // Hent alle ikke-avsluttede lån inkl. nye statuser
-      const { data: loans } = await supabase
-        .from('loans')
-        .select('*, profiles!loans_borrower_id_fkey(id, name, email, avatar_url)')
-        .eq('item_id', id)
-        .in('status', ['pending', 'confirmed', 'active', 'change_proposed', 'pending_return', 'overdue'])
-        .order('start_date', { ascending: true })
-      setAllLoans(loans || [])
+      const { data: coItems } = await supabase
+        .from('items')
+        .select('*, profiles!items_owner_id_fkey(id, name, avatar_url)')
+        .eq('connected_profile_id', user.id)
+        .order('created_at', { ascending: false })
 
-      const myLoan = (loans || []).find((l: any) => l.borrower_id === user.id)
-      setLoan(myLoan || null)
+      const seen = new Set<string>()
+      const merged = [...(ownItems || []), ...(coItems || [])].filter(i => {
+        if (seen.has(i.id)) return false
+        seen.add(i.id)
+        return true
+      })
+      setMyItems(merged)
 
-      const hasAccess = item?.owner_id === user.id || item?.connected_profile_id === user.id
-      if (hasAccess) {
-        setPendingLoans((loans || []).filter((l: any) =>
-          l.status === 'pending' || l.status === 'change_proposed'
-        ))
+      if (merged.length > 0) {
+        const itemIds = merged.map((i: any) => i.id)
+        const { data: accessRows } = await supabase
+          .from('item_access')
+          .select('item_id, access_type')
+          .in('item_id', itemIds)
+        const map: Record<string, string> = {}
+        for (const row of (accessRows || [])) map[row.item_id] = row.access_type
+        setItemAccessMap(map)
       }
 
-      const { data: blocked } = await supabase
-        .from('item_blocked_dates').select('date').eq('item_id', id)
-      setBlockedDates((blocked || []).map((b: any) => b.date))
+      const shareKey = `village_share_intro_${user.id}`
+      if ((merged || []).length === 0 && !localStorage.getItem(shareKey)) {
+        try {
+          const raw = localStorage.getItem('village_owned_items')
+          if (raw) setOnboardingOwnedItems(JSON.parse(raw))
+        } catch { /* ignore */ }
+        setShowShareModal(true)
+      }
 
-      const { data: access } = await supabase
-        .from('item_access')
-        .select('access_type, community_id, communities(name)')
-        .eq('item_id', id)
-      setAccessRules(access || [])
+      const { data: friendships } = await supabase
+        .from('friendships')
+        .select('user_b, profiles!friendships_user_b_fkey(id, name, email, avatar_url)')
+        .eq('user_a', user.id)
+      setFriends(friendships || [])
 
-      if (!hasAccess) track(Events.CALENDAR_OPENED, { item_id: item?.id })
+      const { data: starredRows } = await supabase
+        .from('starred_users').select('starred_id').eq('user_id', user.id)
+      setStarred(new Set((starredRows || []).map((s: any) => s.starred_id)))
+
+      const { data: incoming } = await supabase
+        .from('friend_requests')
+        .select('*, profiles!friend_requests_from_id_fkey(id, name, email, avatar_url)')
+        .eq('to_id', user.id).eq('status', 'pending')
+      setPendingRequests(incoming || [])
+
+      const { data: sent } = await supabase
+        .from('friend_requests')
+        .select('*, profiles!friend_requests_to_id_fkey(id, name, email, avatar_url)')
+        .eq('from_id', user.id).eq('status', 'pending')
+      setSentRequests(sent || [])
+
+      const { count: lendCount } = await supabase
+        .from('loans').select('id', { count: 'exact', head: true })
+        .eq('owner_id', user.id).in('status', ['pending', 'active', 'change_proposed'])
+      const { count: borrowCount } = await supabase
+        .from('loans').select('id', { count: 'exact', head: true })
+        .eq('borrower_id', user.id).in('status', ['pending', 'active', 'change_proposed'])
+      setActiveLoansCount((lendCount ?? 0) + (borrowCount ?? 0))
 
       setLoading(false)
     }
     load()
-  }, [id])
+  }, [])
 
-  // Owner blocking: first tap sets range start, second tap blocks the full range
-  const toggleBlock = async (dateStr: string) => {
-    if (!blockRangeStart) {
-      // First tap — if date is already blocked, unblock it immediately; otherwise start a range
-      if (blockedDates.includes(dateStr)) {
-        const supabase = createClient()
-        await supabase.from('item_blocked_dates').delete().eq('item_id', id).eq('date', dateStr)
-        setBlockedDates(prev => prev.filter(d => d !== dateStr))
-      } else {
-        setBlockRangeStart(dateStr)
+  const dismissShareModal = () => {
+    if (user) localStorage.setItem(`village_share_intro_${user.id}`, '1')
+    setShowShareModal(false)
+    track('share_first_time_dismissed')
+  }
+
+  const uploadAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+    setAvatarUploading(true)
+    const supabase = createClient()
+    const ext = file.name.split('.').pop()
+    const path = `avatars/${user.id}.${ext}`
+    await supabase.storage.from('item-images').upload(path, file, { upsert: true })
+    const { data } = supabase.storage.from('item-images').getPublicUrl(path)
+    await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', user.id)
+    setProfile((p: any) => ({ ...p, avatar_url: data.publicUrl }))
+    setAvatarUploading(false)
+  }
+
+  const saveCity = async () => {
+    if (!user) return
+    const supabase = createClient()
+    await supabase.from('profiles').update({ city: cityInput.trim() || null }).eq('id', user.id)
+    setProfile((p: any) => ({ ...p, city: cityInput.trim() || null }))
+    setEditingCity(false)
+  }
+
+  const saveBio = async () => {
+    if (!user) return
+    const supabase = createClient()
+    await supabase.from('profiles').update({ bio: bioInput.trim() || null }).eq('id', user.id)
+    setProfile((p: any) => ({ ...p, bio: bioInput.trim() || null }))
+    setEditingBio(false)
+  }
+
+  const respondToFriendRequest = async (requestId: string, fromId: string, accept: boolean) => {
+    const supabase = createClient()
+    await supabase.from('friend_requests')
+      .update({ status: accept ? 'accepted' : 'declined' }).eq('id', requestId)
+    if (accept) {
+      await supabase.from('friendships').insert([
+        { user_a: user.id, user_b: fromId },
+        { user_a: fromId, user_b: user.id },
+      ])
+      const accepted = pendingRequests.find(r => r.id === requestId)
+      if (accepted) setFriends(prev => [...prev, { user_b: fromId, profiles: accepted.profiles }])
+    }
+    setPendingRequests(prev => prev.filter(r => r.id !== requestId))
+    track('friend_request_handled', { accepted: accept })
+  }
+
+  const cancelFriendRequest = async (requestId: string, toId?: string) => {
+    // Optimistic update first
+    setSentRequests(prev => prev.filter(r => r.id !== requestId))
+    if (toId) {
+      setSearchResults(prev => prev.map(r => r.id === toId ? { ...r, requestSent: false } : r))
+    }
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('friend_requests').delete()
+      .eq('id', requestId).eq('from_id', user.id)
+    if (error) {
+      // Revert on failure
+      console.error('cancelFriendRequest error:', error)
+      const { data: sent } = await supabase
+        .from('friend_requests')
+        .select('*, profiles!friend_requests_to_id_fkey(id, name, email, avatar_url)')
+        .eq('from_id', user.id).eq('status', 'pending')
+      setSentRequests(sent || [])
+      if (toId) {
+        setSearchResults(prev => prev.map(r => r.id === toId ? { ...r, requestSent: true } : r))
       }
-      return
     }
-    // Second tap — block all dates in range
-    const [a, b] = [blockRangeStart, dateStr].sort()
-    const dates: string[] = []
-    const cur = new Date(a)
-    const end = new Date(b)
-    while (cur <= end) {
-      dates.push(cur.toISOString().split('T')[0])
-      cur.setDate(cur.getDate() + 1)
-    }
-    setBlockRangeStart(null)
-    const newDates = dates.filter(d => !blockedDates.includes(d))
-    if (newDates.length === 0) return
+  }
+
+  const searchUsers = async (q: string) => {
+    setFriendSearch(q)
+    if (q.trim().length < 2) { setSearchResults([]); return }
     const supabase = createClient()
-    await supabase.from('item_blocked_dates').insert(newDates.map(date => ({ item_id: id, date })))
-    setBlockedDates(prev => [...prev, ...newDates])
+    const { data } = await supabase
+      .from('profiles').select('id, name, email, avatar_url')
+      .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
+      .neq('id', user.id).limit(10)
+
+    const friendIds = new Set(friends.map((f: any) => f.user_b))
+    const sentIds = new Set(sentRequests.map((r: any) => r.to_id))
+    const results = (data || []).map(p => ({
+      ...p,
+      isFriend: friendIds.has(p.id),
+      requestSent: sentIds.has(p.id),
+    }))
+    setSearchResults(results)
+
+    const myFriendIds = friends.map((f: any) => f.user_b)
+    const mutual: Record<string, any[]> = {}
+    for (const result of results) {
+      const { data: theirFriends } = await supabase
+        .from('friendships')
+        .select('user_b, profiles!friendships_user_b_fkey(id, name, email, avatar_url)')
+        .eq('user_a', result.id)
+      const common = (theirFriends || []).filter((f: any) => myFriendIds.includes(f.user_b))
+      mutual[result.id] = common.map((f: any) => f.profiles)
+    }
+    setMutualMap(mutual)
   }
 
-  const handleSelectRange = (start: string, end: string) => {
-    setStartDate(start)
-    setDueDate(end)
-    setMessage(`Hei! Kan jeg låne «${item?.name}» fra ${fd(start)} til ${fd(end)}? 😊`)
-    track(Events.DATE_RANGE_SELECTED, {
-      item_id: item?.id,
-      days: Math.ceil((new Date(end).getTime() - new Date(start).getTime()) / 86400000),
-    })
-  }
-
-  const handleStartDateChange = (val: string) => {
-    setStartDate(val)
-    if (val && dueDate) setMessage(`Hei! Kan jeg låne «${item?.name}» fra ${fd(val)} til ${fd(dueDate)}? 😊`)
-  }
-
-  const handleDueDateChange = (val: string) => {
-    setDueDate(val)
-    if (startDate && val) setMessage(`Hei! Kan jeg låne «${item?.name}» fra ${fd(startDate)} til ${fd(val)}? 😊`)
-  }
-
-  const sendRequest = async () => {
-    if (!message.trim() || !startDate || !dueDate) return
-    const t = startTimer()
+  const sendFriendRequest = async (toId: string) => {
     const supabase = createClient()
-
-    let notifyUserId = item.owner_id
-    if (item.connected_profile_id) {
-      const { data: friendWithOwner } = await supabase
-        .from('friendships').select('user_b')
-        .eq('user_a', user.id).eq('user_b', item.owner_id).maybeSingle()
-      if (!friendWithOwner) {
-        const { data: friendWithCoOwner } = await supabase
-          .from('friendships').select('user_b')
-          .eq('user_a', user.id).eq('user_b', item.connected_profile_id).maybeSingle()
-        if (friendWithCoOwner) notifyUserId = item.connected_profile_id
-      }
-    }
-
-    const { data: newLoan, error: loanError } = await supabase
-      .from('loans')
-      .insert({
-        item_id: id,
-        borrower_id: user.id,
-        owner_id: item.owner_id,
-        message,
-        start_date: startDate,
-        due_date: dueDate,
-        status: 'pending',
-        community_id: item.community_id || null,
-      })
-      .select().single()
-
-    if (loanError || !newLoan?.id) {
-      console.error('Loan insert failed:', loanError)
-      alert('Kunne ikke sende forespørsel. Sjekk at du er logget inn og prøv igjen.')
-      return
-    }
-
-    await supabase.from('loan_messages').insert({
-      loan_id: newLoan.id, sender_id: user.id, type: 'chat', body: message,
-    })
-
+    const { data: newReq } = await supabase
+      .from('friend_requests')
+      .insert({ from_id: user.id, to_id: toId })
+      .select('*, profiles!friend_requests_to_id_fkey(id, name, email, avatar_url)')
+      .single()
     await supabase.from('notifications').insert({
-      user_id: notifyUserId, type: 'loan_request',
-      title: 'Ny låneforespørsel',
-      body: `${userProfile?.name || user.email?.split('@')[0]} vil låne «${item.name}»`,
-      loan_id: newLoan.id,
+      user_id: toId, type: 'friend_request',
+      title: 'Ny venneforespørsel',
+      body: `${profile?.name || user.email?.split('@')[0]} vil bli venner`,
     })
-
-    setSentRange({ start: startDate, end: dueDate })
-    setLoan(newLoan)
-    setSent(true)
-    track(Events.LOAN_REQUEST_SENT, {
-      item_id: item.id,
-      duration_ms: t(),
-      days_requested: Math.ceil((new Date(dueDate).getTime() - new Date(startDate).getTime()) / 86400000),
-    })
+    setSearchResults(prev => prev.map(r => r.id === toId ? { ...r, requestSent: true } : r))
+    if (newReq) setSentRequests(prev => [...prev, newReq])
+    track('friend_request_sent')
   }
 
-  // Godta → setter nå 'confirmed' (ikke 'active')
-  const respondToLoan = async (loanId: string, accept: boolean) => {
-    const supabase = createClient()
+  const displayName = profile?.name || user?.email?.split('@')[0]
+  const lentOut = myItems.filter(i => !i.available).length
 
-    const { data: updated } = await supabase
-      .from('loans')
-      .update({ status: accept ? 'confirmed' : 'declined' })
-      .eq('id', loanId)
-      .eq('status', 'pending')
-      .select().single()
-
-    if (!updated) {
-      alert('Denne forespørselen er allerede behandlet.')
-      const { data: fresh } = await supabase
-        .from('loans').select('*, profiles!loans_borrower_id_fkey(id, name, email, avatar_url)')
-        .eq('item_id', id).in('status', ['pending', 'change_proposed'])
-      setPendingLoans(fresh || [])
-      return
-    }
-
-    await supabase.from('notifications').update({ read: true })
-      .eq('loan_id', loanId).eq('type', 'loan_request').eq('user_id', user.id)
-
-    const targetLoan = pendingLoans.find(l => l.id === loanId)
-    const isCoOwner = user?.id === item.connected_profile_id
-    const actorName = userProfile?.name || user.email?.split('@')[0]
-
-    await supabase.from('loan_messages').insert({
-      loan_id: loanId, sender_id: user.id, type: 'system',
-      body: accept
-        ? `✅ Forespørsel godtatt – klar til henting ${targetLoan?.start_date ? fd(targetLoan.start_date) : ''}`
-        : `❌ Forespørsel avslått`,
+  const filteredItems = myItems
+    .filter(i => activeCategory === 'all' || i.category === activeCategory)
+    .filter(i => {
+      if (!itemSearch || itemSearch.length < 2) return true
+      return i.name?.toLowerCase().includes(itemSearch.toLowerCase())
     })
 
-    await supabase.from('notifications').insert({
-      user_id: targetLoan?.borrower_id,
-      type: accept ? 'loan_accepted' : 'loan_declined',
-      title: accept ? '✓ Forespørsel godtatt!' : 'Forespørsel avslått',
-      body: accept ? `Lånet av «${item.name}» er godkjent – klar til henting` : `Forespørselen om «${item.name}» ble avslått`,
-      loan_id: loanId,
-    })
-
-    const nonActorId = isCoOwner ? item.owner_id : item.connected_profile_id
-    if (nonActorId) {
-      await supabase.from('notifications').insert({
-        user_id: nonActorId,
-        type: accept ? 'loan_accepted_coowner' : 'loan_declined_coowner',
-        title: accept ? `🔗 Forespørsel godtatt av ${actorName}` : `🔗 Forespørsel avslått av ${actorName}`,
-        body: `«${item.name}» – ${targetLoan?.profiles?.name || 'låntaker'}`,
-        loan_id: loanId,
-      })
-    }
-
-    setPendingLoans(prev => prev.filter(l => l.id !== loanId))
-    if (accept && targetLoan) {
-      setAllLoans(prev => prev.map(l => l.id === loanId ? { ...l, status: 'confirmed' } : l))
-    }
-    track(accept ? Events.LOAN_ACCEPTED : Events.LOAN_DECLINED, {
-      loan_id: loanId, item_id: item.id,
-      handled_by: isCoOwner ? 'co_owner' : 'owner',
-    })
-  }
-
-  const fd = (d: string) => new Date(d).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
-
-  const isOverdue = (due: string) => due && new Date(due) < new Date()
-  const isDueSoon = (due: string) => {
-    if (!due) return false
-    const diff = (new Date(due).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-    return diff >= 0 && diff <= 3
-  }
-
-  if (loading) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
-  if (!item)   return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Fant ikke gjenstanden</div>
-
-  const ownerName      = item.profiles?.name || item.profiles?.email?.split('@')[0]
-  const isOwner        = user?.id === item.owner_id
-  const isCoOwner      = user?.id === item.connected_profile_id
-  const hasOwnerAccess = isOwner || isCoOwner
-  const activeLoan     = allLoans.find(l => ACTIVE_STATUSES.includes(l.status))
-  const categoryGfx    = getCategoryGradient(item.category)
+  if (loading) return (
+    <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
+  )
 
   return (
-    <div className="max-w-lg mx-auto pb-32">
+    <div className="max-w-lg mx-auto pb-24">
 
-      {/* ── Hero ── */}
-      <div className="relative">
-        {(() => {
-          // Build ordered image list: primary first, then extras
-          const allImages: string[] = [
-            ...(item.image_url ? [item.image_url] : []),
-            ...(Array.isArray(item.extra_images) ? item.extra_images : []),
-          ]
-
-          // Shared nav buttons — rendered inside whichever container is used
-          const navButtons = (
-            <>
-              <button onClick={() => router.back()}
-                className="btn-glass absolute top-6 left-4 z-10"
-                style={{ width: 36, height: 36, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                ←
-              </button>
-              <ShareLinkButton
-                variant="item"
-                itemName={item?.name}
-                itemId={item?.id}
-                className="btn-glass absolute top-6 right-4 z-10"
-                style={{ width: 36, height: 36, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              />
-            </>
-          )
-
-          if (allImages.length === 0) return (
-            <div className="relative w-full flex flex-col items-center justify-center gap-2"
-              style={{ height: 256, background: categoryGfx.gradient }}>
-              {navButtons}
-              <span className="font-display text-white/90 font-semibold"
-                style={{ fontSize: 20, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-                {categoryGfx.label}
-              </span>
-              <span className="text-white/60 text-sm">{item.name}</span>
+      {/* ── Profilhode ── */}
+      <div style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }} className="px-4 pt-6 pb-4">
+        <div className="flex items-center gap-4">
+          <label className="relative cursor-pointer flex-shrink-0">
+            <div
+              className="flex items-center justify-center text-white font-bold text-2xl overflow-hidden"
+              style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--terra)' }}
+            >
+              {profile?.avatar_url
+                ? <img src={profile.avatar_url} className="w-full h-full object-cover" alt={displayName} />
+                : displayName?.[0]?.toUpperCase()}
             </div>
-          )
-
-          return (
-            <div className="relative w-full overflow-hidden" style={{ height: 256 }}>
-              {navButtons}
-              {/* Images */}
-              <div
-                className="flex h-full transition-transform"
-                style={{ transform: `translateX(-${carouselIdx * 100}%)`, transition: 'transform 0.3s ease' }}
-              >
-                {allImages.map((src, i) => (
-                  <img key={i} src={src} alt={item.name}
-                    className="flex-shrink-0 w-full h-full object-cover"
-                    style={{ minWidth: '100%' }} />
-                ))}
-              </div>
-              {/* Prev/Next buttons — only when multiple images */}
-              {allImages.length > 1 && (
-                <>
-                  <button
-                    onClick={() => setCarouselIdx(i => Math.max(0, i - 1))}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center"
-                    style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: 18, opacity: carouselIdx === 0 ? 0.3 : 1 }}
-                    aria-label="Forrige bilde"
-                  >‹</button>
-                  <button
-                    onClick={() => setCarouselIdx(i => Math.min(allImages.length - 1, i + 1))}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center"
-                    style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: 18, opacity: carouselIdx === allImages.length - 1 ? 0.3 : 1 }}
-                    aria-label="Neste bilde"
-                  >›</button>
-                  {/* Dots */}
-                  <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
-                    {allImages.map((_, i) => (
-                      <button key={i} onClick={() => setCarouselIdx(i)}
-                        style={{ width: 6, height: 6, borderRadius: '50%', background: i === carouselIdx ? '#fff' : 'rgba(255,255,255,0.45)', padding: 0, border: 'none' }}
-                        aria-label={`Bilde ${i + 1}`}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
+            <div
+              className="absolute bottom-0 right-0 w-5 h-5 rounded-full flex items-center justify-center text-xs"
+              style={{ background: '#fff', border: '1px solid var(--glass-border)' }}
+            >
+              {avatarUploading ? '…' : '📷'}
             </div>
-          )
-        })()}
-        {!item.available && (
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-            <span className="text-white font-bold tracking-widest" style={{ fontSize: 18 }}>UTLÅNT</span>
-          </div>
-        )}
-      </div>
-
-      <div className="px-4 pt-5 flex flex-col gap-4">
-
-        {/* ── Tittel + pris ── */}
-        <div className="flex justify-between items-start">
-          <h1 className="font-display flex-1"
-            style={{ fontSize: 26, color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-            {item.name}
-          </h1>
-          {item.price
-            ? <span className="status-pill pending ml-2">{item.price} kr/dag</span>
-            : <span className="status-pill active ml-2">Gratis</span>}
-        </div>
-
-        {/* Co-owner banner */}
-        {isCoOwner && (
-          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, border: '1px solid rgba(46,98,113,0.25)' }}>
-            <span style={{ fontSize: 18 }}>🔗</span>
-            <p className="text-sm" style={{ color: 'var(--terra-dark)' }}>
-              Denne gjenstanden tilhører <strong>{ownerName}</strong> – du administrerer den sammen
-            </p>
-          </div>
-        )}
-
-        {/* ── Tilgjengelighetsbanner ── */}
-        {item.available ? (
-          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
-            <span className="status-pill active">● Tilgjengelig nå</span>
-          </div>
-        ) : activeLoan ? (
-          <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
-            <div className="flex items-center gap-3">
-              <Link href={`/profile/${activeLoan.profiles?.id}`}>
-                <div className="rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm"
-                  style={{ width: 36, height: 36, background: 'rgba(46,98,113,0.15)', color: 'var(--terra)' }}>
-                  {activeLoan.profiles?.avatar_url
-                    ? <img src={activeLoan.profiles.avatar_url} className="w-full h-full object-cover" />
-                    : (activeLoan.profiles?.name || activeLoan.profiles?.email)?.[0]?.toUpperCase()}
-                </div>
-              </Link>
-              <div className="flex-1">
-                <Link href={`/profile/${activeLoan.profiles?.id}`}
-                  className="text-sm font-medium hover:underline" style={{ color: 'var(--terra-dark)' }}>
-                  {activeLoan.status === 'confirmed' ? 'Godtatt — ' : 'Lånt av '}
-                  {activeLoan.profiles?.name || activeLoan.profiles?.email?.split('@')[0]}
-                </Link>
-                {activeLoan.due_date && (
-                  <p className="text-xs mt-0.5 font-medium"
-                    style={{ color: activeLoan.status === 'overdue' ? '#E24B4A' : isOverdue(activeLoan.due_date) ? '#ef4444' : isDueSoon(activeLoan.due_date) ? 'var(--terra)' : 'var(--terra-mid)' }}>
-                    {activeLoan.status === 'overdue'
-                      ? `⚠️ Forfalt — skulle vært returnert ${fd(activeLoan.due_date)}`
-                      : activeLoan.status === 'confirmed'
-                        ? `Hentes ${fd(activeLoan.start_date)}`
-                        : isOverdue(activeLoan.due_date)
-                          ? `⚠️ Skulle vært returnert ${fd(activeLoan.due_date)}`
-                          : isDueSoon(activeLoan.due_date)
-                            ? `⏰ Returneres snart – ${fd(activeLoan.due_date)}`
-                            : `Returneres ${fd(activeLoan.due_date)}`}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {item.description && (
-          <p style={{ color: 'var(--terra-dark)', letterSpacing: '-0.01em' }}>{item.description}</p>
-        )}
-
-        {item.location && (
-          <div className="flex items-center gap-2">
-            <span style={{ fontSize: 15 }}>📍</span>
-            <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>{item.location}</p>
-          </div>
-        )}
-
-        {/* ── Eier-kort ── */}
-        <Link href={`/profile/${item.profiles?.id}`}>
-          <div className="item-card" style={{ borderRadius: 16, overflow: 'hidden', border: '1px solid rgba(46,98,113,0.18)' }}>
-            <div className="item-card-body glass-card"
-              style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div className="rounded-full overflow-hidden flex items-center justify-center font-bold text-white flex-shrink-0"
-                style={{ width: 40, height: 40, background: 'var(--terra)' }}>
-                {item.profiles?.avatar_url
-                  ? <img src={item.profiles.avatar_url} className="w-full h-full object-cover" />
-                  : ownerName?.[0]?.toUpperCase()}
-              </div>
-              <div>
-                <p className="font-medium" style={{ color: 'var(--terra-dark)' }}>
-                  {ownerName}
-                  {isCoOwner && <span className="ml-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>🔗 Tilkoblet</span>}
-                </p>
-                <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>Eier</p>
-              </div>
-            </div>
-          </div>
-        </Link>
-
-        {/* ── Tilgangsfelt ── */}
-        {(() => {
-          const accessLabels: Record<string, string> = {
-            public: '🌍 Alle kan se denne',
-            friends: '👥 Kun venner',
-            friends_of_friends: '👥👥 Venner av venner',
-            community: '🏘️ Krets',
-          }
-          const labels = accessRules.length === 0
-            ? ['👥 Kun venner']
-            : accessRules.map(r =>
-                r.access_type === 'community'
-                  ? `🏘️ ${r.communities?.name || 'Krets'}`
-                  : accessLabels[r.access_type] || r.access_type
-              )
-          return (
-            <div className="glass" style={{ borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <div className="flex flex-col gap-0.5">
-                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Synlig for</p>
-                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>{labels.join(' · ')}</p>
-              </div>
-              {isOwner && (
-                <Link href={`/items/access?item=${item.id}`}
-                  className="text-xs font-medium flex-shrink-0"
-                  style={{ color: 'var(--terra)', textDecoration: 'underline' }}>
-                  Endre →
-                </Link>
-              )}
-            </div>
-          )
-        })()}
-
-        {/* ── Kalender ── */}
-        {hasOwnerAccess && (
-          <p className="text-xs px-1 mb-1" style={{ color: blockRangeStart ? 'var(--terra)' : 'var(--terra-mid)', fontWeight: blockRangeStart ? 500 : 400 }}>
-            {blockRangeStart
-              ? `Fra ${fd(blockRangeStart)} valgt — trykk på sluttdatoen for å blokkere perioden`
-              : 'Trykk én dag for å blokkere/fjerne den, eller velg to dager for å blokkere en periode'}
-          </p>
-        )}
-        <ItemCalendar
-          loans={allLoans}
-          blockedDates={blockedDates}
-          requestedRange={sentRange}
-          onToggleBlock={hasOwnerAccess ? toggleBlock : undefined}
-          onSelectRange={!hasOwnerAccess && !loan && item.available ? handleSelectRange : undefined}
-          isOwner={hasOwnerAccess}
-        />
-
-        {/* ── Kalender-forklaring ── */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-1" style={{ marginTop: -4 }}>
-          {(allLoans.some(l => ['confirmed', 'active', 'pending_return', 'overdue'].includes(l.status))) && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FEE2E2', display: 'inline-block', flexShrink: 0 }} />
-              Aktivt lån
-            </span>
-          )}
-          {(allLoans.some(l => ['pending', 'change_proposed'].includes(l.status))) && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FDE68A', display: 'inline-block', flexShrink: 0 }} />
-              Forespørsel
-            </span>
-          )}
-          {blockedDates.length > 0 && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#E8DDD0', display: 'inline-block', flexShrink: 0 }} />
-              Blokkert
-            </span>
-          )}
-          {sentRange && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FDE68A', display: 'inline-block', flexShrink: 0 }} />
-              Din forespørsel
-            </span>
-          )}
-          {!hasOwnerAccess && !loan && item.available && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: 'var(--terra)', display: 'inline-block', flexShrink: 0 }} />
-              Valgt periode
-            </span>
-          )}
-        </div>
-
-        {/* ══ EIER / CO-EIER VISNINGER ══ */}
-
-        {/* ── Eier-handlinger: Rediger + Endre tilgang alltid synlig for isOwner ── */}
-        {isOwner && (
-          <div className="flex gap-2">
-            <Link href={`/items/edit?item=${item.id}`} className="flex-1">
-              <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-                <p className="text-sm">✏️</p>
-                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Rediger</p>
-              </div>
-            </Link>
-            <Link href={`/items/access?item=${item.id}`} className="flex-1">
-              <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-                <p className="text-sm">🔒</p>
-                <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Endre tilgang</p>
-              </div>
-            </Link>
-            {item.available && pendingLoans.length === 0 && !activeLoan && (
-              <button
-                onClick={async () => {
-                  if (!confirm('Er du sikker på at du vil slette denne gjenstanden?')) return
-                  const supabase = createClient()
-                  await supabase.from('items').delete().eq('id', id)
-                  router.back()
-                }}
-                className="flex-1 glass"
-                style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center', border: '1px solid rgba(239,68,68,0.25)' }}>
-                <p className="text-sm">🗑️</p>
-                <p className="text-xs mt-1 font-medium" style={{ color: '#ef4444' }}>Slett gjenstand</p>
-              </button>
-            )}
-          </div>
-        )}
-        {isCoOwner && !isOwner && (
-          <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
-            <p className="text-sm">🔗</p>
-            <p className="text-xs mt-1 font-medium" style={{ color: 'var(--terra-mid)' }}>Delt gjenstand</p>
-          </div>
-        )}
-
-        {/* Aktivt lån eller bekreftet — vis meldingstråd */}
-        {hasOwnerAccess && activeLoan && ACTIVE_STATUSES.includes(activeLoan.status) && (
-          <div className="flex flex-col gap-2">
-            <LoanThread
-              loan={activeLoan} item={item} user={user} isOwner={true}
-              onLoanUpdated={updated => {
-                setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))
-                if (updated.status === 'returned') {
-                  setItem((i: any) => ({ ...i, available: true }))
-                  setAllLoans(prev => prev.filter(l => l.id !== updated.id))
-                }
-              }}
-            />
-          </div>
-        )}
-
-        {/* Innkommende forespørsler */}
-        {hasOwnerAccess && pendingLoans.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <h2 className="font-display font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-              Innkommende forespørsler{' '}
-              <span style={{ color: 'var(--terra)' }}>({pendingLoans.length})</span>
+            <input type="file" accept="image/*" onChange={uploadAvatar} className="hidden" />
+          </label>
+          <div className="flex-1 min-w-0">
+            <h2 className="font-display text-xl font-bold" style={{ color: 'var(--terra-dark)' }}>
+              {displayName}
             </h2>
-
-            {pendingLoans.map(l => (
-              <div key={l.id} className="flex flex-col">
-                <div className="glass" style={{ borderRadius: '16px 16px 0 0', padding: 16 }}>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Link href={`/profile/${l.profiles?.id}`}>
-                      <div className="rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm"
-                        style={{ width: 36, height: 36, background: 'rgba(46,98,113,0.15)', color: 'var(--terra)' }}>
-                        {l.profiles?.avatar_url
-                          ? <img src={l.profiles.avatar_url} className="w-full h-full object-cover" />
-                          : (l.profiles?.name || l.profiles?.email)?.[0]?.toUpperCase()}
-                      </div>
-                    </Link>
-                    <div className="flex-1">
-                      <Link href={`/profile/${l.profiles?.id}`}
-                        className="font-medium text-sm hover:underline" style={{ color: 'var(--terra-dark)' }}>
-                        {l.profiles?.name || l.profiles?.email?.split('@')[0]}
-                      </Link>
-                    </div>
-                    <span className="text-xs" style={{ color: 'var(--terra-mid)' }}>
-                      {fd(l.start_date)}{l.due_date ? ` → ${fd(l.due_date)}` : ''}
-                    </span>
-                  </div>
-
-                  {l.status === 'change_proposed' ? (
-                    <div className="glass" style={{ borderRadius: 12, padding: '10px 14px', display: 'flex', alignItems: 'flex-start', gap: 12, border: '1px solid rgba(46,98,113,0.3)' }}>
-                      <div>
-                        <p className="text-sm font-semibold" style={{ color: 'var(--terra)' }}>Endringsforslag sendt</p>
-                        <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Venter på svar fra låntaker – se meldingstråden</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button onClick={() => respondToLoan(l.id, true)} className="btn-sm btn-accept flex-1">
-                        ✓ Godta
-                      </button>
-                      <button
-                        onClick={() => {
-                          setProposalLoanId(l.id)
-                          setTimeout(() => {
-                            document.getElementById(`proposal-${l.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                          }, 80)
-                        }}
-                        className="btn-glass btn-sm flex-1">
-                        Foreslå endring
-                      </button>
-                      <button onClick={() => respondToLoan(l.id, false)} className="btn-sm btn-decline flex-1">
-                        Avslå
-                      </button>
-                    </div>
-                  )}
+            
+            {/* Bio — redigerbar med blyantikon */}
+            {editingBio ? (
+              <div className="mt-2">
+                <textarea
+                  autoFocus
+                  value={bioInput}
+                  onChange={e => setBioInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') setEditingBio(false) }}
+                  placeholder="Si noe om deg selv…"
+                  rows={3}
+                  className="w-full rounded-lg px-2 py-1 text-xs outline-none resize-none"
+                  style={{ border: '1px solid var(--terra)', color: 'var(--terra-dark)', background: '#fff', minWidth: 0 }}
+                />
+                <div className="flex gap-1.5 mt-1">
+                  <button onClick={saveBio} className="text-xs px-2 py-0.5 rounded-lg font-medium"
+                    style={{ background: 'var(--terra)', color: '#fff' }}>Lagre</button>
+                  <button onClick={() => { setEditingBio(false); setBioInput(profile?.bio || '') }} className="text-xs px-2 py-0.5 rounded-lg"
+                    style={{ color: 'var(--terra-mid)', border: '1px solid var(--glass-border)' }}>✕</button>
                 </div>
-
-                <div id={`proposal-${l.id}`} style={{ borderRadius: '0 0 16px 16px', overflow: 'hidden' }}>
-                  <LoanThread
-                    loan={l} item={item} user={user} isOwner={true}
-                    openProposal={proposalLoanId === l.id}
-                    onProposalOpened={() => setProposalLoanId(null)}
-                    onLoanUpdated={updated => {
-                      if (updated.status === 'confirmed') {
-                        setPendingLoans(prev => prev.filter(p => p.id !== updated.id))
-                      } else {
-                        setPendingLoans(prev => prev.map(p => p.id === updated.id ? updated : p))
-                      }
-                      setAllLoans(prev => prev.map(a => a.id === updated.id ? updated : a))
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ══ LÅNTAKER VISNINGER ══ */}
-
-        {/* pending — venter på godkjenning */}
-        {!hasOwnerAccess && loan?.status === 'pending' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
-              <span className="status-pill pending">⏳ Venter på svar fra {ownerName}</span>
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
-
-        {/* confirmed — godtatt, klar til henting */}
-        {!hasOwnerAccess && loan?.status === 'confirmed' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(56,138,221,0.3)', background: 'rgba(56,138,221,0.04)' }}>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: '#185FA5' }}>Godtatt — klar til henting!</p>
-                <p className="text-xs mt-0.5" style={{ color: '#378ADD' }}>
-                  {loan.start_date ? `Hentes ${fd(loan.start_date)}` : 'Avtal henting i tråden'}
-                </p>
-              </div>
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
-
-        {/* change_proposed */}
-        {!hasOwnerAccess && loan?.status === 'change_proposed' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(46,98,113,0.3)' }}>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: 'var(--terra)' }}>Utleier har foreslått endring</p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Se meldingstråden og svar på forslaget</p>
-              </div>
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => {
-                setLoan(updated)
-                setAllLoans(prev => prev.map(l => l.id === updated.id ? updated : l))
-              }} />
-          </div>
-        )}
-
-        {/* active */}
-        {!hasOwnerAccess && loan?.status === 'active' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16 }}>
-              <span className="status-pill active">✓ Du låner denne nå!</span>
-              {loan.due_date && (
-                <p className="text-sm mt-2" style={{ color: 'var(--terra-mid)' }}>Returner innen {fd(loan.due_date)}</p>
-              )}
-              {item.price && item.vipps_number && (
-                <a href={`https://qr.vipps.no/28/2/01/031/${item.vipps_number}?amount=${item.price}&message=Leie+${encodeURIComponent(item.name)}`}
-                  target="_blank"
-                  className="btn-primary mt-3 flex items-center justify-center gap-2 w-full"
-                  style={{ background: '#FF5B24' }}>
-                  Betal via Vipps 💸
-                </a>
-              )}
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
-
-        {/* pending_return — venter på utleiers bekreftelse */}
-        {!hasOwnerAccess && loan?.status === 'pending_return' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(56,138,221,0.3)', background: 'rgba(56,138,221,0.04)' }}>
-              <div>
-                <p className="text-sm font-semibold" style={{ color: '#185FA5' }}>Levering registrert</p>
-                <p className="text-xs mt-0.5" style={{ color: '#378ADD' }}>Venter på at {ownerName} bekrefter mottak</p>
-              </div>
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
-
-        {/* overdue */}
-        {!hasOwnerAccess && loan?.status === 'overdue' && (
-          <div className="flex flex-col gap-3">
-            <div className="glass" style={{ borderRadius: 16, padding: 16, border: '1px solid rgba(226,75,74,0.3)', background: 'rgba(226,75,74,0.04)' }}>
-              <span className="status-pill" style={{ background: '#FCEBEB', color: '#791F1F' }}>⚠️ Forfalt — returner snarest</span>
-              {loan.due_date && (
-                <p className="text-sm mt-2" style={{ color: '#E24B4A' }}>Skulle vært returnert {fd(loan.due_date)}</p>
-              )}
-            </div>
-            <LoanThread loan={loan} item={item} user={user} isOwner={false}
-              onLoanUpdated={updated => setLoan(updated)} />
-          </div>
-        )}
-
-        {/* Ikke lånt, tilgjengelig */}
-        {!hasOwnerAccess && !loan && item.available && (
-          <div className="flex flex-col gap-3">
-            <h2 className="font-display font-bold" style={{ color: 'var(--terra-dark)', letterSpacing: '-0.025em' }}>
-              Send låneforespørsel
-            </h2>
-            {sent ? (
-              <div className="flex flex-col gap-3">
-                <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
-                  <span className="status-pill active">✓ Forespørsel sendt til {ownerName}!</span>
-                </div>
-                {loan && <LoanThread loan={loan} item={item} user={user} isOwner={false}
-                  onLoanUpdated={updated => setLoan(updated)} />}
               </div>
             ) : (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Fra</label>
-                    <input type="date" value={startDate} onChange={e => handleStartDateChange(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
-                      className="glass text-sm outline-none"
-                      style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)' }} />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Til</label>
-                    <input type="date" value={dueDate} onChange={e => handleDueDateChange(e.target.value)}
-                      min={startDate || new Date().toISOString().split('T')[0]}
-                      className="glass text-sm outline-none"
-                      style={{ borderRadius: 12, padding: '10px 12px', color: 'var(--terra-dark)' }} />
-                  </div>
-                </div>
-                {startDate && dueDate && (
-                  <div className="glass" style={{ borderRadius: 12, padding: '8px 12px' }}>
-                    <span className="status-pill active">✓ {fd(startDate)} → {fd(dueDate)}</span>
-                  </div>
-                )}
-                <textarea value={message} onChange={e => setMessage(e.target.value)} rows={3}
-                  className="glass outline-none resize-none"
-                  style={{ borderRadius: 12, padding: '12px 16px', color: 'var(--terra-dark)', fontSize: 15 }} />
-                <button onClick={sendRequest} disabled={!startDate || !dueDate}
-                  className="btn-primary disabled:opacity-40">
-                  Send forespørsel
-                </button>
-              </>
+              <button
+                onClick={() => setEditingBio(true)}
+                className="flex items-start gap-0.5 mt-1 text-xs text-left"
+                style={{ color: profile?.bio ? 'var(--terra-dark)' : 'var(--terra)', background: 'none', border: 'none', padding: 0, cursor: 'pointer', maxWidth: '100%' }}
+              >
+                {profile?.bio
+                  ? <><span style={{ flex: 1 }}>{profile.bio}</span><span style={{ opacity: 0.45, marginLeft: 4, flexShrink: 0 }}>✏️</span></>
+                  : <span style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}>+ Legg til bio</span>
+                }
+              </button>
+            )}
+
+            {/* Lokasjonsfelt — inline redigerbart */}
+            {editingCity ? (
+              <div className="flex items-center gap-1.5 mt-1">
+                <span style={{ color: 'var(--terra-mid)', fontSize: 13 }}>📍</span>
+                <input
+                  autoFocus
+                  value={cityInput}
+                  onChange={e => setCityInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveCity(); if (e.key === 'Escape') setEditingCity(false) }}
+                  placeholder="By eller sted…"
+                  className="flex-1 rounded-lg px-2 py-0.5 text-xs outline-none"
+                  style={{ border: '1px solid var(--terra)', color: 'var(--terra-dark)', background: '#fff', minWidth: 0 }}
+                />
+                <button onClick={saveCity} className="text-xs px-2 py-0.5 rounded-lg font-medium"
+                  style={{ background: 'var(--terra)', color: '#fff' }}>Lagre</button>
+                <button onClick={() => setEditingCity(false)} className="text-xs px-2 py-0.5 rounded-lg"
+                  style={{ color: 'var(--terra-mid)', border: '1px solid var(--glass-border)' }}>✕</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setEditingCity(true)}
+                className="flex items-center gap-0.5 mt-1 text-xs"
+                style={{ color: profile?.city ? 'var(--terra-mid)' : 'var(--terra)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+              >
+                {profile?.city
+                  ? <>📍 <span>{profile.city}</span> <span style={{ opacity: 0.5, marginLeft: 2 }}>✏️</span></>
+                  : <>📍 <span style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}>Legg til sted</span></>
+                }
+              </button>
             )}
           </div>
+          <ShareLinkButton
+            variant="own-profile"
+            profileName={displayName}
+            profileUsername={profile?.username}
+            profileId={user?.id}
+          />
+        </div>
+
+        {/* Stats-bokser */}
+        <div className="flex gap-2 mt-5">
+          <Link href="/items/manage" className="flex-1">
+            <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16, cursor: 'pointer' }}>
+              <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>
+                {myItems.filter(i => i.owner_id === user?.id).length}
+              </p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
+                gjenstander{lentOut > 0 && <span> ({lentOut} utlånt)</span>}
+              </p>
+            </div>
+          </Link>
+          <Link href="/schedule" className="flex-1">
+            <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16, cursor: 'pointer' }}>
+              <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{activeLoansCount}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>avtaler</p>
+            </div>
+          </Link>
+          <Link href="/friends" className="flex-1">
+            <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16, cursor: 'pointer' }}>
+              <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{friends.length}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>venner</p>
+            </div>
+          </Link>
+        </div>
+      </div>
+
+      {/* Stories */}
+      {user && (
+        <div style={{ borderBottom: '1px solid var(--glass-border)', background: 'var(--glass-bg-heavy)' }}>
+          <StoryRing
+            key={storyRefreshKey}
+            ownerId={user.id}
+            isOwner={true}
+            onCreateStory={() => setShowStoryCreator(true)}
+          />
+        </div>
+      )}
+
+      <div className="px-4 pt-5 flex flex-col gap-6">
+
+        {/* ── 1) Mine ønsker ── */}
+        {user && (
+          <ItemRequestCard
+            profileUserId={user.id}
+            viewerId={user.id}
+            isOwner={true}
+            ownerName={displayName}
+          />
         )}
 
-        {/* Ikke lånt, utilgjengelig */}
-        {!hasOwnerAccess && !loan && !item.available && (
-          <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
-            <span className="status-pill declined">Utlånt akkurat nå</span>
+        {/* ── 2) Mine gjenstander ── */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="font-bold flex-1" style={{ color: 'var(--terra-dark)' }}>
+              Mine gjenstander
+              {myItems.length > 0 && (
+                <span className="font-normal text-sm ml-1.5" style={{ color: 'var(--terra-mid)' }}>
+                  ({myItems.length})
+                </span>
+              )}
+            </h2>
+            <IconBtn onClick={() => { setItemSearchOpen(o => !o); setItemSearch('') }} label="Søk i gjenstander">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </IconBtn>
+            <Link href="/add"
+              className="flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-full"
+              style={{ background: 'var(--terra)', color: '#fff' }}>
+              + Legg ut
+            </Link>
           </div>
-        )}
+
+          {itemSearchOpen && (
+            <div className="relative mb-3">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--terra-mid)' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              </span>
+              <input autoFocus value={itemSearch} onChange={e => setItemSearch(e.target.value)}
+                placeholder="Søk i gjenstander…"
+                className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none"
+                style={{ background: '#fff', border: '1px solid var(--glass-border)', color: 'var(--terra-dark)' }}
+                onFocus={e => e.currentTarget.style.borderColor = 'var(--terra)'}
+                onBlur={e => e.currentTarget.style.borderColor = 'var(--glass-border)'}
+              />
+            </div>
+          )}
+
+          {myItems.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-3" style={{ scrollbarWidth: 'none' }}>
+              {CATEGORIES
+                .filter(c => c.id === 'all' || myItems.some(i => i.category === c.id))
+                .map(cat => (
+                  <button key={cat.id}
+                    onClick={() => { setActiveCategory(cat.id); setItemSearch('') }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0 transition-colors"
+                    style={activeCategory === cat.id
+                      ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
+                      : { background: '#fff', color: '#1A3542', border: '1px solid var(--glass-border)' }
+                    }>
+                    {cat.emoji && <span>{cat.emoji}</span>}
+                    <span>{cat.label}</span>
+                  </button>
+                ))}
+            </div>
+          )}
+
+          {filteredItems.length === 0 ? (
+            <div className="rounded-2xl p-5 text-center text-sm" style={{ background: '#fff', color: 'var(--terra-mid)' }}>
+              {myItems.length === 0 ? 'Du har ikke lagt ut noe ennå' : 'Ingen gjenstander matcher søket'}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {filteredItems.slice(0, 5).map(item => {
+                const accessType = itemAccessMap[item.id]
+                const access = accessType ? ACCESS_LABEL[accessType] : null
+                return (
+                  <Link key={item.id} href={`/items/${item.id}`}>
+                    <div className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
+                      {item.image_url
+                        ? <img src={item.image_url} className="rounded-xl object-cover flex-shrink-0"
+                            style={{ width: 48, height: 48 }} alt={item.name} />
+                        : <div className="rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                            style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
+                            {CATEGORY_EMOJI[item.category] ?? '📦'}
+                          </div>
+                      }
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>
+                          {item.connected_profile_id === user?.id && <span className="mr-1">🔗</span>}
+                          {item.name}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <p className="text-xs capitalize" style={{ color: 'var(--terra-mid)' }}>
+                            {item.category?.replace(/-/g, ' ')}
+                            {item.connected_profile_id === user?.id && item.profiles?.name && (
+                              <span> · {item.profiles.name}</span>
+                            )}
+                          </p>
+                          {access && (
+                            <span className="text-xs flex items-center gap-0.5 px-1.5 py-0.5 rounded-full"
+                              style={{ background: 'var(--glass-bg)', color: 'var(--terra-mid)', lineHeight: 1.2 }}>
+                              <span>{access.icon}</span>
+                              <span>{access.label}</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
+                        style={{ fontSize: 10, ...(item.available
+                          ? { background: '#EEF4F0', color: 'var(--terra-green)' }
+                          : { background: 'var(--glass-bg)', color: 'var(--terra)' }) }}>
+                        {item.available ? 'Ledig' : 'Utlånt'}
+                      </span>
+                    </div>
+                  </Link>
+                )
+              })}
+              {filteredItems.length > 5 && (
+                <Link href="/items/manage"
+                  className="flex items-center justify-center text-sm w-full py-2.5 rounded-xl"
+                  style={{ color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.2)', background: 'rgba(46,98,113,0.04)' }}>
+                  Vis alle {filteredItems.length} gjenstander →
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── 3) Venner ── */}
+        <div>
+          {pendingRequests.length > 0 && (
+            <div className="mb-4">
+              <h2 className="text-base font-bold mb-3" style={{ color: 'var(--terra-dark)' }}>
+                Venneforespørsler{' '}
+                <span style={{ color: 'var(--terra)' }}>({pendingRequests.length})</span>
+              </h2>
+              <div className="flex flex-col gap-2">
+                {pendingRequests.map(req => (
+                  <div key={req.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
+                    <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
+                      style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--glass-border)', color: '#1A3542' }}>
+                      {req.profiles?.avatar_url
+                        ? <img src={req.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
+                        : (req.profiles?.name || req.profiles?.email)?.[0]?.toUpperCase()}
+                    </div>
+                    <p className="flex-1 font-medium text-sm" style={{ color: 'var(--terra-dark)' }}>
+                      {req.profiles?.name || req.profiles?.email?.split('@')[0]}
+                    </p>
+                    <button onClick={() => respondToFriendRequest(req.id, req.from_id, true)}
+                      className="text-xs rounded-full px-3 py-1.5 font-medium"
+                      style={{ background: 'var(--terra-green)', color: '#fff' }}>
+                      ✓ Godta
+                    </button>
+                    <button onClick={() => respondToFriendRequest(req.id, req.from_id, false)}
+                      className="text-xs rounded-full px-3 py-1.5"
+                      style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-mid)' }}>
+                      Avslå
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {sentRequests.length > 0 && (
+            <div className="flex flex-col gap-2 mb-4">
+              {sentRequests.map(req => (
+                <div key={req.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm"
+                  style={{ background: 'var(--glass-bg-heavy)', border: '1px solid var(--glass-border)' }}>
+                  <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
+                    style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--glass-border)', color: '#1A3542' }}>
+                    {req.profiles?.avatar_url
+                      ? <img src={req.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
+                      : (req.profiles?.name || req.profiles?.email)?.[0]?.toUpperCase()}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-sm" style={{ color: 'var(--terra-dark)' }}>
+                      {req.profiles?.name || req.profiles?.email?.split('@')[0]}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>Forespørsel sendt</p>
+                  </div>
+                  <button onClick={() => cancelFriendRequest(req.id, req.to_id)}
+                    className="text-xs rounded-full px-3 py-1.5"
+                    style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-mid)' }}>
+                    Trekk tilbake
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="font-bold flex-1" style={{ color: 'var(--terra-dark)' }}>
+              Venner
+              {friends.length > 0 && (
+                <span className="font-normal text-sm ml-1.5" style={{ color: 'var(--terra-mid)' }}>
+                  ({friends.length})
+                </span>
+              )}
+            </h2>
+            <IconBtn
+              onClick={() => { setFriendSearchOpen(o => !o); setFriendSearch(''); setSearchResults([]) }}
+              label="Søk etter folk"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </IconBtn>
+            <button
+              onClick={() => setShowInviteComposer(true)}
+              className="flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded-full"
+              style={{ background: 'var(--terra)', color: '#fff' }}>
+              + Inviter
+            </button>
+          </div>
+
+          {friendSearchOpen && (
+            <div className="mb-3">
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'var(--terra-mid)' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                </span>
+                <input autoFocus value={friendSearch} onChange={e => searchUsers(e.target.value)}
+                  placeholder="Navn eller e-post…"
+                  className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none"
+                  style={{ background: '#fff', border: '1px solid var(--glass-border)', color: 'var(--terra-dark)' }}
+                  onFocus={e => e.currentTarget.style.borderColor = 'var(--terra)'}
+                  onBlur={e => e.currentTarget.style.borderColor = 'var(--glass-border)'}
+                />
+              </div>
+              {searchResults.length > 0 && (
+                <div className="flex flex-col gap-2 mt-2">
+                  {searchResults.map(result => (
+                    <div key={result.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
+                      <div className="flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0"
+                        style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--glass-border)', color: '#1A3542' }}>
+                        {result.avatar_url
+                          ? <img src={result.avatar_url} className="w-full h-full object-cover" alt="" />
+                          : (result.name || result.email)?.[0]?.toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>
+                          {result.name || result.email?.split('@')[0]}
+                        </p>
+                        {mutualMap[result.id]?.length > 0 && (
+                          <button onClick={() => setExpandedMutual(expandedMutual === result.id ? null : result.id)}
+                            className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
+                            {mutualMap[result.id].length} felles {mutualMap[result.id].length === 1 ? 'venn' : 'venner'} ↓
+                          </button>
+                        )}
+                        {expandedMutual === result.id && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {mutualMap[result.id].map((m: any) => (
+                              <span key={m.id} className="text-xs px-2 py-0.5 rounded-full"
+                                style={{ background: 'var(--glass-bg-heavy)', color: '#1A3542' }}>
+                                {m.name || m.email?.split('@')[0]}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {result.isFriend ? (
+                        <span className="text-xs px-3 py-1.5 rounded-full"
+                          style={{ background: '#EEF4F0', color: 'var(--terra-green)' }}>Venn ✓</span>
+                      ) : result.requestSent ? (
+                        <span className="text-xs px-3 py-1.5 rounded-full"
+                          style={{ background: 'var(--glass-bg-heavy)', color: 'var(--terra-mid)' }}>Sendt</span>
+                      ) : (
+                        <button onClick={() => sendFriendRequest(result.id)}
+                          className="text-xs px-3 py-1.5 rounded-full font-medium"
+                          style={{ background: 'var(--terra)', color: '#fff' }}>
+                          + Legg til
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {friends.length === 0 ? (
+            <div className="rounded-2xl p-5 text-center text-sm" style={{ background: '#fff', color: 'var(--terra-mid)' }}>
+              Du har ingen venner i Village ennå.{' '}
+              <button onClick={() => setFriendSearchOpen(true)} style={{ color: 'var(--terra)' }}>
+                Finn folk du kjenner
+              </button>
+              {' '}eller{' '}
+              <Link href="/invite" style={{ color: 'var(--terra)' }}>inviter noen.</Link>
+            </div>
+          ) : (
+            <div className="rounded-2xl px-4 py-3 flex items-center gap-1 shadow-sm flex-wrap" style={{ background: '#fff' }}>
+              {[...friends]
+                .sort((a, b) => (starred.has(a.user_b) ? -1 : 1))
+                .slice(0, 8)
+                .map((f: any) => (
+                  <Link key={f.user_b} href={`/profile/${f.user_b}`} className="relative block">
+                    <div className="flex items-center justify-center font-bold text-sm overflow-hidden"
+                      style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--glass-border)', border: '2px solid #fff' }}>
+                      {f.profiles?.avatar_url
+                        ? <img src={f.profiles.avatar_url} className="w-full h-full object-cover" alt="" />
+                        : <span className="text-xs" style={{ color: '#1A3542' }}>
+                            {(f.profiles?.name || f.profiles?.email)?.[0]?.toUpperCase()}
+                          </span>
+                      }
+                    </div>
+                    {starred.has(f.user_b) && (
+                      <span className="absolute -top-0.5 -right-0.5 text-xs">❤️</span>
+                    )}
+                  </Link>
+                ))}
+              {friends.length > 8 && (
+                <Link href="/friends"
+                  className="flex items-center justify-center text-xs font-bold"
+                  style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--glass-border)', border: '2px solid #fff', color: '#1A3542' }}>
+                  +{friends.length - 8}
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ── 4) Inviter venner ── */}
+        <button
+          onClick={() => setShowInviteComposer(true)}
+          className="flex items-center justify-center gap-1.5 text-sm w-full py-2.5 rounded-xl mb-4"
+          style={{ color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.25)', background: 'rgba(46,98,113,0.04)' }}>
+          <span>👥</span>
+          <span>Inviter venner til Village</span>
+        </button>
 
       </div>
+
+      {showStoryCreator && (
+        <StoryCreator
+          onClose={() => setShowStoryCreator(false)}
+          onCreated={() => {
+            setShowStoryCreator(false)
+            setStoryRefreshKey(k => k + 1)
+          }}
+        />
+      )}
+
+      {showInviteComposer && (
+        <InviteComposer
+          senderName={displayName}
+          onClose={() => setShowInviteComposer(false)}
+        />
+      )}
+
+      {showShareModal && user && (
+        <FirstTimeShareModal
+          userId={user.id}
+          ownedItems={onboardingOwnedItems}
+          onDismiss={dismissShareModal}
+          onAddItem={() => {
+            dismissShareModal()
+            router.push('/add')
+          }}
+        />
+      )}
+
+      <div className="nav-spacer" />
     </div>
   )
 }

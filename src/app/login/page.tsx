@@ -16,6 +16,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [resetSent, setResetSent] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
   const router = useRouter()
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -46,6 +48,21 @@ export default function LoginPage() {
       router.push('/')
     }
     setLoading(false)
+  }
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError('Skriv inn e-postadressen din først')
+      return
+    }
+    setResetLoading(true)
+    setError('')
+    const supabase = createClient()
+    await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    setResetSent(true)
+    setResetLoading(false)
   }
 
   return (
@@ -171,6 +188,24 @@ export default function LoginPage() {
               onFocus={e => (e.target.style.borderColor = 'var(--terra)')}
               onBlur={e => (e.target.style.borderColor = 'var(--glass-border)')}
             />
+
+            <div className="flex justify-end -mt-1">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={resetLoading}
+                className="text-xs underline underline-offset-2 transition-colors"
+                style={{ color: 'var(--terra-mid)' }}
+              >
+                {resetLoading ? '…' : 'Glemt passord?'}
+              </button>
+            </div>
+
+            {resetSent && (
+              <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                <p className="text-green-700 text-sm">Sjekk e-posten din – vi har sendt en tilbakestillingslenke.</p>
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">

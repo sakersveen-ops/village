@@ -1,5 +1,6 @@
 // Path of this file: src/app/items/edit/page.tsx
 'use client'
+export const dynamic = 'force-dynamic'
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useSearchParams } from 'next/navigation'

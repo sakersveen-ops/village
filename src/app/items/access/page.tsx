@@ -18,9 +18,10 @@ const ACCESS_LEVELS = [
 ]
 
 const PRICE_TYPES = [
-  { id: 'per_day',  label: 'per dag' },
-  { id: 'per_week', label: 'per uke' },
-  { id: 'fixed',    label: 'engangsbeløp' },
+  { id: 'per_day',   label: 'per dag' },
+  { id: 'per_week',  label: 'per uke' },
+  { id: 'per_month', label: 'per måned' },
+  { id: 'flat',      label: 'engangsbeløp' },
 ]
 
 const LEVEL_ORDER = ['close_friends', 'friends', 'friends_of_friends', 'community', 'public']

@@ -388,7 +388,12 @@ export default function ItemPage() {
             {item.name}
           </h1>
           {item.price
-            ? <span className="status-pill pending ml-2">{item.price} kr/dag</span>
+            ? <span className="status-pill pending ml-2">{item.price} kr {
+                item.price_type === 'per_week'  ? '/ uke'    :
+                item.price_type === 'per_month' ? '/ mnd'    :
+                item.price_type === 'flat'      ? '(fast)'   :
+                '/ dag'
+              }</span>
             : <span className="status-pill active ml-2">Gratis</span>}
         </div>
 
@@ -750,7 +755,7 @@ export default function ItemPage() {
                 <p className="text-sm mt-2" style={{ color: 'var(--terra-mid)' }}>Returner innen {fd(loan.due_date)}</p>
               )}
               {item.price && item.vipps_number && (
-                <a href={`https://qr.vipps.no/28/2/01/031/${item.vipps_number}?amount=${item.price}&message=Leie+${encodeURIComponent(item.name)}`}
+                <a href={`https://qr.vipps.no/28/2/01/031/${item.vipps_number}?amount=${item.price}&message=Leie+${encodeURIComponent(item.name)}+${item.price_type === 'per_week' ? 'per+uke' : item.price_type === 'per_month' ? 'per+mnd' : item.price_type === 'flat' ? 'fast+pris' : 'per+dag'}`}
                   target="_blank"
                   className="btn-primary mt-3 flex items-center justify-center gap-2 w-full"
                   style={{ background: '#FF5B24' }}>

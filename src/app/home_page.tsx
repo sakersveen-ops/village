@@ -440,7 +440,7 @@ export default function FeedPage() {
 
       const { data: items, error } = await supabase
         .from('items')
-        .select('*, profiles!items_owner_id_fkey(id, name, email, avatar_url)')
+        .select('*, profiles!items_owner_id_fkey(id, name, email, avatar_url), v_item_min_price!left(min_price, min_price_type)')
         .neq('owner_id', user.id)
         .order('created_at', { ascending: false })
         .limit(60)
@@ -790,6 +790,15 @@ export default function FeedPage() {
                         <p className="text-[10px] text-[var(--terra-mid)] mt-0.5 truncate">
                           {item.profiles?.name ?? 'Ukjent'} · {relativeTime(item.created_at)}
                         </p>
+                        {item.v_item_min_price?.min_price > 0 && (
+                          <p className="text-[10px] mt-0.5 font-medium" style={{ color: 'var(--terra)' }}>
+                            fra {item.v_item_min_price.min_price} kr{' '}
+                            {item.v_item_min_price.min_price_type === 'per_week'  ? '/ uke'  :
+                             item.v_item_min_price.min_price_type === 'per_month' ? '/ mnd'  :
+                             item.v_item_min_price.min_price_type === 'flat'      ? '(fast)' :
+                             '/ dag'}
+                          </p>
+                        )}
                       </div>
                       <span className="text-[var(--terra-mid)] text-sm flex-shrink-0">›</span>
                     </div>

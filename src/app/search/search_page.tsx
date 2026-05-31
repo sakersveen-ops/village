@@ -73,7 +73,7 @@ export default function SearchPage() {
     const supabase = createClient()
     let dbQuery = supabase
       .from('items')
-      .select('*, profiles!items_owner_id_fkey(id, name, avatar_url)')
+      .select('*, profiles!items_owner_id_fkey(id, name, avatar_url), v_item_min_price!left(min_price, min_price_type)')
       .limit(60)
 
     if (q.length >= 2) {
@@ -343,6 +343,15 @@ export default function SearchPage() {
                           {isUnavailable && (
                             <p style={{ fontSize: 11, color: 'var(--terra)', marginTop: 3, fontWeight: 500 }}>
                               Opptatt i denne perioden
+                            </p>
+                          )}
+                          {!isUnavailable && item.v_item_min_price?.min_price > 0 && (
+                            <p style={{ fontSize: 11, color: 'var(--terra)', marginTop: 3, fontWeight: 500 }}>
+                              fra {item.v_item_min_price.min_price} kr{' '}
+                              {item.v_item_min_price.min_price_type === 'per_week'  ? '/ uke'  :
+                               item.v_item_min_price.min_price_type === 'per_month' ? '/ mnd'  :
+                               item.v_item_min_price.min_price_type === 'flat'      ? '(fast)' :
+                               '/ dag'}
                             </p>
                           )}
                         </div>

@@ -33,6 +33,7 @@ function EditItemForm() {
   const [subcategory, setSubcategory] = useState('')
   const [available, setAvailable] = useState(true)
   const [price, setPrice] = useState('')
+  const [priceType, setPriceType] = useState('per_day')
   const [ageRanges, setAgeRanges] = useState<string[]>([])
 
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -66,6 +67,7 @@ function EditItemForm() {
       setSubcategory(item.subcategory ?? '')
       setAvailable(item.available ?? true)
       setPrice(item.price ? String(item.price) : '')
+      setPriceType(item.price_type ?? 'per_day')
       setImageUrl(item.image_url ?? null)
       setAgeRanges(item.age_ranges ?? [])
       setLoading(false)
@@ -123,6 +125,7 @@ function EditItemForm() {
       subcategory: subcategory || null,
       available,
       price: price ? Number(price) : null,
+      price_type: price && Number(price) > 0 ? priceType : null,
       image_url: finalImageUrl,
       age_ranges: isBabyCategory ? ageRanges : [],
     }
@@ -267,12 +270,32 @@ function EditItemForm() {
         <div className="rounded-2xl p-4 flex flex-col gap-4" style={{ background: '#fff' }}>
           <div>
             <label className="text-sm font-medium block mb-2" style={{ color: 'var(--terra-dark)' }}>
-              Pris per dag (kr)
+              Pris (kr)
             </label>
             <input type="number" value={price} onChange={e => setPrice(e.target.value)}
               placeholder="0 = gratis" min={0}
               className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
               style={{ border: '1px solid var(--glass-border)', background: 'var(--glass-bg)', color: 'var(--terra-dark)' }} />
+            {price && Number(price) > 0 && (
+              <div className="flex gap-2 mt-2 flex-wrap">
+                {[
+                  { value: 'per_day',   label: 'per dag' },
+                  { value: 'per_week',  label: 'per uke' },
+                  { value: 'per_month', label: 'per måned' },
+                  { value: 'flat',      label: 'fast pris' },
+                ].map(opt => (
+                  <button key={opt.value} type="button"
+                    onClick={() => setPriceType(opt.value)}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                    style={priceType === opt.value
+                      ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
+                      : { background: 'var(--glass-bg)', color: 'var(--terra-dark)', border: '1px solid var(--glass-border)' }
+                    }>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-center justify-between">
             <div>

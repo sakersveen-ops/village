@@ -14,12 +14,11 @@ export default function SearchPage() {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const [tab, setTab] = useState<'gjenstander' | 'kretser' | 'personer'>('gjenstander')
+  const [tab, setTab] = useState<'gjenstander' | 'personer'>('gjenstander')
   const [query, setQuery] = useState('')
   const [dateRange, setDateRange] = useState<DateRange>({ from: '', to: '' })
   const [items, setItems] = useState<any[]>([])
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set())
-  const [communities, setCommunities] = useState<any[]>([])
   const [people, setPeople] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -106,18 +105,6 @@ export default function SearchPage() {
     }
   }, [getUnavailableInRange])
 
-  const searchCommunities = useCallback(async (q: string) => {
-    const supabase = createClient()
-    let dbQuery = supabase
-      .from('communities')
-      .select('*')
-      .eq('is_public', true)
-      .limit(40)
-    if (q.length >= 2) dbQuery = dbQuery.ilike('name', `%${q}%`)
-    const { data } = await dbQuery
-    setCommunities(data ?? [])
-  }, [])
-
   const searchPeople = useCallback(async (q: string) => {
     if (q.length < 2) { setPeople([]); return }
     const supabase = createClient()
@@ -136,7 +123,6 @@ export default function SearchPage() {
       setLoading(true)
       try {
         if (tab === 'gjenstander') await searchItems(query, dateRange)
-        else if (tab === 'kretser') await searchCommunities(query)
         else await searchPeople(query)
       } finally {
         setLoading(false)
@@ -147,7 +133,6 @@ export default function SearchPage() {
 
   useEffect(() => {
     searchItems('', { from: '', to: '' })
-    searchCommunities('')
   }, [])
 
   const handleDateChange = (field: 'from' | 'to', val: string) => {
@@ -173,54 +158,69 @@ export default function SearchPage() {
       ]
     : items
 
+  // Shared row style
+  const rowStyle: React.CSSProperties = {
+    borderRadius: 16,
+    border: '1px solid rgba(46,98,113,0.18)',
+    background: 'white',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '12px 14px',
+    cursor: 'pointer',
+    transition: 'box-shadow 150ms ease',
+  }
+
+  const thumbnailSize = 48
+
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
       {/* Header */}
       <header className="page-header glass">
-        <button
-          onClick={() => router.back()}
-          style={{ width: 36, height: 36, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(46,98,113,0.10)', border: '1px solid rgba(46,98,113,0.15)', flexShrink: 0, cursor: 'pointer' }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-        <div style={{ flex: 1, marginLeft: 8, position: 'relative' }}>
-          <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.4 }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            ref={inputRef}
-            type="search"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder={
-              tab === 'gjenstander' ? 'Søk etter gjenstander…' :
-              tab === 'kretser' ? 'Søk etter kretser…' : 'Søk etter personer…'
-            }
-            style={{
-              width: '100%',
-              height: 36,
-              borderRadius: 12,
-              border: '1px solid rgba(46,98,113,0.18)',
-              background: 'rgba(252,254,255,0.7)',
-              padding: '0 28px 0 32px',
-              fontSize: 14,
-              color: 'var(--terra-dark)',
-              outline: 'none',
-            }}
-          />
-          {query.length > 0 && (
-            <button
-              onClick={() => setQuery('')}
-              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--terra-mid)', fontSize: 16, lineHeight: 1, padding: 2 }}
-            >×</button>
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+          <button
+            onClick={() => router.back()}
+            style={{ width: 36, height: 36, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(46,98,113,0.10)', border: '1px solid rgba(46,98,113,0.15)', flexShrink: 0, cursor: 'pointer' }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <svg style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.4, pointerEvents: 'none' }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--terra-dark)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              ref={inputRef}
+              type="search"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder={tab === 'gjenstander' ? 'Søk etter gjenstander…' : 'Søk etter personer…'}
+              style={{
+                width: '100%',
+                height: 36,
+                borderRadius: 12,
+                border: '1px solid rgba(46,98,113,0.18)',
+                background: 'rgba(252,254,255,0.7)',
+                padding: '0 28px 0 32px',
+                fontSize: 14,
+                color: 'var(--terra-dark)',
+                outline: 'none',
+              }}
+            />
+            {query.length > 0 && (
+              <button
+                onClick={() => setQuery('')}
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--terra-mid)', fontSize: 16, lineHeight: 1, padding: 2 }}
+              >×</button>
+            )}
+          </div>
         </div>
-        {/* Tabs — inside header so they stay sticky on scroll */}
-        <div style={{ maxWidth: 480, margin: '8px auto 0', padding: '0 4px' }}>
+
+        {/* 2-tab segmented control */}
+        <div style={{ marginTop: 8 }}>
           <div className="glass" style={{ display: 'flex', borderRadius: 14, padding: 3, gap: 3 }}>
-            {(['gjenstander', 'kretser', 'personer'] as const).map(t => (
+            {(['gjenstander', 'personer'] as const).map(t => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -241,7 +241,7 @@ export default function SearchPage() {
 
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '12px 16px 0' }}>
 
-        {/* Date filter */}
+        {/* Date filter — gjenstander only */}
         {tab === 'gjenstander' && (
           <div className="glass" style={{ borderRadius: 16, padding: '12px 14px', marginBottom: 12 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -309,26 +309,15 @@ export default function SearchPage() {
                       <div
                         key={item.id}
                         onClick={() => router.push(`/items/${item.id}`)}
-                        style={{
-                          borderRadius: 16,
-                          border: '1px solid rgba(46,98,113,0.18)',
-                          background: 'white',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          padding: '10px 12px',
-                          cursor: 'pointer',
-                          opacity: isUnavailable ? 0.45 : 1,
-                          transition: 'opacity 150ms ease, box-shadow 150ms ease',
-                        }}
+                        style={{ ...rowStyle, opacity: isUnavailable ? 0.45 : 1 }}
                         onMouseEnter={e => { if (!isUnavailable) (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(26,37,48,0.10)' }}
                         onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}
                       >
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                           {item.image_url ? (
-                            <img src={item.image_url} style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', display: 'block' }} alt={item.name} />
+                            <img src={item.image_url} style={{ width: thumbnailSize, height: thumbnailSize, borderRadius: 10, objectFit: 'cover', display: 'block' }} alt={item.name} />
                           ) : (
-                            <div style={{ width: 52, height: 52, borderRadius: 10, background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>📦</div>
+                            <div style={{ width: thumbnailSize, height: thumbnailSize, borderRadius: 10, background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>📦</div>
                           )}
                           {!hasDateFilter && (
                             <span style={{ position: 'absolute', bottom: 2, right: 2, width: 9, height: 9, borderRadius: '50%', border: '2px solid white', background: item.available ? '#4A7C59' : 'var(--terra)' }} />
@@ -337,7 +326,7 @@ export default function SearchPage() {
 
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                            <p className="font-display" style={{ color: 'var(--terra-dark)', fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>
+                            <p className="font-display" style={{ color: 'var(--terra-dark)', fontSize: 15, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>
                               {item.name}
                             </p>
                             {isOwn && (
@@ -347,7 +336,7 @@ export default function SearchPage() {
                               <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--terra-mid)', background: 'rgba(46,98,113,0.08)', borderRadius: 6, padding: '1px 5px', whiteSpace: 'nowrap' }}>🔗 Delt</span>
                             )}
                           </div>
-                          <p style={{ color: 'var(--terra-mid)', fontSize: 11, margin: '2px 0 0' }}>
+                          <p style={{ color: 'var(--terra-mid)', fontSize: 12, margin: '3px 0 0' }}>
                             {item.profiles?.name ?? 'Ukjent'}
                             {item.category ? ` · ${getCategoryLabel(item.category)}` : ''}
                           </p>
@@ -368,38 +357,6 @@ export default function SearchPage() {
           </>
         )}
 
-        {/* ── KRETSER ── */}
-        {!loading && tab === 'kretser' && (
-          <>
-            {communities.length === 0 ? (
-              <p style={{ color: 'var(--terra-mid)', fontSize: 14, textAlign: 'center', padding: '32px 0' }}>
-                {query.length >= 2 ? 'Ingen kretser funnet' : 'Søk etter offentlige kretser'}
-              </p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {communities.map(c => (
-                  <div
-                    key={c.id}
-                    onClick={() => router.push(`/communities/${c.id}`)}
-                    style={{ borderRadius: 16, border: '1px solid rgba(46,98,113,0.18)', background: 'white', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer', transition: 'box-shadow 150ms ease' }}
-                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(26,37,48,0.10)'}
-                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}
-                  >
-                    <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(46,98,113,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>
-                      {c.avatar_emoji ?? '🏘️'}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p className="font-display" style={{ color: 'var(--terra-dark)', fontSize: 14, fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</p>
-                      <p style={{ color: 'var(--terra-mid)', fontSize: 11, margin: '2px 0 0' }}>{c.is_public ? 'Offentlig krets' : 'Privat krets'}</p>
-                    </div>
-                    <span style={{ color: 'var(--terra-mid)', fontSize: 16, flexShrink: 0 }}>›</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-
         {/* ── PERSONER ── */}
         {!loading && tab === 'personer' && (
           <>
@@ -413,22 +370,22 @@ export default function SearchPage() {
                   <div
                     key={p.id}
                     onClick={() => router.push(`/profile/${p.id}`)}
-                    style={{ borderRadius: 16, border: '1px solid rgba(46,98,113,0.18)', background: 'white', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', cursor: 'pointer', transition: 'box-shadow 150ms ease' }}
+                    style={rowStyle}
                     onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(26,37,48,0.10)'}
                     onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}
                   >
                     {p.avatar_url ? (
-                      <img src={p.avatar_url} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt={p.name} />
+                      <img src={p.avatar_url} style={{ width: thumbnailSize, height: thumbnailSize, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt={p.name} />
                     ) : (
-                      <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(46,98,113,0.12)', border: '1px solid rgba(46,98,113,0.20)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: 'var(--terra)', flexShrink: 0 }}>
+                      <div style={{ width: thumbnailSize, height: thumbnailSize, borderRadius: '50%', background: 'rgba(46,98,113,0.12)', border: '1px solid rgba(46,98,113,0.20)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: 'var(--terra)', flexShrink: 0 }}>
                         {(p.name ?? '?')[0].toUpperCase()}
                       </div>
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p className="font-display" style={{ color: 'var(--terra-dark)', fontSize: 14, fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <p className="font-display" style={{ color: 'var(--terra-dark)', fontSize: 15, fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {p.id === connectedProfileId ? '🔗 ' : ''}{p.name}
                       </p>
-                      {p.username && <p style={{ color: 'var(--terra-mid)', fontSize: 11, margin: '2px 0 0' }}>@{p.username}</p>}
+                      {p.username && <p style={{ color: 'var(--terra-mid)', fontSize: 12, margin: '3px 0 0' }}>@{p.username}</p>}
                     </div>
                     <span style={{ color: 'var(--terra-mid)', fontSize: 16, flexShrink: 0 }}>›</span>
                   </div>

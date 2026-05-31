@@ -24,18 +24,20 @@ export async function GET(request: Request) {
     }
   )
 
-  // PKCE token_hash flow (recovery emails)
-  if (token_hash) {
-    const { error } = await supabase.auth.exchangeCodeForSession(token_hash)
-    if (!error && type === 'recovery') {
+  if (token_hash && type === 'recovery') {
+    // Strip pkce_ prefix if present
+    const cleanHash = token_hash.startsWith('pkce_') ? token_hash.slice(5) : token_hash
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: cleanHash,
+      type: 'recovery',
+    })
+    if (!error) {
       return NextResponse.redirect(`${origin}/reset-password`)
     }
-    if (!error) {
-      return NextResponse.redirect(`${origin}/`)
-    }
+    // Log error to help debug
+    console.error('verifyOtp error:', error)
   }
 
-  // OAuth code flow
   if (code) {
     const { data } = await supabase.auth.exchangeCodeForSession(code)
     if (data.user) {

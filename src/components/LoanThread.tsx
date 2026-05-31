@@ -184,11 +184,17 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
         payload => {
           const newMsg = payload.new as any
           setMessages(prev => {
-            const exists = prev.some(m => m.id === newMsg.id || (m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id))
-            if (exists) return prev.map(m =>
-              m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id
-                ? { ...newMsg, profiles: m.profiles } : m
+            // Already have this exact id (e.g. system msg added via addLocal, or optimistic replaced)
+            if (prev.some(m => m.id === newMsg.id)) return prev
+            // Optimistic chat/proposal sent by us — replace the _sending placeholder
+            const optimisticIdx = prev.findIndex(
+              m => m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id
             )
+            if (optimisticIdx !== -1) {
+              const next = [...prev]
+              next[optimisticIdx] = { ...newMsg, profiles: prev[optimisticIdx].profiles }
+              return next
+            }
             return [...prev, newMsg]
           })
           if (newMsg.sender_id !== user.id) {
@@ -254,7 +260,9 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
       .from('loan_messages')
       .insert({ loan_id: loan.id, sender_id: user.id, type: 'system', body })
       .select('*, profiles(id, name, email, avatar_url)').single()
-    if (data) addLocal(data)
+    // Realtime picks this up — but if realtime is slow or missed, fall back.
+    // Guard against duplicate: only add if id not already present.
+    if (data) setMessages(prev => prev.some(m => m.id === data.id) ? prev : [...prev, data])
   }
 
   // ── Send chat ─────────────────────────────────────────────────────────────
@@ -426,7 +434,8 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     const { data: sysMsg } = await supabase
       .from('loan_messages').insert({ loan_id: loan.id, sender_id: user.id, type: 'system', body: sysBody })
       .select('*, profiles(id, name, email, avatar_url)').single()
-    if (sysMsg) addLocal(sysMsg)
+    // Guard: realtime also delivers this insert — only add if not already present
+    if (sysMsg) setMessages(prev => prev.some(m => m.id === sysMsg.id) ? prev : [...prev, sysMsg])
 
     await supabase.from('notifications').insert({
       user_id: target.sender_id,

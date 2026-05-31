@@ -41,6 +41,7 @@ export default function UserProfilePage() {
   const [sharedCommunities, setSharedCommunities] = useState<any[]>([])
   const [publicCommunities, setPublicCommunities] = useState<any[]>([])
   const [mutualFriends, setMutualFriends] = useState<any[]>([])
+  const [myComIds, setMyComIds] = useState<Set<string>>(new Set())
   const [itemSearch, setItemSearch] = useState('')
   const [itemCategory, setItemCategory] = useState('')
   const [activeLoansCount, setActiveLoansCount] = useState(0)
@@ -91,6 +92,7 @@ export default function UserProfilePage() {
         .select('community_id, communities(id, name, avatar_emoji, is_public)')
         .eq('user_id', userId as string).eq('status', 'active')
       const myComIds = new Set((myMemberships || []).map((m: any) => m.community_id))
+      setMyComIds(myComIds)
       const shared = (theirMemberships || []).filter((m: any) => myComIds.has(m.community_id))
       setSharedCommunities(shared)
 
@@ -113,7 +115,7 @@ export default function UserProfilePage() {
       else if (shared.length > 0) level = 'community'
       setAccessLevel(level)
 
-      if (friend) {
+      if (friend || shared.length > 0) {
         const { data: allItems } = await supabase
           .from('items').select('*, item_access(*)')
           .eq('owner_id', userId as string)
@@ -121,17 +123,19 @@ export default function UserProfilePage() {
 
         const visible = (allItems || []).filter((item: any) => {
           const access: any[] = item.item_access || []
-          if (access.length === 0) return true
+          if (access.length === 0) return friend // ingen regel = kun venner
           return access.some((rule: any) => {
             if (rule.access_type === 'public') return true
-            if (rule.access_type === 'friends') return true
-            if (rule.access_type === 'friends_of_friends') return true
+            if (rule.access_type === 'friends' && friend) return true
+            if (rule.access_type === 'friends_of_friends' && (friend || isFoF)) return true
             if (rule.access_type === 'community' && myComIds.has(rule.community_id)) return true
             return false
           })
         })
         setItems(visible)
+      }
 
+      if (friend) {
         const { data: theirFriendsFull } = await supabase
           .from('friendships')
           .select('user_b, profiles!friendships_user_b_fkey(id, name, username, avatar_url)')
@@ -230,6 +234,21 @@ export default function UserProfilePage() {
                 ? '🏘️ Dere er i samme krets'
                 : '👤 Ikke tilkoblet'}
             </p>
+
+            {/* Felles kretser — vises kun ved community-tilgang */}
+            {accessLevel === 'community' && sharedCommunities.length > 0 && (
+              <div className="flex flex-wrap gap-2 justify-center mt-3">
+                {sharedCommunities.map((m: any) => (
+                  <Link key={m.community_id} href={`/community/${m.community_id}`}>
+                    <span className="rounded-full px-3 py-1.5 text-xs shadow-sm"
+                      style={{ background: '#fff', border: '1px solid var(--glass-border)', color: '#1A3542' }}>
+                      {m.communities?.avatar_emoji} {m.communities?.name}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+
             <button onClick={toggleStar} className="mt-3 text-xl" aria-label={isStarred ? 'Slutt å følge' : 'Følg'}>
               {isStarred ? '❤️' : '🤍'}
             </button>
@@ -256,6 +275,65 @@ export default function UserProfilePage() {
             )}
           </div>
         </div>
+
+        {/* Gjenstander synlige via felles krets */}
+        {accessLevel === 'community' && items.length > 0 && (
+          <div className="px-4 pt-5 pb-8">
+            <h2 className="font-bold mb-3" style={{ color: 'var(--terra-dark)', fontSize: 15 }}>
+              Delte gjenstander
+              <span className="font-normal ml-1.5" style={{ color: 'var(--terra-mid)', fontSize: 13 }}>({items.length})</span>
+            </h2>
+            <div className="flex flex-col gap-2">
+              {items.slice(0, 5).map((item: any) => {
+                // Finn hvilken felles krets som gir tilgang
+                const communityRule = (item.item_access || []).find((rule: any) =>
+                  rule.access_type === 'community' && myComIds.has(rule.community_id)
+                )
+                const communityName = communityRule
+                  ? sharedCommunities.find((m: any) => m.community_id === communityRule.community_id)?.communities?.name
+                  : null
+                const communityEmoji = communityRule
+                  ? sharedCommunities.find((m: any) => m.community_id === communityRule.community_id)?.communities?.avatar_emoji
+                  : null
+                return (
+                  <Link key={item.id} href={`/items/${item.id}`}>
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-2xl shadow-sm" style={{ background: '#fff' }}>
+                      {item.image_url
+                        ? <img src={item.image_url} className="rounded-xl object-cover flex-shrink-0"
+                            style={{ width: 48, height: 48 }} alt={item.name} />
+                        : <div className="flex items-center justify-center text-xl flex-shrink-0 rounded-xl"
+                            style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
+                            {CATEGORY_EMOJI[item.category] ?? '📦'}
+                          </div>
+                      }
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>
+                            {CATEGORIES.find(c => c.id === item.category)?.label || item.category?.replace(/-/g, ' ')}
+                          </p>
+                          {communityName && (
+                            <span className="text-xs flex items-center gap-0.5 px-1.5 py-0.5 rounded-full"
+                              style={{ background: 'var(--glass-bg)', color: 'var(--terra-mid)', lineHeight: 1.2 }}>
+                              🏘️ {communityEmoji} {communityName}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full flex-shrink-0 font-medium text-xs"
+                        style={item.available
+                          ? { background: '#EEF4F0', color: 'var(--terra-green)' }
+                          : { background: 'var(--glass-bg)', color: 'var(--terra)' }}>
+                        {item.available ? '● Ledig' : '● Utlånt'}
+                      </span>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="nav-spacer" />
       </div>
     )
@@ -470,32 +548,50 @@ export default function UserProfilePage() {
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {filteredItems.slice(0, 5).map(item => (
-                <Link key={item.id} href={`/items/${item.id}`}>
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-2xl shadow-sm" style={{ background: '#fff' }}>
-                    {item.image_url
-                      ? <img src={item.image_url} className="rounded-xl object-cover flex-shrink-0"
-                          style={{ width: 48, height: 48 }} alt={item.name} />
-                      : <div className="flex items-center justify-center text-xl flex-shrink-0 rounded-xl"
-                          style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
-                          {CATEGORY_EMOJI[item.category] ?? '📦'}
+              {filteredItems.slice(0, 5).map(item => {
+                const communityRule = (item.item_access || []).find((rule: any) =>
+                  rule.access_type === 'community' && myComIds.has(rule.community_id)
+                )
+                const communityName = communityRule
+                  ? sharedCommunities.find((m: any) => m.community_id === communityRule.community_id)?.communities?.name
+                  : null
+                const communityEmoji = communityRule
+                  ? sharedCommunities.find((m: any) => m.community_id === communityRule.community_id)?.communities?.avatar_emoji
+                  : null
+                return (
+                  <Link key={item.id} href={`/items/${item.id}`}>
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-2xl shadow-sm" style={{ background: '#fff' }}>
+                      {item.image_url
+                        ? <img src={item.image_url} className="rounded-xl object-cover flex-shrink-0"
+                            style={{ width: 48, height: 48 }} alt={item.name} />
+                        : <div className="flex items-center justify-center text-xl flex-shrink-0 rounded-xl"
+                            style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
+                            {CATEGORY_EMOJI[item.category] ?? '📦'}
+                          </div>
+                      }
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>
+                            {CATEGORIES.find(c => c.id === item.category)?.label || item.category?.replace(/-/g, ' ')}
+                          </p>
+                          {communityName && (
+                            <span className="text-xs flex items-center gap-0.5 px-1.5 py-0.5 rounded-full"
+                              style={{ background: 'var(--glass-bg)', color: 'var(--terra-mid)', lineHeight: 1.2 }}>
+                              🏘️ {communityEmoji} {communityName}
+                            </span>
+                          )}
                         </div>
-                    }
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
-                        {CATEGORY_EMOJI[item.category] ?? '📦'}{' '}
-                        {CATEGORIES.find(c => c.id === item.category)?.label || item.category?.replace(/-/g, ' ')}
-                      </p>
+                      </div>
+                      {item.price && (
+                        <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--terra)' }}>
+                          {item.price} kr/dag
+                        </span>
+                      )}
                     </div>
-                    {item.price && (
-                      <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--terra)' }}>
-                        {item.price} kr/dag
-                      </span>
-                    )}
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                )
+              })}
               {filteredItems.length > 5 && (
                 <Link href={`/profile/${userId}/items`}
                   className="flex items-center justify-center text-sm w-full py-2.5 rounded-xl"

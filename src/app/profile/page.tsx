@@ -535,7 +535,7 @@ export default function ProfilePage() {
             <div className="flex flex-col gap-2">
               {filteredItems.slice(0, 5).map(item => {
                 const accessType = itemAccessMap[item.id]
-                const access = ACCESS_LABEL[accessType] ?? ACCESS_LABEL['public']
+                const access = accessType ? ACCESS_LABEL[accessType] : null
                 return (
                   <Link key={item.id} href={`/items/${item.id}`}>
                     <div className="rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm" style={{ background: '#fff' }}>
@@ -559,11 +559,13 @@ export default function ProfilePage() {
                               <span> · {item.profiles.name}</span>
                             )}
                           </p>
-                          <span className="text-xs flex items-center gap-0.5 px-1.5 py-0.5 rounded-full"
-                            style={{ background: 'var(--glass-bg)', color: 'var(--terra-mid)', lineHeight: 1.2 }}>
-                            <span>{access.icon}</span>
-                            <span>{access.label}</span>
-                          </span>
+                          {access && (
+                            <span className="text-xs flex items-center gap-0.5 px-1.5 py-0.5 rounded-full"
+                              style={{ background: 'var(--glass-bg)', color: 'var(--terra-mid)', lineHeight: 1.2 }}>
+                              <span>{access.icon}</span>
+                              <span>{access.label}</span>
+                            </span>
+                          )}
                         </div>
                       </div>
                       <span className="px-2 py-0.5 rounded-full flex-shrink-0 font-medium"

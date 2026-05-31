@@ -67,6 +67,8 @@ type Draft = {
 
 // ─── Max bilder per gjenstand ─────────────────────────────────────────────────
 const MAX_IMAGES = 10
+const MAX_FILE_SIZE_MB = 5
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 function toBase64(file: File): Promise<string> {
   return new Promise((res, rej) => {
@@ -331,6 +333,11 @@ export default function AddPage() {
     if (!file) return
     e.target.value = ''
 
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setAnalysisError(`Bildet er for stort (maks ${MAX_FILE_SIZE_MB} MB). Prøv et mindre bilde.`)
+      return
+    }
+
     setUploading(true)
     setAnalysisLocked(false)
     setImageAnalyzing(true)
@@ -495,9 +502,18 @@ Returner KUN JSON, ingen annen tekst.` }
     if (!files.length) return
     e.target.value = ''
 
+    const oversized = files.filter(f => f.size > MAX_FILE_SIZE_BYTES)
+    if (oversized.length > 0) {
+      setErrors(prev => ({ ...prev, images: `${oversized.length} bilde(r) er for store (maks ${MAX_FILE_SIZE_MB} MB per bilde).` }))
+      return
+    }
+
+    const slots = MAX_IMAGES - imagePreviews.length
+    if (slots <= 0) return
+    const filesToUpload = files.slice(0, slots)
+
     setUploading(true)
-    const uploadPromises = files.map(f => uploadImageToStorage(f))
-    const urls = await Promise.all(uploadPromises)
+    const urls = await Promise.all(filesToUpload.map(f => uploadImageToStorage(f)))
     const validUrls = urls.filter((u): u is string => !!u)
 
     setImagePreviews(prev => {

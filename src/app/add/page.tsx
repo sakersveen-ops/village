@@ -643,6 +643,21 @@ Returner KUN JSON, ingen annen tekst.` }
       }
     }
 
+    track(Events.RECEIPT_IMPORT_PUBLISHED, {
+      source: importDraft?.source,
+      item_count: items.length,
+      store: importDraft?.store ?? undefined,
+    })
+
+    if (importDraft?.id) {
+      const supabase2 = createClient()
+      await supabase2.from('item_import_drafts').update({ used_at: new Date().toISOString() }).eq('id', importDraft.id)
+    }
+
+    sessionStorage.removeItem(DRAFT_KEY)
+    setImportDraft(null)
+    router.push('/')
+  }
 
   const analyzeUrl = async () => {
     if (!urlInput.trim()) return
@@ -1582,5 +1597,4 @@ Returner KUN JSON, ingen annen tekst.` }
       </div>
     </div>
   )
-}
 }

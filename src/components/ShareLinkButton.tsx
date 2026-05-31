@@ -19,7 +19,7 @@ interface ShareButtonProps {
   label?: string
 }
 
-const BASE = 'https://village-jade.vercel.app'
+const BASE = 'https://villageapp.no'
 
 function buildUrl(props: ShareButtonProps): string {
   if (props.variant === 'own-profile' || props.variant === 'other-profile') {

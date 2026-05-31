@@ -21,7 +21,7 @@ export async function generateMetadata({ params: paramsPromise }: { params: Prom
   if (!profile) return { title: 'Village' }
   const name = profile.name || profile.email?.split('@')[0] || 'Bruker'
   return {
-    metadataBase: new URL('https://village-jade.vercel.app'),
+    metadataBase: new URL('https://villageapp.no'),
     title: `${name} deler på Village`,
     description: `Se hva ${name} deler på Village — appen for nabodeling.`,
     openGraph: {
@@ -81,7 +81,7 @@ export default async function PublicProfilePage({ params: paramsPromise }: { par
   const name = profile.name || profile.email?.split('@')[0] || 'Bruker'
   const ownerInitials = initials(profile.name, profile.email)
   const hue = (profile.name || '').split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) % 360
-  const appDeepLink = `https://village-jade.vercel.app/profile/${resolvedParams.userId}`
+  const appDeepLink = `https://villageapp.no/profile/${resolvedParams.userId}`
 
   const CATEGORY_EMOJI: Record<string, string> = {
     'baby-og-barn': '🍼', 'klar-og-mote': '👗', 'boker': '📚', 'annet': '📦'
@@ -145,7 +145,7 @@ export default async function PublicProfilePage({ params: paramsPromise }: { par
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
               {sortedItems.slice(0, 9).map((item: any) => (
-                <a key={item.id} href={`https://village-jade.vercel.app/p/item/${item.id}`}
+                <a key={item.id} href={`https://villageapp.no/p/item/${item.id}`}
                   style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid rgba(46,98,113,0.12)', textDecoration: 'none', background: 'rgba(252,254,255,0.6)', display: 'block' }}>
                   <div style={{ height: 80, background: 'linear-gradient(135deg, #b8dce4 0%, #8ec5d0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, position: 'relative' }}>
                     {item.image_url
@@ -171,7 +171,7 @@ export default async function PublicProfilePage({ params: paramsPromise }: { par
         <div style={{ background: 'rgba(252,254,255,0.72)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderRadius: 18, border: '1px solid rgba(46,98,113,0.14)', padding: '16px 18px' }}>
           <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 600, color: '#1A2530' }}>Ny på Village?</p>
           <p style={{ margin: '0 0 12px', fontSize: 13, color: '#6B7A82', lineHeight: 1.5 }}>Del det du har, lån det du trenger — fra folk du kjenner og stoler på.</p>
-          <a href="https://village-jade.vercel.app/register" style={{ display: 'block', background: 'rgba(46,98,113,0.10)', color: '#2E6271', borderRadius: 12, padding: '11px 0', textAlign: 'center', fontSize: 14, fontWeight: 600, textDecoration: 'none', border: '1.5px solid rgba(46,98,113,0.22)' }}>
+          <a href="https://villageapp.no/register" style={{ display: 'block', background: 'rgba(46,98,113,0.10)', color: '#2E6271', borderRadius: 12, padding: '11px 0', textAlign: 'center', fontSize: 14, fontWeight: 600, textDecoration: 'none', border: '1.5px solid rgba(46,98,113,0.22)' }}>
             Opprett konto gratis →
           </a>
         </div>

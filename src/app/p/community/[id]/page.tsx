@@ -20,7 +20,7 @@ export async function generateMetadata({ params: paramsPromise }: { params: Prom
     .single()
   if (!community) return { title: 'Village' }
   return {
-    metadataBase: new URL('https://village-jade.vercel.app'),
+    metadataBase: new URL('https://villageapp.no'),
     title: `${community.avatar_emoji || '🏘️'} ${community.name} — Village`,
     description: community.description || `Bli med i ${community.name} på Village — appen for nabodeling.`,
     openGraph: {
@@ -85,8 +85,8 @@ export default async function PublicCommunityPage({ params: paramsPromise }: { p
 
   const sortedItems = [...(items || [])].sort((a: any, b: any) => (loanCounts[b.id] || 0) - (loanCounts[a.id] || 0))
 
-  const appDeepLink = `https://village-jade.vercel.app/community/${resolvedParams.id}`
-  const registerDeepLink = `https://village-jade.vercel.app/register?redirect=/community/${resolvedParams.id}`
+  const appDeepLink = `https://villageapp.no/community/${resolvedParams.id}`
+  const registerDeepLink = `https://villageapp.no/register?redirect=/community/${resolvedParams.id}`
 
   // Show up to 5 member avatars
   const previewMembers = members.slice(0, 5)
@@ -169,7 +169,7 @@ export default async function PublicCommunityPage({ params: paramsPromise }: { p
                 const hue = (ownerProfile?.name || '').split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) % 360
                 const loans = loanCounts[item.id] || 0
                 return (
-                  <a key={item.id} href={`https://village-jade.vercel.app/p/item/${item.id}`}
+                  <a key={item.id} href={`https://villageapp.no/p/item/${item.id}`}
                     style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: 'rgba(252,254,255,0.6)', borderRadius: 14, border: '1px solid rgba(46,98,113,0.10)', textDecoration: 'none' }}>
                     {/* Item image or emoji */}
                     <div style={{ width: 46, height: 46, borderRadius: 12, flexShrink: 0, overflow: 'hidden', background: 'linear-gradient(135deg, #b8dce4 0%, #8ec5d0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>

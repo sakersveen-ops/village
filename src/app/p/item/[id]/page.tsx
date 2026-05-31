@@ -23,7 +23,7 @@ export async function generateMetadata({ params: paramsPromise }: { params: Prom
   if (!item) return { title: 'Village' }
   const owner = (item.profiles as any)?.name || 'noen'
   return {
-    metadataBase: new URL('https://village-jade.vercel.app'),
+    metadataBase: new URL('https://villageapp.no'),
     title: `${item.name} — lån av ${owner} på Village`,
     description: item.description || `${owner} deler ${item.name} på Village, appen for nabodeling.`,
     openGraph: {
@@ -50,7 +50,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 // SMS fallback text – used in share sheet
 export function buildSmsText(item: any, ownerName: string) {
   const available = item.available ? 'Tilgjengelig nå' : 'Opptatt akkurat nå'
-  return `${ownerName} deler ${item.name} på Village (${available}). Se her: https://village-jade.vercel.app/p/item/${item.id}`
+  return `${ownerName} deler ${item.name} på Village (${available}). Se her: https://villageapp.no/p/item/${item.id}`
 }
 
 export default async function PublicItemPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
@@ -72,7 +72,7 @@ export default async function PublicItemPage({ params: paramsPromise }: { params
   const ownerInitials = initials(owner?.name, owner?.email)
   const hue = (owner?.name || '').split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) % 360
   const categoryLabel = CATEGORY_LABELS[item.category] || item.category
-  const appDeepLink = `https://village-jade.vercel.app/items/${item.id}`
+  const appDeepLink = `https://villageapp.no/items/${item.id}`
 
   // Build a short SMS/plain-text fallback line for WhatsApp/iMessage previews
   // (used server-side in og:description)
@@ -155,7 +155,7 @@ export default async function PublicItemPage({ params: paramsPromise }: { params
           <p style={{ margin: '0 0 12px', fontSize: 13, color: '#6B7A82', lineHeight: 1.5 }}>
             Village er appen for deling mellom naboer og venner. Del det du har, lån det du trenger.
           </p>
-          <a href="https://village-jade.vercel.app/register" style={{ display: 'block', background: 'rgba(46,98,113,0.10)', color: '#2E6271', borderRadius: 12, padding: '11px 0', textAlign: 'center', fontSize: 14, fontWeight: 600, textDecoration: 'none', border: '1.5px solid rgba(46,98,113,0.22)' }}>
+          <a href="https://villageapp.no/register" style={{ display: 'block', background: 'rgba(46,98,113,0.10)', color: '#2E6271', borderRadius: 12, padding: '11px 0', textAlign: 'center', fontSize: 14, fontWeight: 600, textDecoration: 'none', border: '1.5px solid rgba(46,98,113,0.22)' }}>
             Opprett konto gratis →
           </a>
         </div>

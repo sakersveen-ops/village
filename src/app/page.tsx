@@ -599,13 +599,13 @@ export default function FeedPage() {
 
   return (
     <div className="max-w-lg mx-auto">
-      <div className="px-4 pt-5 flex flex-col gap-6">
+      <div className="px-4 pt-2 flex flex-col gap-6">
 
         {/* ── RequestStory-rad ── */}
         {requestGroups.length > 0 && (
           <div>
             <div className="flex justify-between items-baseline mb-3">
-              <h2 className="font-display text-[var(--terra-dark)] text-base font-semibold">Kretsen trenger</h2>
+              <h2 className="font-display text-[var(--terra-dark)] text-base font-semibold">Etterspørres nå</h2>
               {requestGroups.some(isGroupNew) && (
                 <span className="text-[10px] font-semibold text-[var(--terra)] uppercase tracking-wide">Nytt</span>
               )}

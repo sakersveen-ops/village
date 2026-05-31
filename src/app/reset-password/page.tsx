@@ -14,13 +14,28 @@ export default function ResetPasswordPage() {
   const router = useRouter()
 
   useEffect(() => {
-    // Supabase puts the token in the URL hash — it auto-exchanges to a session
     const supabase = createClient()
-    supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setValidSession(true)
+
+    // PKCE flow: exchange the `code` param for a session
+    const exchangeCode = async () => {
+      const params = new URLSearchParams(window.location.search)
+      const code = params.get('code')
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        if (!error) {
+          setValidSession(true)
+          return
+        }
       }
-    })
+      // Fallback: implicit flow via hash (PASSWORD_RECOVERY event)
+      supabase.auth.onAuthStateChange((event) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setValidSession(true)
+        }
+      })
+    }
+
+    exchangeCode()
   }, [])
 
   const handleReset = async (e: React.FormEvent) => {
@@ -90,14 +105,11 @@ export default function ResetPasswordPage() {
           ) : !validSession ? (
             <div className="text-center py-4">
               <h2 className="font-display text-2xl mb-2" style={{ color: 'var(--terra-dark)' }}>
-                Ugyldig lenke
+                Laster…
               </h2>
-              <p className="text-sm mb-6" style={{ color: 'var(--terra-mid)' }}>
-                Lenken er utløpt eller allerede brukt.
+              <p className="text-sm" style={{ color: 'var(--terra-mid)' }}>
+                Verifiserer lenken din.
               </p>
-              <a href="/login" className="btn-primary block text-center">
-                Gå til innlogging
-              </a>
             </div>
           ) : (
             <>

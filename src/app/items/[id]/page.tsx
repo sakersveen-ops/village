@@ -292,27 +292,35 @@ export default function ItemPage() {
 
       {/* ── Hero ── */}
       <div className="relative">
-        <button onClick={() => router.back()}
-          className="btn-glass absolute top-6 left-4 z-10"
-          style={{ width: 36, height: 36, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          ←
-        </button>
-        <ShareLinkButton
-          variant="item"
-          itemName={item?.name}
-          itemId={item?.id}
-          className="btn-glass absolute top-6 right-4 z-10"
-          style={{ width: 36, height: 36, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        />
         {(() => {
           // Build ordered image list: primary first, then extras
           const allImages: string[] = [
             ...(item.image_url ? [item.image_url] : []),
             ...(Array.isArray(item.extra_images) ? item.extra_images : []),
           ]
+
+          // Shared nav buttons — rendered inside whichever container is used
+          const navButtons = (
+            <>
+              <button onClick={() => router.back()}
+                className="btn-glass absolute top-6 left-4 z-10"
+                style={{ width: 36, height: 36, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                ←
+              </button>
+              <ShareLinkButton
+                variant="item"
+                itemName={item?.name}
+                itemId={item?.id}
+                className="btn-glass absolute top-6 right-4 z-10"
+                style={{ width: 36, height: 36, borderRadius: '50%', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              />
+            </>
+          )
+
           if (allImages.length === 0) return (
-            <div className="w-full flex flex-col items-center justify-center gap-2"
+            <div className="relative w-full flex flex-col items-center justify-center gap-2"
               style={{ height: 256, background: categoryGfx.gradient }}>
+              {navButtons}
               <span className="font-display text-white/90 font-semibold"
                 style={{ fontSize: 20, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
                 {categoryGfx.label}
@@ -320,8 +328,10 @@ export default function ItemPage() {
               <span className="text-white/60 text-sm">{item.name}</span>
             </div>
           )
+
           return (
             <div className="relative w-full overflow-hidden" style={{ height: 256 }}>
+              {navButtons}
               {/* Images */}
               <div
                 className="flex h-full transition-transform"

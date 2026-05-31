@@ -52,6 +52,7 @@ export default function EditItemPage() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
+      console.log('itemId:', itemId)
       setUser(user)
 
       const { data: item, error } = await supabase

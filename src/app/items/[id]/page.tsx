@@ -18,27 +18,26 @@ const getCategoryGradient = (category?: string) => {
   return { gradient: 'linear-gradient(135deg, var(--terra-mid) 0%, #1A3542 100%)', label: category }
 }
 
-// Statuser som regnes som "aktivt" for tilgjengelighetsvisning
 const ACTIVE_STATUSES = ['confirmed', 'active', 'change_proposed', 'pending_return', 'overdue']
 
 export default function ItemPage() {
-  const [item, setItem]                     = useState<any>(null)
-  const [user, setUser]                     = useState<any>(null)
-  const [userProfile, setUserProfile]       = useState<any>(null)
-  const [loan, setLoan]                     = useState<any>(null)
-  const [carouselIdx, setCarouselIdx]       = useState(0)
-  const [allLoans, setAllLoans]             = useState<any[]>([])
-  const [pendingLoans, setPendingLoans]     = useState<any[]>([])
-  const [proposalLoanId, setProposalLoanId] = useState<string | null>(null)
-  const [blockedDates, setBlockedDates]     = useState<string[]>([])
+  const [item, setItem]                       = useState<any>(null)
+  const [user, setUser]                       = useState<any>(null)
+  const [userProfile, setUserProfile]         = useState<any>(null)
+  const [loan, setLoan]                       = useState<any>(null)
+  const [carouselIdx, setCarouselIdx]         = useState(0)
+  const [allLoans, setAllLoans]               = useState<any[]>([])
+  const [pendingLoans, setPendingLoans]       = useState<any[]>([])
+  const [proposalLoanId, setProposalLoanId]   = useState<string | null>(null)
+  const [blockedDates, setBlockedDates]       = useState<string[]>([])
   const [blockRangeStart, setBlockRangeStart] = useState<string | null>(null)
-  const [message, setMessage]               = useState('')
-  const [startDate, setStartDate]           = useState('')
-  const [dueDate, setDueDate]               = useState('')
-  const [sent, setSent]                     = useState(false)
-  const [sentRange, setSentRange]           = useState<{ start: string; end: string } | null>(null)
-  const [accessRules, setAccessRules]       = useState<any[]>([])
-  const [loading, setLoading]               = useState(true)
+  const [message, setMessage]                 = useState('')
+  const [startDate, setStartDate]             = useState('')
+  const [dueDate, setDueDate]                 = useState('')
+  const [sent, setSent]                       = useState(false)
+  const [sentRange, setSentRange]             = useState<{ start: string; end: string } | null>(null)
+  const [accessRules, setAccessRules]         = useState<any[]>([])
+  const [loading, setLoading]                 = useState(true)
   const router = useRouter()
   const { id } = useParams()
 
@@ -60,7 +59,6 @@ export default function ItemPage() {
       setItem(item)
       setMessage(`Hei! Kan jeg låne «${item?.name}»? 😊`)
 
-      // Hent alle ikke-avsluttede lån inkl. nye statuser
       const { data: loans } = await supabase
         .from('loans')
         .select('*, profiles!loans_borrower_id_fkey(id, name, email, avatar_url)')
@@ -96,10 +94,8 @@ export default function ItemPage() {
     load()
   }, [id])
 
-  // Owner blocking: first tap sets range start, second tap blocks the full range
   const toggleBlock = async (dateStr: string) => {
     if (!blockRangeStart) {
-      // First tap — if date is already blocked, unblock it immediately; otherwise start a range
       if (blockedDates.includes(dateStr)) {
         const supabase = createClient()
         await supabase.from('item_blocked_dates').delete().eq('item_id', id).eq('date', dateStr)
@@ -109,7 +105,6 @@ export default function ItemPage() {
       }
       return
     }
-    // Second tap — block all dates in range
     const [a, b] = [blockRangeStart, dateStr].sort()
     const dates: string[] = []
     const cur = new Date(a)
@@ -205,7 +200,6 @@ export default function ItemPage() {
     })
   }
 
-  // Godta → setter nå 'confirmed' (ikke 'active')
   const respondToLoan = async (loanId: string, accept: boolean) => {
     const supabase = createClient()
 
@@ -293,13 +287,11 @@ export default function ItemPage() {
       {/* ── Hero ── */}
       <div className="relative">
         {(() => {
-          // Build ordered image list: primary first, then extras
           const allImages: string[] = [
             ...(item.image_url ? [item.image_url] : []),
             ...(Array.isArray(item.extra_images) ? item.extra_images : []),
           ]
 
-          // Shared nav buttons — rendered inside whichever container is used
           const navButtons = (
             <>
               <button onClick={() => router.back()}
@@ -332,9 +324,8 @@ export default function ItemPage() {
           return (
             <div className="relative w-full overflow-hidden" style={{ height: 256 }}>
               {navButtons}
-              {/* Images */}
               <div
-                className="flex h-full transition-transform"
+                className="flex h-full"
                 style={{ transform: `translateX(-${carouselIdx * 100}%)`, transition: 'transform 0.3s ease' }}
               >
                 {allImages.map((src, i) => (
@@ -343,7 +334,6 @@ export default function ItemPage() {
                     style={{ minWidth: '100%' }} />
                 ))}
               </div>
-              {/* Prev/Next buttons — only when multiple images */}
               {allImages.length > 1 && (
                 <>
                   <button
@@ -358,7 +348,6 @@ export default function ItemPage() {
                     style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: 18, opacity: carouselIdx === allImages.length - 1 ? 0.3 : 1 }}
                     aria-label="Neste bilde"
                   >›</button>
-                  {/* Dots */}
                   <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
                     {allImages.map((_, i) => (
                       <button key={i} onClick={() => setCarouselIdx(i)}
@@ -388,13 +377,17 @@ export default function ItemPage() {
             {item.name}
           </h1>
           {item.price
-            ? <span className="status-pill pending ml-2">{item.price} kr {
-                item.price_type === 'per_week'  ? '/ uke'    :
-                item.price_type === 'per_month' ? '/ mnd'    :
-                item.price_type === 'flat'      ? '(fast)'   :
+            ? <span className="status-pill pending ml-2 flex-shrink-0">{item.price} kr {
+                item.price_type === 'per_week'  ? '/ uke'  :
+                item.price_type === 'per_month' ? '/ mnd'  :
+                item.price_type === 'flat'      ? '(fast)' :
                 '/ dag'
               }</span>
-            : <span className="status-pill active ml-2">Gratis</span>}
+            : <span className="status-pill ml-2 flex-shrink-0"
+                style={{ background: 'rgba(46,98,113,0.08)', color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.2)' }}>
+                Gratis
+              </span>
+          }
         </div>
 
         {/* Co-owner banner */}
@@ -484,31 +477,40 @@ export default function ItemPage() {
         {/* ── Tilgangsfelt ── */}
         {(() => {
           const accessLabels: Record<string, string> = {
-            public: '🌍 Alle kan se denne',
-            friends: '👥 Kun venner',
+            public: '🌍 Alle',
+            friends: '👥 Venner',
             friends_of_friends: '👥👥 Venner av venner',
             community: '🏘️ Krets',
           }
           const labels = accessRules.length === 0
-            ? ['👥 Kun venner']
+            ? ['👥 Venner']
             : accessRules.map(r =>
                 r.access_type === 'community'
                   ? `🏘️ ${r.communities?.name || 'Krets'}`
                   : accessLabels[r.access_type] || r.access_type
               )
           return (
-            <div className="glass" style={{ borderRadius: 16, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-              <div className="flex flex-col gap-0.5">
-                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Synlig for</p>
-                <p className="text-sm font-medium" style={{ color: 'var(--terra-dark)' }}>{labels.join(' · ')}</p>
+            <div className="glass" style={{ borderRadius: 16, padding: '12px 16px' }}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
+                  Synlig for
+                </p>
+                {isOwner && (
+                  <Link href={`/items/access?item=${item.id}`}
+                    className="text-xs font-medium"
+                    style={{ color: 'var(--terra)', textDecoration: 'underline' }}>
+                    Endre →
+                  </Link>
+                )}
               </div>
-              {isOwner && (
-                <Link href={`/items/access?item=${item.id}`}
-                  className="text-xs font-medium flex-shrink-0"
-                  style={{ color: 'var(--terra)', textDecoration: 'underline' }}>
-                  Endre →
-                </Link>
-              )}
+              <div className="flex flex-wrap gap-1.5">
+                {labels.map((label, i) => (
+                  <span key={i} className="text-xs font-medium px-2.5 py-1 rounded-full"
+                    style={{ background: 'rgba(46,98,113,0.08)', color: 'var(--terra-dark)', border: '1px solid rgba(46,98,113,0.15)' }}>
+                    {label}
+                  </span>
+                ))}
+              </div>
             </div>
           )
         })()}
@@ -532,13 +534,13 @@ export default function ItemPage() {
 
         {/* ── Kalender-forklaring ── */}
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-1" style={{ marginTop: -4 }}>
-          {(allLoans.some(l => ['confirmed', 'active', 'pending_return', 'overdue'].includes(l.status))) && (
+          {allLoans.some(l => ['confirmed', 'active', 'pending_return', 'overdue'].includes(l.status)) && (
             <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
               <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FEE2E2', display: 'inline-block', flexShrink: 0 }} />
-              Aktivt lån
+              Utlånt
             </span>
           )}
-          {(allLoans.some(l => ['pending', 'change_proposed'].includes(l.status))) && (
+          {allLoans.some(l => ['pending', 'change_proposed'].includes(l.status)) && (
             <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
               <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FDE68A', display: 'inline-block', flexShrink: 0 }} />
               Forespørsel
@@ -546,7 +548,7 @@ export default function ItemPage() {
           )}
           {blockedDates.length > 0 && (
             <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: '#E8DDD0', display: 'inline-block', flexShrink: 0 }} />
+              <span style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(46,98,113,0.12)', display: 'inline-block', flexShrink: 0 }} />
               Blokkert
             </span>
           )}
@@ -566,7 +568,6 @@ export default function ItemPage() {
 
         {/* ══ EIER / CO-EIER VISNINGER ══ */}
 
-        {/* ── Eier-handlinger: Rediger + Endre tilgang alltid synlig for isOwner ── */}
         {isOwner && (
           <div className="flex gap-2">
             <Link href={`/items/edit?item=${item.id}`} className="flex-1">
@@ -597,6 +598,7 @@ export default function ItemPage() {
             )}
           </div>
         )}
+
         {isCoOwner && !isOwner && (
           <div className="glass" style={{ borderRadius: 16, padding: '14px 16px', textAlign: 'center' }}>
             <p className="text-sm">🔗</p>
@@ -604,7 +606,7 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* Aktivt lån eller bekreftet — vis meldingstråd */}
+        {/* Aktivt lån — vis meldingstråd */}
         {hasOwnerAccess && activeLoan && ACTIVE_STATUSES.includes(activeLoan.status) && (
           <div className="flex flex-col gap-2">
             <LoanThread
@@ -702,7 +704,7 @@ export default function ItemPage() {
 
         {/* ══ LÅNTAKER VISNINGER ══ */}
 
-        {/* pending — venter på godkjenning */}
+        {/* pending */}
         {!hasOwnerAccess && loan?.status === 'pending' && (
           <div className="flex flex-col gap-3">
             <div className="glass" style={{ borderRadius: 16, padding: 16, textAlign: 'center' }}>
@@ -713,7 +715,7 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* confirmed — godtatt, klar til henting */}
+        {/* confirmed */}
         {!hasOwnerAccess && loan?.status === 'confirmed' && (
           <div className="flex flex-col gap-3">
             <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(56,138,221,0.3)', background: 'rgba(56,138,221,0.04)' }}>
@@ -768,7 +770,7 @@ export default function ItemPage() {
           </div>
         )}
 
-        {/* pending_return — venter på utleiers bekreftelse */}
+        {/* pending_return */}
         {!hasOwnerAccess && loan?.status === 'pending_return' && (
           <div className="flex flex-col gap-3">
             <div className="glass" style={{ borderRadius: 16, padding: 16, display: 'flex', alignItems: 'center', gap: 12, border: '1px solid rgba(56,138,221,0.3)', background: 'rgba(56,138,221,0.04)' }}>
@@ -853,6 +855,7 @@ export default function ItemPage() {
         )}
 
       </div>
+      <div className="nav-spacer" />
     </div>
   )
 }

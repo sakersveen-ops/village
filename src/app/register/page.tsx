@@ -25,7 +25,7 @@ export default function RegisterPage() {
     setLoading(true)
 
     const supabase = createClient()
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -39,6 +39,14 @@ export default function RegisterPage() {
           ? 'Denne e-postadressen er allerede registrert. Prøv å logge inn.'
           : 'Noe gikk galt. Sjekk e-posten og prøv igjen.'
       )
+      setLoading(false)
+      return
+    }
+
+    // Supabase returnerer ikke feil på eksisterende e-post når confirm email er på —
+    // men identities-arrayen er tom i så fall
+    if (!data.user?.identities || data.user.identities.length === 0) {
+      setError('Denne e-postadressen er allerede registrert. Prøv å logge inn.')
       setLoading(false)
       return
     }

@@ -1,6 +1,6 @@
 // Path of this file: src/app/items/[id]/page.tsx
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -516,13 +516,6 @@ export default function ItemPage() {
         })()}
 
         {/* ── Kalender ── */}
-        {hasOwnerAccess && (
-          <p className="text-xs px-1 mb-1" style={{ color: blockRangeStart ? 'var(--terra)' : 'var(--terra-mid)', fontWeight: blockRangeStart ? 500 : 400 }}>
-            {blockRangeStart
-              ? `Fra ${fd(blockRangeStart)} valgt — trykk på sluttdatoen for å blokkere perioden`
-              : 'Trykk én dag for å blokkere/fjerne den, eller velg to dager for å blokkere en periode'}
-          </p>
-        )}
         <ItemCalendar
           loans={allLoans}
           blockedDates={blockedDates}
@@ -532,7 +525,7 @@ export default function ItemPage() {
           isOwner={hasOwnerAccess}
         />
 
-        {/* ── Kalender-forklaring ── */}
+        {/* ── Kalender-forklaring (bare vis oppføringer som er relevante) ── */}
         <div className="flex flex-wrap gap-x-4 gap-y-1.5 px-1" style={{ marginTop: -4 }}>
           {allLoans.some(l => ['confirmed', 'active', 'pending_return', 'overdue'].includes(l.status)) && (
             <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
@@ -544,12 +537,6 @@ export default function ItemPage() {
             <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
               <span style={{ width: 12, height: 12, borderRadius: 3, background: '#FDE68A', display: 'inline-block', flexShrink: 0 }} />
               Forespørsel
-            </span>
-          )}
-          {blockedDates.length > 0 && (
-            <span className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--terra-mid)' }}>
-              <span style={{ width: 12, height: 12, borderRadius: 3, background: 'rgba(46,98,113,0.12)', display: 'inline-block', flexShrink: 0 }} />
-              Blokkert
             </span>
           )}
           {sentRange && (

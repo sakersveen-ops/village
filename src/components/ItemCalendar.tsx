@@ -166,7 +166,7 @@ export default function ItemCalendar({ loans, blockedDates, requestedRange, onTo
         )}
         <div className="flex items-center gap-1.5">
           {/* cal-day blocked → #E8DDD0 */}
-          <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: '#E8DDD0' }} />
+          <div className="rounded-full flex-shrink-0" style={{ width: 12, height: 12, background: 'rgba(225,232,235,0.55)' }} />
           <span style={{ fontSize: 12, color: 'var(--terra-mid)' }}>Blokkert</span>
         </div>
         {isOwner && (

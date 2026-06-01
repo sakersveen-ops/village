@@ -40,7 +40,6 @@ export const CATEGORIES: Category[] = [
     gradient: 'linear-gradient(135deg, #e07b4a 0%, #c4673a 100%)',
     hasAge: true,
     hasColor: true,
-    subcategoryHint: 'Flere underkategorier kommer snart.',
     subcategories: [
       { id: 'spise',  label: 'Spise'  },
       { id: 'leke',   label: 'Leke'   },
@@ -73,7 +72,6 @@ export const CATEGORIES: Category[] = [
     label: 'Bøker',
     gradient: 'linear-gradient(135deg, #C4673A 0%, #8B3A1E 100%)',
     hasGenre: true,
-    subcategoryHint: 'Sjanger og målgruppe utvides snart.',
     subcategories: [
       { id: 'skjonnlitteratur', label: 'Skjønnlitteratur' },
       { id: 'sakprosa',         label: 'Sakprosa'         },

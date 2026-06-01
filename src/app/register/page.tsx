@@ -1,4 +1,4 @@
-// Path of this file: src/app/register/page.tsx
+// src/app/register/page.tsx
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
@@ -49,27 +49,47 @@ export default function RegisterPage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center px-4"
-      style={{ background: 'linear-gradient(160deg, #FFF5EE 0%, #F5E6D8 50%, #EDD5C0 100%)' }}
+      className="min-h-screen flex flex-col items-center justify-center px-6 py-12"
+      style={{ background: 'linear-gradient(160deg, #0D1E25 0%, #1A3542 50%, #2E6271 100%)' }}
     >
-      {/* Logo / brand */}
-      <div className="mb-8 text-center">
-        <div className="text-5xl mb-3">🏡</div>
-        <h1
-          className="font-display text-4xl font-bold"
-          style={{ color: 'var(--terra-dark)', letterSpacing: '-0.03em' }}
-        >
-          Village
-        </h1>
-        <p className="text-sm mt-1" style={{ color: 'var(--terra-mid)' }}>
-          Del og lån med folk du stoler på
-        </p>
+      {/* Logo + tagline */}
+      <div className="flex flex-col items-center mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <div style={{
+            width: 56, height: 56, borderRadius: 16, flexShrink: 0,
+            background: '#E1F5EE',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 34,
+              color: 'var(--terra)',
+              lineHeight: 1,
+              letterSpacing: '-0.04em',
+              fontOpticalSizing: 'auto' as any,
+            }}>V</span>
+          </div>
+          <h1
+            className="font-display"
+            style={{
+              fontSize: 'clamp(36px, 10vw, 48px)',
+              color: 'white',
+              letterSpacing: '-0.025em',
+              fontOpticalSizing: 'auto' as any,
+              margin: 0,
+              lineHeight: 1,
+            }}
+          >
+            Village
+          </h1>
+        </div>
+        <p className="text-white/60 text-sm">Del og lån med folk du stoler på</p>
       </div>
 
       {/* Card */}
       <div
-        className="glass-heavy w-full max-w-sm px-6 py-8 flex flex-col gap-5"
-        style={{ borderRadius: 24 }}
+        className="glass-heavy w-full px-6 py-8 flex flex-col gap-5"
+        style={{ borderRadius: 24, maxWidth: 400 }}
       >
         <div>
           <h2
@@ -85,10 +105,7 @@ export default function RegisterPage() {
 
         {/* Email */}
         <div className="flex flex-col gap-1.5">
-          <label
-            className="text-xs font-semibold uppercase tracking-wide"
-            style={{ color: 'var(--terra-mid)' }}
-          >
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
             E-post
           </label>
           <input
@@ -97,17 +114,16 @@ export default function RegisterPage() {
             onChange={e => setEmail(e.target.value)}
             placeholder="deg@eksempel.no"
             autoComplete="email"
-            className="glass px-4 py-3 outline-none w-full"
-            style={{ borderRadius: 14, color: 'var(--terra-dark)', fontSize: 15 }}
+            className="bg-white rounded-xl px-4 py-3.5 outline-none transition-colors w-full"
+            style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-dark)', fontSize: 15 }}
+            onFocus={e => (e.target.style.borderColor = 'var(--terra)')}
+            onBlur={e => (e.target.style.borderColor = 'var(--glass-border)')}
           />
         </div>
 
         {/* Password */}
         <div className="flex flex-col gap-1.5">
-          <label
-            className="text-xs font-semibold uppercase tracking-wide"
-            style={{ color: 'var(--terra-mid)' }}
-          >
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
             Passord
           </label>
           <div className="relative">
@@ -117,8 +133,10 @@ export default function RegisterPage() {
               onChange={e => setPassword(e.target.value)}
               placeholder="Minst 8 tegn"
               autoComplete="new-password"
-              className="glass px-4 py-3 pr-12 outline-none w-full"
-              style={{ borderRadius: 14, color: 'var(--terra-dark)', fontSize: 15 }}
+              className="bg-white rounded-xl px-4 py-3.5 pr-12 outline-none transition-colors w-full"
+              style={{ border: '1px solid var(--glass-border)', color: 'var(--terra-dark)', fontSize: 15 }}
+              onFocus={e => (e.target.style.borderColor = 'var(--terra)')}
+              onBlur={e => (e.target.style.borderColor = 'var(--glass-border)')}
             />
             <button
               type="button"
@@ -130,23 +148,16 @@ export default function RegisterPage() {
               {showPassword ? '🙈' : '👁️'}
             </button>
           </div>
-
-          {/* Strength hint */}
           {password.length > 0 && (
-            <div className="flex gap-1.5 mt-1">
+            <div className="flex gap-1.5 mt-0.5">
               {[1, 2, 3].map(n => (
                 <div
                   key={n}
                   className="h-1 flex-1 rounded-full transition-all"
                   style={{
-                    background:
-                      password.length >= n * 4
-                        ? n === 1
-                          ? '#e88c5a'
-                          : n === 2
-                          ? 'var(--terra)'
-                          : 'var(--terra-green)'
-                        : 'rgba(46,98,113,0.15)',
+                    background: password.length >= n * 4
+                      ? n === 1 ? '#e88c5a' : n === 2 ? 'var(--terra)' : 'var(--terra-green)'
+                      : 'rgba(46,98,113,0.15)',
                   }}
                 />
               ))}
@@ -156,10 +167,7 @@ export default function RegisterPage() {
 
         {/* Password confirm */}
         <div className="flex flex-col gap-1.5">
-          <label
-            className="text-xs font-semibold uppercase tracking-wide"
-            style={{ color: 'var(--terra-mid)' }}
-          >
+          <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>
             Bekreft passord
           </label>
           <input
@@ -168,40 +176,31 @@ export default function RegisterPage() {
             onChange={e => setPasswordConfirm(e.target.value)}
             placeholder="Skriv passordet igjen"
             autoComplete="new-password"
-            className="glass px-4 py-3 outline-none w-full"
+            className="bg-white rounded-xl px-4 py-3.5 outline-none transition-colors w-full"
             style={{
-              borderRadius: 14,
+              border: `1px solid ${passwordConfirm.length > 0 && !passwordsMatch ? 'rgba(220,38,38,0.45)' : 'var(--glass-border)'}`,
               color: 'var(--terra-dark)',
               fontSize: 15,
-              borderColor:
-                passwordConfirm.length > 0 && !passwordsMatch
-                  ? 'rgba(220,38,38,0.45)'
-                  : undefined,
             }}
+            onFocus={e => (e.target.style.borderColor = passwordConfirm.length > 0 && !passwordsMatch ? 'rgba(220,38,38,0.45)' : 'var(--terra)')}
+            onBlur={e => (e.target.style.borderColor = passwordConfirm.length > 0 && !passwordsMatch ? 'rgba(220,38,38,0.45)' : 'var(--glass-border)')}
           />
           {passwordConfirm.length > 0 && !passwordsMatch && (
-            <p className="text-xs" style={{ color: '#ef4444' }}>
-              Passordene er ikke like
-            </p>
+            <p className="text-xs" style={{ color: '#ef4444' }}>Passordene er ikke like</p>
           )}
           {passwordConfirm.length > 0 && passwordsMatch && passwordLongEnough && (
-            <p className="text-xs" style={{ color: 'var(--terra-green)' }}>
-              ✓ Passordene stemmer
-            </p>
+            <p className="text-xs" style={{ color: 'var(--terra-green)' }}>✓ Passordene stemmer</p>
           )}
         </div>
 
         {/* Error */}
         {error && (
-          <div
-            className="px-4 py-3 text-sm"
-            style={{
-              borderRadius: 12,
-              background: 'rgba(220,38,38,0.08)',
-              border: '1px solid rgba(220,38,38,0.25)',
-              color: '#b91c1c',
-            }}
-          >
+          <div className="px-4 py-3 text-sm" style={{
+            borderRadius: 12,
+            background: 'rgba(220,38,38,0.08)',
+            border: '1px solid rgba(220,38,38,0.25)',
+            color: '#b91c1c',
+          }}>
             {error}
           </div>
         )}
@@ -211,41 +210,29 @@ export default function RegisterPage() {
           onClick={handleRegister}
           disabled={!canSubmit}
           className="btn-primary w-full"
-          style={{
-            borderRadius: 14,
-            padding: '14px 0',
-            fontSize: 15,
-            fontWeight: 600,
-            opacity: canSubmit ? 1 : 0.45,
-          }}
+          style={{ opacity: canSubmit ? 1 : 0.45 }}
         >
           {loading ? 'Oppretter konto…' : 'Opprett konto'}
         </button>
 
         {/* Divider */}
         <div className="flex items-center gap-3">
-          <div className="flex-1 h-px" style={{ background: 'rgba(46,98,113,0.18)' }} />
-          <span className="text-xs" style={{ color: 'var(--terra-mid)' }}>
-            eller
-          </span>
-          <div className="flex-1 h-px" style={{ background: 'rgba(46,98,113,0.18)' }} />
+          <div className="flex-1 h-px" style={{ background: 'var(--glass-border)' }} />
+          <span className="text-xs" style={{ color: 'var(--terra-mid)' }}>eller</span>
+          <div className="flex-1 h-px" style={{ background: 'var(--glass-border)' }} />
         </div>
 
         {/* Login link */}
         <p className="text-center text-sm" style={{ color: 'var(--terra-mid)' }}>
           Har du allerede en konto?{' '}
-          <Link
-            href="/login"
-            className="font-semibold"
-            style={{ color: 'var(--terra)' }}
-          >
+          <Link href="/login" className="font-semibold underline underline-offset-2" style={{ color: 'var(--terra)' }}>
             Logg inn
           </Link>
         </p>
       </div>
 
       {/* Fine print */}
-      <p className="text-xs text-center mt-6 max-w-xs" style={{ color: 'var(--terra-mid)' }}>
+      <p className="text-xs text-center mt-6 max-w-xs" style={{ color: 'rgba(255,255,255,0.35)' }}>
         Ved å opprette konto godtar du at Village lagrer profilen din for å gi deg tjenesten.
         Ingen data deles med tredjeparter.
       </p>

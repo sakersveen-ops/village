@@ -1,4 +1,3 @@
-// Path of this file: src/app/search/page.tsx
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
@@ -8,7 +7,37 @@ import { getCategoryLabel } from '@/lib/categories'
 import { sortProfilesWithConnectionFirst } from '@/lib/sortProfiles'
 import { track, Events } from '@/lib/track'
 
-type DateRange = { from: string; to: string }
+const CATEGORY_TABS = [
+  { id: 'all',     label: 'Alle' },
+  { id: 'baby-og-barn',   label: 'Baby & barn' },
+  { id: 'klar-og-mote',   label: 'Antrekk' },
+  { id: 'boker',          label: 'Bøker' },
+  { id: 'annet',          label: 'Annet' },
+] as const
+type CatId = typeof CATEGORY_TABS[number]['id']
+
+const SUBCATEGORIES: Record<string, string[]> = {
+  'baby-og-barn':  ['Spise','Leke','Stelle','Sove','Bade','Ha-på','Reise','Gravid','Annet'],
+  'klar-og-mote':  ['Bryllup','Fest & ball','Konfirmasjon','Begravelse & seremoni','Hverdag & casual','Annet'],
+  'boker':         ['Skjønnlitteratur','Sakprosa','Barn & ungdom','Kokebok','Biografi','Fagbok','Annet'],
+  'annet':         ['Sport & fritid','Elektronikk','Verktøy','Kjøkken & hjem','Hage','Annet'],
+}
+
+const AGE_GROUPS = ['0–3 mnd','3–6 mnd','6–12 mnd','1–2 år','2–3 år','3–5 år','5–8 år','8–12 år']
+const SIZES_DAME  = ['XS','S','M','L','XL','XXL']
+const SIZES_HERRE = ['XS','S','M','L','XL','XXL']
+const SIZES_BARN  = ['86–92','98–104','110–116','122–128','134–140','146–152','158–164']
+const COLORS = ['Hvit','Grå','Svart','Blå','Grønn','Rød','Rosa','Gul','Beige','Flerfarget']
+
+const COLOR_MAP: Record<string, string> = {
+  Hvit: '#F5F5F5', Grå: '#9E9E9E', Svart: '#212121', Blå: '#1565C0',
+  Grønn: '#2E7D32', Rød: '#C62828', Rosa: '#E91E8C', Gul: '#F9A825',
+  Beige: '#C8A97C', Flerfarget: 'conic-gradient(red,yellow,green,blue,red)',
+}
+
+function fd(d: string) {
+  return new Date(d).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })
+}
 
 export default function SearchPage() {
   const router = useRouter()
@@ -16,17 +45,25 @@ export default function SearchPage() {
 
   const [tab, setTab] = useState<'gjenstander' | 'personer'>('gjenstander')
   const [query, setQuery] = useState('')
-  const [dateRange, setDateRange] = useState<DateRange>({ from: '', to: '' })
   const [items, setItems] = useState<any[]>([])
-  const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set())
   const [people, setPeople] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [connectedProfileId, setConnectedProfileId] = useState<string | null>(null)
 
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
+  // Filters
+  const [activeCat, setActiveCat] = useState<CatId>('all')
+  const [activeSub, setActiveSub] = useState<string | null>(null)
+  const [activeAge, setActiveAge] = useState<string | null>(null)
+  const [activeGender, setActiveGender] = useState<'dame' | 'herre' | 'barn' | null>(null)
+  const [activeSize, setActiveSize] = useState<string | null>(null)
+  const [activeColor, setActiveColor] = useState<string | null>(null)
+  const [availableOnly, setAvailableOnly] = useState(false)
+
+  // Active loans map: item_id → due_date of earliest active/confirmed loan
+  const [activeLoanMap, setActiveLoanMap] = useState<Record<string, string>>({})
+
+  useEffect(() => { inputRef.current?.focus() }, [])
 
   useEffect(() => {
     const init = async () => {
@@ -48,42 +85,41 @@ export default function SearchPage() {
     init()
   }, [])
 
-  const getUnavailableInRange = useCallback(async (from: string, to: string): Promise<Set<string>> => {
+  const fetchActiveLoans = useCallback(async () => {
     const supabase = createClient()
-    const [{ data: loans }, { data: blocked }] = await Promise.all([
-      supabase
-        .from('loans')
-        .select('item_id')
-        .in('status', ['pending', 'active', 'change_proposed'])
-        .lte('start_date', to)
-        .gte('due_date', from),
-      supabase
-        .from('item_blocked_dates')
-        .select('item_id')
-        .gte('date', from)
-        .lte('date', to),
-    ])
-    const ids = new Set<string>()
-    loans?.forEach((l) => ids.add(l.item_id))
-    blocked?.forEach((b) => ids.add(b.item_id))
-    return ids
+    const { data } = await supabase
+      .from('loans')
+      .select('item_id, due_date')
+      .in('status', ['pending', 'confirmed', 'active', 'change_proposed'])
+      .order('due_date', { ascending: true })
+    if (!data) return
+    const map: Record<string, string> = {}
+    for (const loan of data) {
+      if (!map[loan.item_id]) map[loan.item_id] = loan.due_date
+    }
+    setActiveLoanMap(map)
   }, [])
 
-  const searchItems = useCallback(async (q: string, range: DateRange) => {
+  useEffect(() => { fetchActiveLoans() }, [])
+
+  const searchItems = useCallback(async (q: string) => {
     const supabase = createClient()
     let dbQuery = supabase
       .from('items')
-      .select('*, profiles!items_owner_id_fkey(id, name, avatar_url), v_item_min_price!left(min_price, min_price_type)')
-      .limit(60)
+      .select('id, name, category, subcategories, available, image_url, owner_id, connected_profile_id, color, size, age_ranges, item_filters, profiles!items_owner_id_fkey(id, name, avatar_url), v_item_min_price!left(min_price, min_price_type)')
+      .limit(80)
 
     if (q.length >= 2) {
-      dbQuery = dbQuery.ilike('name', `%${q}%`)
+      // search name, category label, and subcategories
+      dbQuery = dbQuery.or(
+        `name.ilike.%${q}%,category.ilike.%${q}%,subcategories.cs.{${q}}`
+      )
     }
 
     const { data } = await dbQuery.order('created_at', { ascending: false })
     let results = data ?? []
 
-    // Deduplicate connected_profile items — show once under owner_id
+    // Deduplicate connected_profile items
     const seen = new Set<string>()
     results = results.filter((item) => {
       const key = item.connected_profile_id
@@ -95,15 +131,7 @@ export default function SearchPage() {
     })
 
     setItems(results)
-
-    if (range.from && range.to) {
-      const ids = await getUnavailableInRange(range.from, range.to)
-      setUnavailableIds(ids)
-      track(Events.SEARCH_DATE_FILTER_APPLIED, { from: range.from, to: range.to })
-    } else {
-      setUnavailableIds(new Set())
-    }
-  }, [getUnavailableInRange])
+  }, [])
 
   const searchPeople = useCallback(async (q: string) => {
     if (q.length < 2) { setPeople([]); return }
@@ -122,56 +150,81 @@ export default function SearchPage() {
     const timer = setTimeout(async () => {
       setLoading(true)
       try {
-        if (tab === 'gjenstander') await searchItems(query, dateRange)
+        if (tab === 'gjenstander') await searchItems(query)
         else await searchPeople(query)
       } finally {
         setLoading(false)
       }
     }, 280)
     return () => clearTimeout(timer)
-  }, [query, tab, dateRange])
+  }, [query, tab])
 
-  useEffect(() => {
-    searchItems('', { from: '', to: '' })
-  }, [])
+  useEffect(() => { searchItems('') }, [])
 
-  const handleDateChange = (field: 'from' | 'to', val: string) => {
-    setDateRange(prev => {
-      const next = { ...prev, [field]: val }
-      if (field === 'from' && val && !prev.to) next.to = val
-      if (field === 'to' && val && !prev.from) next.from = val
-      return next
-    })
+  // Reset sub-filters when category changes
+  const handleCatChange = (cat: CatId) => {
+    setActiveCat(cat)
+    setActiveSub(null)
+    setActiveAge(null)
+    setActiveGender(null)
+    setActiveSize(null)
+    setActiveColor(null)
   }
 
-  const clearDates = () => setDateRange({ from: '', to: '' })
+  // Client-side filtering
+  const filteredItems = items.filter(item => {
+    if (activeCat !== 'all' && item.category !== activeCat) return false
+    if (activeSub && !(item.subcategories ?? []).includes(activeSub) && item.subcategories !== activeSub) return false
+    if (activeColor && item.color?.toLowerCase() !== activeColor.toLowerCase()) return false
+    if (activeCat === 'baby-og-barn' && activeAge) {
+      if (!(item.age_ranges ?? []).includes(activeAge)) return false
+    }
+    if (activeCat === 'klar-og-mote') {
+      if (activeGender && item.item_filters?.gender !== activeGender) return false
+      if (activeSize && item.size !== activeSize) return false
+    }
+    if (availableOnly && !item.available) return false
+    return true
+  })
 
-  const hasDateFilter = !!(dateRange.from && dateRange.to)
-  const today = new Date().toISOString().split('T')[0]
-  const fd = (d: string) => new Date(d).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })
+  const showSubcats    = activeCat !== 'all' && SUBCATEGORIES[activeCat]
+  const showAgeFilter  = activeCat === 'baby-og-barn'
+  const showSizeFilter = activeCat === 'klar-og-mote'
+  const showColorFilter = ['baby-og-barn', 'klar-og-mote'].includes(activeCat)
 
-  // Available items first, then greyed-out unavailable
-  const sortedItems = hasDateFilter
-    ? [
-        ...items.filter(i => !unavailableIds.has(i.id)),
-        ...items.filter(i => unavailableIds.has(i.id)),
-      ]
-    : items
+  const sizeOptions = activeGender === 'barn' ? SIZES_BARN : activeGender === 'herre' ? SIZES_HERRE : SIZES_DAME
 
-  // Shared row style
+  const pillBase: React.CSSProperties = {
+    padding: '6px 13px', borderRadius: 20, fontSize: 13, cursor: 'pointer',
+    border: '1px solid rgba(46,98,113,0.18)', background: 'white',
+    color: 'var(--terra-mid)', whiteSpace: 'nowrap', flexShrink: 0,
+    transition: 'all 150ms ease', display: 'inline-flex', alignItems: 'center', gap: 5,
+  }
+  const pillActive: React.CSSProperties = {
+    background: 'var(--terra)', borderColor: 'var(--terra)', color: 'white',
+  }
+  const subPillBase: React.CSSProperties = {
+    padding: '5px 11px', borderRadius: 16, fontSize: 12, cursor: 'pointer',
+    border: '1px solid rgba(46,98,113,0.15)', background: 'white',
+    color: 'var(--terra-mid)', whiteSpace: 'nowrap', flexShrink: 0,
+    transition: 'all 150ms ease',
+  }
+  const subPillActive: React.CSSProperties = {
+    background: 'rgba(46,98,113,0.10)', borderColor: 'var(--terra)', color: 'var(--terra)', fontWeight: 500,
+  }
+
   const rowStyle: React.CSSProperties = {
-    borderRadius: 16,
-    border: '1px solid rgba(46,98,113,0.18)',
-    background: 'white',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    padding: '12px 14px',
-    cursor: 'pointer',
-    transition: 'box-shadow 150ms ease',
+    borderRadius: 16, border: '1px solid rgba(46,98,113,0.18)',
+    background: 'white', display: 'flex', alignItems: 'center',
+    gap: 12, padding: '12px 14px', cursor: 'pointer', transition: 'box-shadow 150ms ease',
   }
 
-  const thumbnailSize = 48
+  const scrollRow: React.CSSProperties = {
+    display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2,
+    scrollbarWidth: 'none',
+  }
+
+  const today = new Date().toISOString().split('T')[0]
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
@@ -197,15 +250,9 @@ export default function SearchPage() {
               onChange={e => setQuery(e.target.value)}
               placeholder={tab === 'gjenstander' ? 'Søk etter gjenstander…' : 'Søk etter personer…'}
               style={{
-                width: '100%',
-                height: 36,
-                borderRadius: 12,
-                border: '1px solid rgba(46,98,113,0.18)',
-                background: 'rgba(252,254,255,0.7)',
-                padding: '0 28px 0 32px',
-                fontSize: 14,
-                color: 'var(--terra-dark)',
-                outline: 'none',
+                width: '100%', height: 36, borderRadius: 12,
+                border: '1px solid rgba(46,98,113,0.18)', background: 'rgba(252,254,255,0.7)',
+                padding: '0 28px 0 32px', fontSize: 14, color: 'var(--terra-dark)', outline: 'none',
               }}
             />
             {query.length > 0 && (
@@ -217,7 +264,6 @@ export default function SearchPage() {
           </div>
         </div>
 
-        {/* 2-tab segmented control */}
         <div style={{ marginTop: 8 }}>
           <div className="glass" style={{ display: 'flex', borderRadius: 14, padding: 3, gap: 3 }}>
             {(['gjenstander', 'personer'] as const).map(t => (
@@ -241,41 +287,133 @@ export default function SearchPage() {
 
       <div style={{ maxWidth: 480, margin: '0 auto', padding: '12px 16px 0' }}>
 
-        {/* Date filter — gjenstander only */}
+        {/* ── FILTER PANEL — gjenstander only ── */}
         {tab === 'gjenstander' && (
           <div className="glass" style={{ borderRadius: 16, padding: '12px 14px', marginBottom: 12 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Fra</label>
-                <input
-                  type="date"
-                  value={dateRange.from}
-                  onChange={e => handleDateChange('from', e.target.value)}
-                  min={today}
-                  className="glass text-sm outline-none"
-                  style={{ borderRadius: 12, padding: '10px 12px', color: dateRange.from ? 'var(--terra-dark)' : 'var(--terra-mid)' }}
-                />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <label className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--terra-mid)' }}>Til</label>
-                <input
-                  type="date"
-                  value={dateRange.to}
-                  onChange={e => handleDateChange('to', e.target.value)}
-                  min={dateRange.from || today}
-                  className="glass text-sm outline-none"
-                  style={{ borderRadius: 12, padding: '10px 12px', color: dateRange.to ? 'var(--terra-dark)' : 'var(--terra-mid)' }}
-                />
-              </div>
+
+            {/* Kategori */}
+            <div style={scrollRow}>
+              {CATEGORY_TABS.map(cat => (
+                <button
+                  key={cat.id}
+                  onClick={() => handleCatChange(cat.id)}
+                  style={{ ...pillBase, ...(activeCat === cat.id ? pillActive : {}) }}
+                >
+                  {cat.label}
+                </button>
+              ))}
             </div>
-            {hasDateFilter && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
-                <span className="status-pill active" style={{ fontSize: 12 }}>
-                  ● {fd(dateRange.from)}{dateRange.from !== dateRange.to ? ` → ${fd(dateRange.to)}` : ''}
-                </span>
-                <button onClick={clearDates} className="btn-glass btn-sm">Nullstill</button>
+
+            {/* Underkategori */}
+            {showSubcats && (
+              <div style={{ ...scrollRow, marginTop: 8 }}>
+                {SUBCATEGORIES[activeCat].map(sub => (
+                  <button
+                    key={sub}
+                    onClick={() => setActiveSub(activeSub === sub ? null : sub)}
+                    style={{ ...subPillBase, ...(activeSub === sub ? subPillActive : {}) }}
+                  >
+                    {sub}
+                  </button>
+                ))}
               </div>
             )}
+
+            {/* Alder — baby */}
+            {showAgeFilter && (
+              <>
+                <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--terra-mid)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '10px 0 6px' }}>Alder</p>
+                <div style={scrollRow}>
+                  {AGE_GROUPS.map(a => (
+                    <button
+                      key={a}
+                      onClick={() => setActiveAge(activeAge === a ? null : a)}
+                      style={{ ...subPillBase, ...(activeAge === a ? subPillActive : {}) }}
+                    >
+                      {a}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Kjønn + størrelse — antrekk */}
+            {showSizeFilter && (
+              <>
+                <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--terra-mid)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '10px 0 6px' }}>Størrelse</p>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                  {(['dame', 'herre', 'barn'] as const).map(g => (
+                    <button
+                      key={g}
+                      onClick={() => { setActiveGender(activeGender === g ? null : g); setActiveSize(null) }}
+                      style={{
+                        flex: 1, padding: '6px 0', borderRadius: 10, border: '1px solid rgba(46,98,113,0.18)',
+                        fontSize: 13, cursor: 'pointer', transition: 'all 150ms ease',
+                        background: activeGender === g ? 'var(--terra)' : 'white',
+                        color: activeGender === g ? 'white' : 'var(--terra-mid)',
+                      }}
+                    >
+                      {g.charAt(0).toUpperCase() + g.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                <div style={scrollRow}>
+                  {sizeOptions.map(s => (
+                    <button
+                      key={s}
+                      onClick={() => setActiveSize(activeSize === s ? null : s)}
+                      style={{ ...subPillBase, ...(activeSize === s ? subPillActive : {}) }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Farge */}
+            {showColorFilter && (
+              <>
+                <p style={{ fontSize: 11, fontWeight: 500, color: 'var(--terra-mid)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '10px 0 6px' }}>Farge</p>
+                <div style={scrollRow}>
+                  {COLORS.map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setActiveColor(activeColor === c ? null : c)}
+                      title={c}
+                      style={{
+                        width: 28, height: 28, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
+                        border: activeColor === c ? '2.5px solid var(--terra)' : '2px solid rgba(0,0,0,0.10)',
+                        background: COLOR_MAP[c] ?? '#ccc',
+                        outline: activeColor === c ? '2px solid rgba(46,98,113,0.25)' : 'none',
+                        outlineOffset: 1,
+                      }}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Ledig nå toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(46,98,113,0.10)' }}>
+              <span style={{ fontSize: 13, color: 'var(--terra-dark)' }}>Bare ledige gjenstander</span>
+              <button
+                onClick={() => setAvailableOnly(v => !v)}
+                style={{
+                  width: 44, height: 26, borderRadius: 13, border: 'none', cursor: 'pointer',
+                  background: availableOnly ? 'var(--terra)' : 'rgba(46,98,113,0.18)',
+                  position: 'relative', transition: 'background 200ms ease', flexShrink: 0,
+                }}
+                aria-pressed={availableOnly}
+                aria-label="Bare ledige gjenstander"
+              >
+                <span style={{
+                  position: 'absolute', top: 3, left: availableOnly ? 21 : 3,
+                  width: 20, height: 20, borderRadius: '50%', background: 'white',
+                  transition: 'left 200ms ease', boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                }} />
+              </button>
+            </div>
           </div>
         )}
 
@@ -286,42 +424,45 @@ export default function SearchPage() {
         {/* ── GJENSTANDER ── */}
         {!loading && tab === 'gjenstander' && (
           <>
-            {sortedItems.length === 0 ? (
+            {filteredItems.length === 0 ? (
               <p style={{ color: 'var(--terra-mid)', fontSize: 14, textAlign: 'center', padding: '32px 0' }}>
                 Ingen gjenstander funnet
               </p>
             ) : (
               <>
                 <p style={{ color: 'var(--terra-mid)', fontSize: 12, marginBottom: 8 }}>
-                  {sortedItems.length} gjenstander
-                  {hasDateFilter && ` · ${sortedItems.filter(i => !unavailableIds.has(i.id)).length} ledige i perioden`}
+                  {filteredItems.length} gjenstander
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {sortedItems.map(item => {
-                    const isUnavailable = hasDateFilter && unavailableIds.has(item.id)
+                  {filteredItems.map(item => {
                     const isOwn = item.owner_id === currentUserId
                     const isConnected = !isOwn && (
                       item.owner_id === connectedProfileId ||
                       item.connected_profile_id === currentUserId
                     )
+                    const occupiedUntil = activeLoanMap[item.id]
+                    const isCurrentlyUnavailable = !item.available && !!occupiedUntil
 
                     return (
                       <div
                         key={item.id}
                         onClick={() => router.push(`/items/${item.id}`)}
-                        style={{ ...rowStyle, opacity: isUnavailable ? 0.45 : 1 }}
-                        onMouseEnter={e => { if (!isUnavailable) (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(26,37,48,0.10)' }}
+                        style={rowStyle}
+                        onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(26,37,48,0.10)'}
                         onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}
                       >
                         <div style={{ position: 'relative', flexShrink: 0 }}>
                           {item.image_url ? (
-                            <img src={item.image_url} style={{ width: thumbnailSize, height: thumbnailSize, borderRadius: 10, objectFit: 'cover', display: 'block' }} alt={item.name} />
+                            <img src={item.image_url} style={{ width: 48, height: 48, borderRadius: 10, objectFit: 'cover', display: 'block' }} alt={item.name} />
                           ) : (
-                            <div style={{ width: thumbnailSize, height: thumbnailSize, borderRadius: 10, background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>📦</div>
+                            <div style={{ width: 48, height: 48, borderRadius: 10, background: 'rgba(46,98,113,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>📦</div>
                           )}
-                          {!hasDateFilter && (
-                            <span style={{ position: 'absolute', bottom: 2, right: 2, width: 9, height: 9, borderRadius: '50%', border: '2px solid white', background: item.available ? '#4A7C59' : 'var(--terra)' }} />
-                          )}
+                          <span style={{
+                            position: 'absolute', bottom: 2, right: 2,
+                            width: 9, height: 9, borderRadius: '50%',
+                            border: '2px solid white',
+                            background: item.available ? '#4A7C59' : 'var(--terra)',
+                          }} />
                         </div>
 
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -340,13 +481,18 @@ export default function SearchPage() {
                             {item.profiles?.name ?? 'Ukjent'}
                             {item.category ? ` · ${getCategoryLabel(item.category)}` : ''}
                           </p>
-                          {isUnavailable && (
+                          {/* Availability status line */}
+                          {item.available ? (
+                            <p style={{ fontSize: 11, color: '#4A7C59', marginTop: 3, fontWeight: 500 }}>● Ledig nå</p>
+                          ) : isCurrentlyUnavailable ? (
                             <p style={{ fontSize: 11, color: 'var(--terra)', marginTop: 3, fontWeight: 500 }}>
-                              Opptatt i denne perioden
+                              ● Opptatt til {fd(occupiedUntil)}
                             </p>
+                          ) : (
+                            <p style={{ fontSize: 11, color: 'var(--terra-mid)', marginTop: 3 }}>Ikke tilgjengelig</p>
                           )}
-                          {!isUnavailable && item.v_item_min_price?.min_price > 0 && (
-                            <p style={{ fontSize: 11, color: 'var(--terra)', marginTop: 3, fontWeight: 500 }}>
+                          {item.v_item_min_price?.min_price > 0 && (
+                            <p style={{ fontSize: 11, color: 'var(--terra)', marginTop: 2, fontWeight: 500 }}>
                               fra {item.v_item_min_price.min_price} kr{' '}
                               {item.v_item_min_price.min_price_type === 'per_week'  ? '/ uke'  :
                                item.v_item_min_price.min_price_type === 'per_month' ? '/ mnd'  :
@@ -384,9 +530,9 @@ export default function SearchPage() {
                     onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}
                   >
                     {p.avatar_url ? (
-                      <img src={p.avatar_url} style={{ width: thumbnailSize, height: thumbnailSize, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt={p.name} />
+                      <img src={p.avatar_url} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt={p.name} />
                     ) : (
-                      <div style={{ width: thumbnailSize, height: thumbnailSize, borderRadius: '50%', background: 'rgba(46,98,113,0.12)', border: '1px solid rgba(46,98,113,0.20)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: 'var(--terra)', flexShrink: 0 }}>
+                      <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(46,98,113,0.12)', border: '1px solid rgba(46,98,113,0.20)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: 'var(--terra)', flexShrink: 0 }}>
                         {(p.name ?? '?')[0].toUpperCase()}
                       </div>
                     )}

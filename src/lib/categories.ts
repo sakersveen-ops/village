@@ -1,4 +1,3 @@
-// Path of this file: src/lib/categories.ts
 /**
  * Village — Master kategoridefinisjon
  * Importer herfra overalt. Aldri hardkod kategori-strenger.
@@ -24,11 +23,11 @@ export type Category = {
   label: string
   gradient: string
   subcategories: { id: string; label: string }[]
-  hasAge?: boolean      // barn
-  hasSize?: boolean     // antrekk
-  hasColor?: boolean    // barn + antrekk
-  hasGenre?: boolean    // bøker
-  subcategoryHint?: string // vises under underkategori-pillene
+  hasAge?: boolean
+  hasSize?: boolean
+  hasColor?: boolean
+  hasGenre?: boolean
+  subcategoryHint?: string
 }
 
 // ─── Toppnivå-kategorier ─────────────────────────────────────────────────────
@@ -115,16 +114,16 @@ export function getCategoryGradient(id: string): string {
 
 /** Mapper gamle DB-verdier til nye kategori-IDer */
 export const LEGACY_CATEGORY_MAP: Record<string, string> = {
-  'barn':     'baby-og-barn',
-  'kjole':    'klar-og-mote',
-  'verktøy':  'annet',
-  'bok':      'boker',
-  'annet':    'annet',
+  'barn':        'baby-og-barn',
+  'kjole':       'klar-og-mote',
+  'verktøy':     'annet',
+  'bok':         'boker',
+  'annet':       'annet',
   'elektronikk': 'annet',
-  'sport':    'annet',
-  'hage':     'annet',
-  'kjøkken':  'annet',
-  'klær':     'klar-og-mote',
+  'sport':       'annet',
+  'hage':        'annet',
+  'kjøkken':     'annet',
+  'klær':        'klar-og-mote',
 }
 
 export function normalizeCategory(cat: string): string {
@@ -153,6 +152,8 @@ export const AGE_GROUPS: { id: AgeGroup; label: string }[] = [
 ]
 
 // ─── Farger (barn + antrekk) ──────────────────────────────────────────────────
+// NB: ingen conic-gradient eller egendefinerte hex-farger her.
+// Flerfarget rendres som statisk gradient-boble direkte i add/page.tsx og search/page.tsx.
 
 export const COLORS: { id: string; label: string; hex: string; border?: string }[] = [
   { id: 'hvit',      label: 'Hvit',      hex: '#ffffff', border: '#ccc' },
@@ -164,5 +165,5 @@ export const COLORS: { id: string; label: string; hex: string; border?: string }
   { id: 'rosa',      label: 'Rosa',      hex: '#e07ba0' },
   { id: 'gul',       label: 'Gul',       hex: '#f0c040' },
   { id: 'beige',     label: 'Beige',     hex: '#C4A882' },
-  { id: 'flerfarge', label: 'Flerfarge', hex: 'conic-gradient(red,yellow,green,blue,red)' },
+  { id: 'flerfarget',label: 'Flerfarget',hex: 'STATIC'  },
 ]

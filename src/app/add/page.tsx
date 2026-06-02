@@ -1378,53 +1378,47 @@ Returner KUN JSON, ingen annen tekst.` }
                       onClick={() => setColor(c.id === color ? '' : c.id)}
                       title={c.label}
                       style={{
-                        width: 30, height: 30,
-                        borderRadius: '50%',
-                        background: c.hex,
+                        width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                        background: c.hex === 'STATIC'
+                          ? 'linear-gradient(135deg, #e74c3c 0%, #f39c12 22%, #2ecc71 44%, #3498db 66%, #9b59b6 88%, #e74c3c 100%)'
+                          : c.hex,
                         border: color === c.id ? '2.5px solid var(--terra)' : `2px solid ${c.border || 'transparent'}`,
                         transform: color === c.id ? 'scale(1.15)' : 'scale(1)',
                         transition: 'transform 0.15s',
                         outline: c.id === 'hvit' ? '0.5px solid #ddd' : 'none',
-                        flexShrink: 0,
-                      }}
-                    />
+                        position: 'relative',
+                        cursor: 'pointer',
+                      }}>
+                      {color === c.id && (
+                        <span style={{
+                          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+                          justifyContent: 'center', borderRadius: '50%',
+                          background: 'rgba(0,0,0,0.3)', color: 'white', fontSize: 13, lineHeight: 1,
+                        }}>×</span>
+                      )}
+                    </button>
                   ))}
-                  {/* Velg egendefinert farge — pipette-ikon */}
-                  <label
-                    title="Velg farge"
+                  <button
+                    onClick={() => setColor(color === 'flerfarget' ? '' : 'flerfarget')}
+                    title="Flerfarget"
                     style={{
                       width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-                      background: color.startsWith('#') ? color : 'white',
-                      border: color.startsWith('#') ? '2.5px solid var(--terra)' : '1.5px dashed rgba(46,98,113,0.4)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      cursor: 'pointer', position: 'relative', overflow: 'hidden',
-                      transform: color.startsWith('#') ? 'scale(1.15)' : 'scale(1)',
+                      background: 'linear-gradient(135deg, #e74c3c 0%, #f39c12 22%, #2ecc71 44%, #3498db 66%, #9b59b6 88%, #e74c3c 100%)',
+                      border: color === 'flerfarget' ? '2.5px solid var(--terra)' : '2px solid transparent',
+                      transform: color === 'flerfarget' ? 'scale(1.15)' : 'scale(1)',
                       transition: 'transform 0.15s',
+                      position: 'relative',
+                      cursor: 'pointer',
                     }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                      stroke={color.startsWith('#') ? 'white' : 'var(--terra-mid)'}
-                      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-                      style={{ position: 'relative', zIndex: 1, pointerEvents: 'none' }}>
-                      <path d="M12 2a7 7 0 0 1 7 7c0 4-7 13-7 13S5 13 5 9a7 7 0 0 1 7-7z"/>
-                      <circle cx="12" cy="9" r="2.5" fill={color.startsWith('#') ? 'white' : 'var(--terra-mid)'} stroke="none"/>
-                    </svg>
-                    <input
-                      type="color"
-                      value={color.startsWith('#') ? color : '#2E6271'}
-                      onChange={e => setColor(e.target.value)}
-                      style={{
-                        position: 'absolute', inset: 0, opacity: 0,
-                        width: '100%', height: '100%', cursor: 'pointer', border: 'none', padding: 0,
-                      }}
-                    />
-                  </label>
+                    {color === 'flerfarget' && (
+                      <span style={{
+                        position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+                        justifyContent: 'center', borderRadius: '50%',
+                        background: 'rgba(0,0,0,0.3)', color: 'white', fontSize: 13, lineHeight: 1,
+                      }}>×</span>
+                    )}
+                  </button>
                 </div>
-                {color.startsWith('#') && (
-                  <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>
-                    Egendefinert farge: <span style={{ fontWeight: 600, color: 'var(--terra-dark)' }}>{color}</span>
-                    <button onClick={() => setColor('')} style={{ marginLeft: 8, color: 'var(--terra)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11 }}>Fjern</button>
-                  </p>
-                )}
               </div>
             )}
 

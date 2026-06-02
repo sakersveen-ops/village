@@ -380,15 +380,25 @@ export default function SearchPage() {
                     <button
                       key={c}
                       onClick={() => setActiveColor(activeColor === c ? null : c)}
-                      title={c}
+                      title={activeColor === c ? `Fjern ${c}` : c}
+                      aria-pressed={activeColor === c}
                       style={{
-                        width: 28, height: 28, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
+                        position: 'relative', width: 28, height: 28, borderRadius: '50%',
+                        flexShrink: 0, cursor: 'pointer',
                         border: activeColor === c ? '2.5px solid var(--terra)' : '2px solid rgba(0,0,0,0.10)',
                         background: COLOR_MAP[c] ?? '#ccc',
                         outline: activeColor === c ? '2px solid rgba(46,98,113,0.25)' : 'none',
                         outlineOffset: 1,
                       }}
-                    />
+                    >
+                      {activeColor === c && (
+                        <span style={{
+                          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+                          justifyContent: 'center', borderRadius: '50%',
+                          background: 'rgba(0,0,0,0.35)', color: 'white', fontSize: 13, lineHeight: 1,
+                        }}>×</span>
+                      )}
+                    </button>
                   ))}
                 </div>
               </>

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 
 const scenarios = [
   { emoji: '👗', name: 'Mia', text: 'Lånte kjole til bryllupet – sparte 3000 kr!' },
@@ -11,7 +12,7 @@ const scenarios = [
   { emoji: '🔧', name: 'Sara', text: 'Naboene deler verktøy. Ingen trenger å eie alt selv lenger.' },
 ]
 
-export default function LoginPage() {
+function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -19,6 +20,8 @@ export default function LoginPage() {
   const [resetSent, setResetSent] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const linkError = searchParams.get('error')
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -164,7 +167,12 @@ export default function LoginPage() {
               Opprett konto
             </a>
           </p>
-
+          
+        {linkError === 'link_expired' && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-3">
+          <p className="text-red-600 text-sm">Bekreftelseslenken er utløpt. Registrer deg på nytt.</p>
+        </div>)}
+        
           <form onSubmit={handleLogin} className="flex flex-col gap-3">
             <input
               type="email"
@@ -267,5 +275,14 @@ export default function LoginPage() {
 
       </div>
     </div>
+  )
+}
+import { Suspense } from 'react'
+
+export default function LoginPageWrapper() {
+  return (
+    <Suspense>
+      <LoginPage />
+    </Suspense>
   )
 }

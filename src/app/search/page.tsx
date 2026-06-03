@@ -32,7 +32,7 @@ const COLORS = ['Hvit','Grå','Svart','Blå','Grønn','Rød','Rosa','Gul','Beige
 const COLOR_MAP: Record<string, string> = {
   Hvit: '#F5F5F5', Grå: '#9E9E9E', Svart: '#212121', Blå: '#1565C0',
   Grønn: '#2E7D32', Rød: '#C62828', Rosa: '#E91E8C', Gul: '#F9A825',
-  Beige: '#C8A97C', Flerfarget: 'conic-gradient(red,yellow,green,blue,red)',
+  Beige: '#C8A97C', Flerfarget: 'linear-gradient(135deg, #e74c3c 0%, #f39c12 22%, #2ecc71 44%, #3498db 66%, #9b59b6 88%, #e74c3c 100%)',
 }
 
 function fd(d: string) {

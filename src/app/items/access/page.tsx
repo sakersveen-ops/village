@@ -20,7 +20,7 @@ const ACCESS_LEVELS = [
 const PRICE_TYPES = [
   { id: 'per_day',  label: 'per dag' },
   { id: 'per_week', label: 'per uke' },
-  { id: 'flat', label: 'engangsbeløp' },
+  { id: 'flat',     label: 'engangsbeløp' },
 ]
 
 const LEVEL_ORDER = ['close_friends', 'friends', 'friends_of_friends', 'community', 'public']
@@ -86,7 +86,6 @@ function AccessPageInner() {
   const [saveError, setSaveError]           = useState<string | null>(null)
   const [loading, setLoading]               = useState(true)
   const [draftName, setDraftName]           = useState<string | null>(null)
-  // Follow-up modal
   const [showFollowUp, setShowFollowUp]     = useState(false)
   const [savedItemId, setSavedItemId]       = useState<string | null>(null)
   const [ownedItems, setOwnedItems]         = useState<string[]>([])
@@ -100,7 +99,6 @@ function AccessPageInner() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      // Les draft — hvis ingen draft, send tilbake til add
       const raw = sessionStorage.getItem(DRAFT_KEY)
       if (!raw) { router.push('/add'); return }
 
@@ -110,7 +108,6 @@ function AccessPageInner() {
 
       setDraftName(draft.name)
 
-      // Hent kretser brukeren er med i
       const { data: memberships } = await supabase
         .from('community_members')
         .select('communities(id, name, avatar_emoji)')
@@ -118,7 +115,6 @@ function AccessPageInner() {
         .eq('status', 'active')
       setCommunities((memberships || []).map((m: any) => m.communities))
 
-      // Hent allerede-listede gjenstander for follow-up modal
       const { data: myItems } = await supabase
         .from('items').select('name').eq('owner_id', user.id)
       setListedItems((myItems || []).map((i: any) => i.name))
@@ -134,10 +130,6 @@ function AccessPageInner() {
     load()
   }, [])
 
-  // ─── Hjelpefunksjoner ─────────────────────────────────────────────────────
-
-  // suggestedPrice: første pris satt på nære venner/venner/venners venner
-  // Brukes kun som placeholder i PriceRow — kopieres IKKE automatisk til andre nivåer
   const suggestedPrice = (() => {
     for (const id of ['close_friends', 'friends', 'friends_of_friends']) {
       const e = selectedLevels.find(l => l.access_type === id && !l.community_id)
@@ -151,11 +143,9 @@ function AccessPageInner() {
     if (idx === -1) return
     const isSelected = selectedLevels.some(l => l.access_type === levelId && !l.community_id)
     if (isSelected) {
-      // Fjern dette nivået og alle lavere
       const toRemove = LEVEL_ORDER.slice(0, idx + 1)
       setSelectedLevels(prev => prev.filter(l => l.community_id || !toRemove.includes(l.access_type)))
     } else {
-      // Legg til dette nivået og alle høyere (inklusiv arv av tilgang, men IKKE pris)
       const toAdd = LEVEL_ORDER.slice(0, idx + 1)
       setSelectedLevels(prev => {
         const existing      = prev.filter(l => l.community_id)
@@ -163,7 +153,6 @@ function AccessPageInner() {
         const newEntries    = toAdd
           .filter(id => !namedExisting.some(l => l.access_type === id))
           .map(id => ({ access_type: id, price_type: 'per_day' as const }))
-          // NB: ingen price kopieres hit — kun tilgangs-arv, ikke pris-arv
         return [...namedExisting, ...newEntries, ...existing]
       })
     }
@@ -174,7 +163,6 @@ function AccessPageInner() {
     if (exists) {
       setSelectedLevels(prev => prev.filter(l => l.community_id !== communityId))
     } else {
-      // Ny community-entry starter helt tom — ingen pris, standard price_type
       setSelectedLevels(prev => [...prev, {
         access_type: 'community',
         community_id: communityId,
@@ -202,7 +190,6 @@ function AccessPageInner() {
   const updateAllCommunitiesPriceType = (val: string) =>
     setSelectedLevels(prev => prev.map(l => l.community_id ? { ...l, price_type: val } : l))
 
-  // ─── Lagre: les draft → insert item → insert access → rydd opp ───────────
   const save = async () => {
     setSaving(true)
     setSaveError(null)
@@ -212,36 +199,32 @@ function AccessPageInner() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Ikke innlogget')
 
-      // Les draft
       const raw = sessionStorage.getItem(DRAFT_KEY)
       if (!raw) throw new Error('Ingen draft funnet')
       const draft = JSON.parse(raw)
 
-      // Last opp bilde om brukeren har valgt eget bilde
       let image_url = ''
       if (draft.selectedImageSrc === 'suggested' && draft.suggestedImageUrl) {
         image_url = draft.suggestedImageUrl
       } else if (draft.imagePreviews?.[0]) {
-        // imagePreviews[0] er allerede en Storage URL — bruk direkte
         image_url = draft.imagePreviews[0]
       }
 
-      // Insert item
       const { data: item, error: itemError } = await supabase
         .from('items')
         .insert({
-          owner_id:    user.id,
-          name:        draft.name,
-          description: draft.description || null,
-          category:    draft.categoryId,
-          subcategory: draft.subcategoryIds?.[0] || null,
+          owner_id:      user.id,
+          name:          draft.name,
+          description:   draft.description || null,
+          category:      draft.categoryId,
+          subcategory:   draft.subcategoryIds?.[0] || null,
           subcategories: draft.subcategoryIds || [],
-          image_url:   image_url || null,
-          available:   true,
-          location:    draft.location || null,
-          color:       draft.color || null,
-          size:        draft.size || null,
-          age_ranges:  draft.ageRanges || [],
+          image_url:     image_url || null,
+          available:     true,
+          location:      draft.location || null,
+          color:         draft.color || null,
+          size:          draft.size || null,
+          age_ranges:    draft.ageRanges || [],
         })
         .select()
         .single()
@@ -251,7 +234,6 @@ function AccessPageInner() {
         throw new Error('Kunne ikke lagre gjenstanden')
       }
 
-      // Insert access-regler
       const communitySelected = selectedLevels.some(l => l.access_type === 'community' && !l.community_id)
       const rows: any[] = selectedLevels
         .filter(l => !(l.access_type === 'community' && !l.community_id && allCommunities))
@@ -275,11 +257,9 @@ function AccessPageInner() {
         has_price:    selectedLevels.some(l => !!l.price),
       })
 
-      // Slett draft — gjenstanden er nå lagret
       sessionStorage.removeItem(DRAFT_KEY)
       setSavedItemId(item.id)
 
-      // Vis follow-up modal om brukeren har ulistede gjenstander fra onboarding
       const remaining = ownedItems.filter(i => !listedItems.includes(i))
       if (remaining.length > 0 || ownedItems.length > 0) {
         setSaving(false)
@@ -294,16 +274,9 @@ function AccessPageInner() {
     }
   }
 
-  const skip = () => {
-    // Hopp over tilgangsstyring — insert item med kun draft, ingen access-regler
-    // Brukeren kan sette tilgang fra gjenstandssiden senere
-    save() // Kaller save() som inserter item — access-regler blir bare tomme
-  }
+  const skip = () => { save() }
 
-  const goBack = () => {
-    // Draft er intakt i sessionStorage — brukeren kommer tilbake til utfylt skjema
-    router.push('/add')
-  }
+  const goBack = () => { router.push('/add') }
 
   if (loading) return (
     <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
@@ -517,9 +490,9 @@ function AccessPageInner() {
             setShowFollowUp(false)
             router.push(`/items/${savedItemId}`)
           }}
-          onSelectItems={(name) => {
+          onSelectItems={(items) => {
             setShowFollowUp(false)
-            router.push(`/add?name=${encodeURIComponent(name)}`)
+            router.push(`/add?name=${encodeURIComponent(items[0]?.name ?? '')}`)
           }}
         />
       )}

@@ -103,13 +103,11 @@ export default function NavBar() {
     if (!user) { setHasUser(false); return undefined }
     setHasUser(true)
 
-    const ACTION_TYPES = ['friend_request', 'connection_request', 'join_request']
     const { count } = await supabase
       .from('notifications')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .eq('read', false)
-      .in('type', ACTION_TYPES)
 
     setUnread(count || 0)
     return user.id

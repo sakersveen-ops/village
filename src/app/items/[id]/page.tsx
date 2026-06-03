@@ -645,20 +645,12 @@ export default function ItemPage() {
                     </div>
                   ) : (
                     <div className="flex gap-2">
-                      <button onClick={() => respondToLoan(l.id, true)} className="btn-sm btn-accept flex-1">
+                     <button onClick={() => respondToLoan(l.id, true)} className="btn-sm btn-accept flex-1"
+                        style={{ background: '#4A7C59', color: 'white', border: 'none', borderRadius: 10, padding: '10px 0', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
                         ✓ Godta
                       </button>
-                      <button
-                        onClick={() => {
-                          setProposalLoanId(l.id)
-                          setTimeout(() => {
-                            document.getElementById(`proposal-${l.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                          }, 80)
-                        }}
-                        className="btn-glass btn-sm flex-1">
-                        Foreslå endring
-                      </button>
-                      <button onClick={() => respondToLoan(l.id, false)} className="btn-sm btn-decline flex-1">
+                      <button onClick={() => respondToLoan(l.id, false)} className="btn-sm btn-decline flex-1"
+                        style={{ background: 'rgba(196,103,58,0.1)', color: 'var(--terra)', border: '1px solid rgba(196,103,58,0.3)', borderRadius: 10, padding: '10px 0', fontWeight: 500, cursor: 'pointer', fontSize: 14 }}>
                         Avslå
                       </button>
                     </div>

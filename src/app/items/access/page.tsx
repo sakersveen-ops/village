@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Suspense } from 'react'
 import { track } from '@/lib/track'
 import FirstTimeAddItemModal from '@/components/FirstTimeAddItemModal'
@@ -18,10 +18,9 @@ const ACCESS_LEVELS = [
 ]
 
 const PRICE_TYPES = [
-  { id: 'per_day',   label: 'per dag' },
-  { id: 'per_week',  label: 'per uke' },
-  { id: 'per_month', label: 'per måned' },
-  { id: 'flat',      label: 'engangsbeløp' },
+  { id: 'per_day',  label: 'per dag' },
+  { id: 'per_week', label: 'per uke' },
+  { id: 'flat', label: 'engangsbeløp' },
 ]
 
 const LEVEL_ORDER = ['close_friends', 'friends', 'friends_of_friends', 'community', 'public']
@@ -77,11 +76,6 @@ function PriceRow({ price, priceType, onPriceChange, onTypeChange, placeholder }
 }
 
 function AccessPageInner() {
-  const searchParams = useSearchParams()
-  // editItemId is set when navigating from an existing item's page (?item=<id>)
-  const editItemId = searchParams.get('item')
-  const isEditMode = !!editItemId
-
   const [communities, setCommunities]       = useState<any[]>([])
   const [selectedLevels, setSelectedLevels] = useState<AccessEntry[]>([
     { access_type: 'close_friends', price_type: 'per_day' },
@@ -92,12 +86,11 @@ function AccessPageInner() {
   const [saveError, setSaveError]           = useState<string | null>(null)
   const [loading, setLoading]               = useState(true)
   const [draftName, setDraftName]           = useState<string | null>(null)
-  // Follow-up modal (new-item flow only)
+  // Follow-up modal
   const [showFollowUp, setShowFollowUp]     = useState(false)
   const [savedItemId, setSavedItemId]       = useState<string | null>(null)
   const [ownedItems, setOwnedItems]         = useState<string[]>([])
   const [listedItems, setListedItems]       = useState<string[]>([])
-  const [hasCloseFriends, setHasCloseFriends] = useState(false)
 
   const router = useRouter()
 
@@ -107,68 +100,17 @@ function AccessPageInner() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
 
-      if (isEditMode) {
-        // ── Edit existing item ────────────────────────────────────────────
-        const { data: item } = await supabase
-          .from('items')
-          .select('id, name, owner_id')
-          .eq('id', editItemId)
-          .single()
+      // Les draft — hvis ingen draft, send tilbake til add
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      if (!raw) { router.push('/add'); return }
 
-        if (!item || item.owner_id !== user.id) {
-          router.back()
-          return
-        }
+      let draft: any = null
+      try { draft = JSON.parse(raw) } catch { router.push('/add'); return }
+      if (!draft?.name) { router.push('/add'); return }
 
-        setDraftName(item.name)
-        setSavedItemId(item.id)
+      setDraftName(draft.name)
 
-        // Load existing access rules
-        const { data: existingAccess } = await supabase
-          .from('item_access')
-          .select('access_type, community_id, price, price_type')
-          .eq('item_id', editItemId)
-
-        if (existingAccess && existingAccess.length > 0) {
-          setSelectedLevels(
-            existingAccess.map((r: any) => ({
-              access_type:  r.access_type,
-              community_id: r.community_id ?? undefined,
-              price:        r.price ?? undefined,
-              price_type:   r.price_type || 'per_day',
-            }))
-          )
-        } else {
-          // No access rows yet — default to friends
-          setSelectedLevels([{ access_type: 'friends', price_type: 'per_day' }])
-        }
-
-        track('access_page_viewed', { mode: 'edit', item_id: editItemId })
-      } else {
-        // ── New item from draft ───────────────────────────────────────────
-        const raw = sessionStorage.getItem(DRAFT_KEY)
-        if (!raw) { router.push('/add'); return }
-
-        let draft: any = null
-        try { draft = JSON.parse(raw) } catch { router.push('/add'); return }
-        if (!draft?.name) { router.push('/add'); return }
-
-        setDraftName(draft.name)
-
-        // Hent allerede-listede gjenstander for follow-up modal
-        const { data: myItems } = await supabase
-          .from('items').select('name').eq('owner_id', user.id)
-        setListedItems((myItems || []).map((i: any) => i.name))
-
-        try {
-          const raw = localStorage.getItem('village_owned_items')
-          if (raw) setOwnedItems(JSON.parse(raw))
-        } catch { /* ignore */ }
-
-        track('access_page_viewed', { mode: 'new' })
-      }
-
-      // Shared: fetch communities + close friends
+      // Hent kretser brukeren er med i
       const { data: memberships } = await supabase
         .from('community_members')
         .select('communities(id, name, avatar_emoji)')
@@ -176,27 +118,44 @@ function AccessPageInner() {
         .eq('status', 'active')
       setCommunities((memberships || []).map((m: any) => m.communities))
 
-      const { count } = await supabase
-        .from('close_friends')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-      setHasCloseFriends((count ?? 0) > 0)
+      // Hent allerede-listede gjenstander for follow-up modal
+      const { data: myItems } = await supabase
+        .from('items').select('name').eq('owner_id', user.id)
+      setListedItems((myItems || []).map((i: any) => i.name))
 
+      try {
+        const raw = localStorage.getItem('village_owned_items')
+        if (raw) setOwnedItems(JSON.parse(raw))
+      } catch { /* ignore */ }
+
+      track('access_page_viewed', { mode: 'new' })
       setLoading(false)
     }
     load()
-  }, [editItemId])
+  }, [])
 
   // ─── Hjelpefunksjoner ─────────────────────────────────────────────────────
+
+  // suggestedPrice: første pris satt på nære venner/venner/venners venner
+  // Brukes kun som placeholder i PriceRow — kopieres IKKE automatisk til andre nivåer
+  const suggestedPrice = (() => {
+    for (const id of ['close_friends', 'friends', 'friends_of_friends']) {
+      const e = selectedLevels.find(l => l.access_type === id && !l.community_id)
+      if (e?.price) return { price: e.price, price_type: e.price_type }
+    }
+    return null
+  })()
 
   const toggleNamedLevel = (levelId: string) => {
     const idx = LEVEL_ORDER.indexOf(levelId)
     if (idx === -1) return
     const isSelected = selectedLevels.some(l => l.access_type === levelId && !l.community_id)
     if (isSelected) {
+      // Fjern dette nivået og alle lavere
       const toRemove = LEVEL_ORDER.slice(0, idx + 1)
       setSelectedLevels(prev => prev.filter(l => l.community_id || !toRemove.includes(l.access_type)))
     } else {
+      // Legg til dette nivået og alle høyere (inklusiv arv av tilgang, men IKKE pris)
       const toAdd = LEVEL_ORDER.slice(0, idx + 1)
       setSelectedLevels(prev => {
         const existing      = prev.filter(l => l.community_id)
@@ -204,6 +163,7 @@ function AccessPageInner() {
         const newEntries    = toAdd
           .filter(id => !namedExisting.some(l => l.access_type === id))
           .map(id => ({ access_type: id, price_type: 'per_day' as const }))
+          // NB: ingen price kopieres hit — kun tilgangs-arv, ikke pris-arv
         return [...namedExisting, ...newEntries, ...existing]
       })
     }
@@ -214,6 +174,7 @@ function AccessPageInner() {
     if (exists) {
       setSelectedLevels(prev => prev.filter(l => l.community_id !== communityId))
     } else {
+      // Ny community-entry starter helt tom — ingen pris, standard price_type
       setSelectedLevels(prev => [...prev, {
         access_type: 'community',
         community_id: communityId,
@@ -241,7 +202,7 @@ function AccessPageInner() {
   const updateAllCommunitiesPriceType = (val: string) =>
     setSelectedLevels(prev => prev.map(l => l.community_id ? { ...l, price_type: val } : l))
 
-  // ─── Lagre ───────────────────────────────────────────────────────────────
+  // ─── Lagre: les draft → insert item → insert access → rydd opp ───────────
   const save = async () => {
     setSaving(true)
     setSaveError(null)
@@ -251,101 +212,80 @@ function AccessPageInner() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Ikke innlogget')
 
-      if (isEditMode) {
-        // ── Update existing item's access rules ───────────────────────────
-        // Delete old rows, insert new ones
-        await supabase.from('item_access').delete().eq('item_id', editItemId)
+      // Les draft
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      if (!raw) throw new Error('Ingen draft funnet')
+      const draft = JSON.parse(raw)
 
-        const rows: any[] = selectedLevels
-          .filter(l => !(l.access_type === 'community' && !l.community_id && allCommunities))
-          .map(l => ({
-            item_id:      editItemId,
-            access_type:  l.access_type,
-            community_id: l.community_id || null,
-            price:        l.price || null,
-            price_type:   l.price_type,
-          }))
+      // Last opp bilde om brukeren har valgt eget bilde
+      let image_url = ''
+      if (draft.selectedImageSrc === 'suggested' && draft.suggestedImageUrl) {
+        image_url = draft.suggestedImageUrl
+      } else if (draft.imagePreviews?.[0]) {
+        // imagePreviews[0] er allerede en Storage URL — bruk direkte
+        image_url = draft.imagePreviews[0]
+      }
 
-        if (rows.length > 0) {
-          const { error: accessError } = await supabase.from('item_access').insert(rows)
-          if (accessError) throw accessError
-        }
-
-        track('item_access_updated', {
-          item_id:      editItemId,
-          access_types: selectedLevels.map(l => l.access_type),
-          has_price:    selectedLevels.some(l => !!l.price),
+      // Insert item
+      const { data: item, error: itemError } = await supabase
+        .from('items')
+        .insert({
+          owner_id:    user.id,
+          name:        draft.name,
+          description: draft.description || null,
+          category:    draft.categoryId,
+          subcategory: draft.subcategoryIds?.[0] || null,
+          subcategories: draft.subcategoryIds || [],
+          image_url:   image_url || null,
+          available:   true,
+          location:    draft.location || null,
+          color:       draft.color || null,
+          size:        draft.size || null,
+          age_ranges:  draft.ageRanges || [],
         })
+        .select()
+        .single()
 
-        router.back()
-      } else {
-        // ── New item from draft ───────────────────────────────────────────
-        const raw = sessionStorage.getItem(DRAFT_KEY)
-        if (!raw) throw new Error('Ingen draft funnet')
-        const draft = JSON.parse(raw)
+      if (itemError || !item?.id) {
+        console.error('Item insert failed:', JSON.stringify(itemError))
+        throw new Error('Kunne ikke lagre gjenstanden')
+      }
 
-        let image_url: string | null = null
-        if (draft.selectedImageSrc === 'suggested' && draft.suggestedImageUrl) {
-          image_url = draft.suggestedImageUrl
-        } else if (draft.imagePreviews?.[0]) {
-          image_url = draft.imagePreviews[0]
-        }
-
-        const { data: item, error: itemError } = await supabase
-          .from('items')
-          .insert({
-            owner_id:    user.id,
-            name:        draft.name,
-            description: draft.description || null,
-            category:      draft.categoryId,
-            subcategories: draft.subcategoryIds || [],
-            image_url:   image_url || null,
-            available:   true,
-            location:    draft.location || null,
-            color:       draft.color || null,
-            size:        draft.size || null,
-            age_ranges:  draft.ageRanges || [],
-          })
-          .select()
-          .single()
-
-        if (itemError || !item?.id) {
-          console.error('Item insert failed:', JSON.stringify(itemError))
-          throw new Error('Kunne ikke lagre gjenstanden')
-        }
-
-        const rows: any[] = selectedLevels
-          .filter(l => !(l.access_type === 'community' && !l.community_id && allCommunities))
-          .map(l => ({
-            item_id:      item.id,
-            access_type:  l.access_type,
-            community_id: l.community_id || null,
-            price:        l.price || null,
-            price_type:   l.price_type,
-          }))
-
-        if (rows.length > 0) {
-          const { error: accessError } = await supabase.from('item_access').insert(rows)
-          if (accessError) throw accessError
-        }
-
-        track('item_published', {
+      // Insert access-regler
+      const communitySelected = selectedLevels.some(l => l.access_type === 'community' && !l.community_id)
+      const rows: any[] = selectedLevels
+        .filter(l => !(l.access_type === 'community' && !l.community_id && allCommunities))
+        .map(l => ({
           item_id:      item.id,
-          category:     draft.categoryId,
-          access_types: selectedLevels.map(l => l.access_type),
-          has_price:    selectedLevels.some(l => !!l.price),
-        })
+          access_type:  l.access_type,
+          community_id: l.community_id || null,
+          price:        l.price || null,
+          price_type:   l.price_type,
+        }))
 
-        sessionStorage.removeItem(DRAFT_KEY)
-        setSavedItemId(item.id)
+      if (rows.length > 0) {
+        const { error: accessError } = await supabase.from('item_access').insert(rows)
+        if (accessError) throw accessError
+      }
 
-        const remaining = ownedItems.filter(i => !listedItems.includes(i))
-        if (remaining.length > 0 || ownedItems.length > 0) {
-          setSaving(false)
-          setShowFollowUp(true)
-        } else {
-          router.push(`/items/${item.id}`)
-        }
+      track('item_published', {
+        item_id:      item.id,
+        category:     draft.categoryId,
+        access_types: selectedLevels.map(l => l.access_type),
+        has_price:    selectedLevels.some(l => !!l.price),
+      })
+
+      // Slett draft — gjenstanden er nå lagret
+      sessionStorage.removeItem(DRAFT_KEY)
+      setSavedItemId(item.id)
+
+      // Vis follow-up modal om brukeren har ulistede gjenstander fra onboarding
+      const remaining = ownedItems.filter(i => !listedItems.includes(i))
+      if (remaining.length > 0 || ownedItems.length > 0) {
+        setSaving(false)
+        setShowFollowUp(true)
+      } else {
+        router.push(`/items/${item.id}`)
       }
     } catch (err: any) {
       console.error('Save error:', err)
@@ -355,12 +295,14 @@ function AccessPageInner() {
   }
 
   const skip = () => {
-    // Only available in new-item mode
-    save()
+    // Hopp over tilgangsstyring — insert item med kun draft, ingen access-regler
+    // Brukeren kan sette tilgang fra gjenstandssiden senere
+    save() // Kaller save() som inserter item — access-regler blir bare tomme
   }
 
   const goBack = () => {
-    router.back()
+    // Draft er intakt i sessionStorage — brukeren kommer tilbake til utfylt skjema
+    router.push('/add')
   }
 
   if (loading) return (
@@ -370,7 +312,7 @@ function AccessPageInner() {
   const communitySelected  = selectedLevels.some(l => l.access_type === 'community' && !l.community_id)
   const highestSelectedIdx = LEVEL_ORDER.reduce((max, id, i) =>
     selectedLevels.some(l => l.access_type === id && !l.community_id) ? i : max, -1)
-  const namedLevels = ACCESS_LEVELS.filter(l => l.id !== 'community' && l.id !== 'public' && (l.id !== 'close_friends' || hasCloseFriends))
+  const namedLevels = ACCESS_LEVELS.filter(l => l.id !== 'community' && l.id !== 'public')
 
   return (
     <div className="max-w-lg mx-auto pb-48">
@@ -432,6 +374,7 @@ function AccessPageInner() {
                   priceType={entry?.price_type || 'per_day'}
                   onPriceChange={val => updatePrice(level.id, undefined, val)}
                   onTypeChange={val => updatePriceType(level.id, undefined, val)}
+                  placeholder={suggestedPrice && !entry?.price ? `${suggestedPrice.price}` : undefined}
                 />
               )}
             </div>
@@ -469,6 +412,7 @@ function AccessPageInner() {
                   priceType={selectedLevels.find(l => l.community_id)?.price_type || 'per_day'}
                   onPriceChange={val => updateAllCommunitiesPrice(val)}
                   onTypeChange={val => updateAllCommunitiesPriceType(val)}
+                  placeholder={suggestedPrice ? `${suggestedPrice.price}` : undefined}
                 />
               )}
 
@@ -493,6 +437,7 @@ function AccessPageInner() {
                             priceType={cEntry?.price_type || 'per_day'}
                             onPriceChange={val => updatePrice('community', c.id, val)}
                             onTypeChange={val => updatePriceType('community', c.id, val)}
+                            placeholder={suggestedPrice ? `${suggestedPrice.price}` : undefined}
                           />
                         )}
                       </div>
@@ -532,6 +477,7 @@ function AccessPageInner() {
                   priceType={entry?.price_type || 'per_day'}
                   onPriceChange={val => updatePrice('public', undefined, val)}
                   onTypeChange={val => updatePriceType('public', undefined, val)}
+                  placeholder={suggestedPrice ? `${suggestedPrice.price}` : undefined}
                 />
               )}
             </div>
@@ -553,17 +499,15 @@ function AccessPageInner() {
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
         }}>
-        {!isEditMode && (
-          <button onClick={skip} disabled={saving} className="btn-glass flex-1 disabled:opacity-50">
-            Hopp over
-          </button>
-        )}
+        <button onClick={skip} disabled={saving} className="btn-glass flex-1 disabled:opacity-50">
+          Hopp over
+        </button>
         <button onClick={save} disabled={saving} className="btn-primary flex-grow disabled:opacity-50">
-          {saving ? 'Lagrer…' : isEditMode ? 'Oppdater tilgang' : 'Lagre tilgang'}
+          {saving ? 'Lagrer…' : 'Lagre tilgang'}
         </button>
       </div>
 
-      {/* Follow-up modal (new-item flow only) */}
+      {/* Follow-up modal */}
       {showFollowUp && savedItemId && (
         <FirstTimeAddItemModal
           ownedItems={ownedItems}
@@ -573,9 +517,9 @@ function AccessPageInner() {
             setShowFollowUp(false)
             router.push(`/items/${savedItemId}`)
           }}
-          onSelectItems={(items) => {
+          onSelectItem={(name) => {
             setShowFollowUp(false)
-            router.push(`/add?name=${encodeURIComponent(items[0]?.name ?? "")}`)  
+            router.push(`/add?name=${encodeURIComponent(name)}`)
           }}
         />
       )}

@@ -7,14 +7,13 @@ import Link from 'next/link'
 import { track, Events } from '@/lib/track'
 import { notifRefreshEvent } from '@/lib/events'
 
-// Types that require explicit action — never auto-read
 const ACTION_TYPES = new Set([
   'friend_request',
   'connection_request',
   'join_request',
+  'community_invite',
 ])
 
-// Types handled in message threads — filtered out at query level
 const MESSAGE_THREAD_TYPES = [
   'loan_request',
   'loan_change_proposal',
@@ -86,6 +85,12 @@ const NotifIcon = ({ type }: { type: string }) => {
       <rect x="7" y="12" width="8" height="7" rx="1" stroke="var(--terra)" strokeWidth="1.5"/>
     </svg>
   )
+  if (type === 'community_invite') return (
+    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+      <path d="M3 10.5L11 4l8 6.5V19a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z" stroke="var(--terra)" strokeWidth="1.5" strokeLinejoin="round"/>
+      <path d="M11 13v4M9 15h4" stroke="var(--terra)" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )
   if (type === 'friend_wishlist') return (
     <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
       <path d="M11 18s-7-5-7-9.5a4 4 0 0 1 7-2.6A4 4 0 0 1 18 8.5c0 4.5-7 9.5-7 9.5z" stroke="var(--terra)" strokeWidth="1.5"/>
@@ -139,7 +144,6 @@ const NotifIcon = ({ type }: { type: string }) => {
   )
 }
 
-// Notification types where we show a person avatar instead of the generic icon
 const AVATAR_TYPES = new Set([
   'starred', 'near_friend_marked', 'near_friend_post',
   'friend_request', 'friend_accepted',
@@ -178,12 +182,10 @@ export default function NotificationsPage() {
   const [handled, setHandled] = useState<Map<string, 'accepted' | 'declined'>>(new Map())
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [currentProfile, setCurrentProfile] = useState<any>(null)
-  // Tracks IDs already queued for auto-read to prevent double-firing
   const seenRef = useRef<Set<string>>(new Set())
   const observerRef = useRef<IntersectionObserver | null>(null)
   const router = useRouter()
 
-  // ── Mark a single notification as read ──────────────────────────────────
   const markNotifRead = useCallback(async (id: string) => {
     if (seenRef.current.has(id)) return
     seenRef.current.add(id)
@@ -193,7 +195,6 @@ export default function NotificationsPage() {
     notifRefreshEvent?.dispatchEvent(new Event('refresh'))
   }, [])
 
-  // ── IntersectionObserver: auto-read non-action cards on scroll ───────────
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
       (entries) => {
@@ -201,7 +202,6 @@ export default function NotificationsPage() {
           if (!entry.isIntersecting) return
           const id = (entry.target as HTMLElement).dataset.notifId
           if (!id) return
-          // Small delay so a fast scroll-past doesn't count
           setTimeout(() => {
             if (document.contains(entry.target)) markNotifRead(id)
           }, 800)
@@ -212,14 +212,12 @@ export default function NotificationsPage() {
     return () => observerRef.current?.disconnect()
   }, [markNotifRead])
 
-  // Attach IntersectionObserver to a card element (skip action cards)
   const observeCard = useCallback((el: HTMLElement | null, id: string, isAction: boolean) => {
     if (!el || isAction || seenRef.current.has(id)) return
     el.dataset.notifId = id
     observerRef.current?.observe(el)
   }, [])
 
-  // ── Initial data load ────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       const supabase = createClient()
@@ -235,22 +233,17 @@ export default function NotificationsPage() {
         .from('notifications')
         .select(`*, loans(item_id, items(name), community_id, communities(name, avatar_emoji))`)
         .eq('user_id', user.id)
-        // Never show message-thread types here
         .not('type', 'in', `(${MESSAGE_THREAD_TYPES.map(t => `"${t}"`).join(',')})`)
-        // FIX: action types that are already read (= handled) are excluded from the feed.
-        // Non-action types always show regardless of read state (they fade via dot indicator).
         .or(`type.not.in.(${[...ACTION_TYPES].map(t => `"${t}"`).join(',')}),read.eq.false`)
         .order('created_at', { ascending: false })
 
       setNotifications(data || [])
-      // Pre-seed seenRef so already-read items don't re-trigger the observer
       ;(data || []).filter((n: any) => n.read).forEach((n: any) => seenRef.current.add(n.id))
       setLoading(false)
     }
     load()
   }, [])
 
-  // Listen for "marked-all-read" fired by NavBar
   useEffect(() => {
     const handler = () => {
       setNotifications(prev => prev.map(n => ({ ...n, read: true })))
@@ -261,6 +254,7 @@ export default function NotificationsPage() {
   }, [])
 
   // ── Action handlers ──────────────────────────────────────────────────────
+
   const handleFriendRequest = async (n: any, accept: boolean) => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -355,6 +349,41 @@ export default function NotificationsPage() {
     setHandled(prev => new Map(prev).set(n.id, accept ? 'accepted' : 'declined'))
   }
 
+  const handleCommunityInvite = async (n: any, accept: boolean) => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const communityId = n.metadata?.community_id
+    if (!communityId) {
+      // Fall back: try to extract from action_url e.g. /community/[id]
+      await markNotifRead(n.id)
+      setHandled(prev => new Map(prev).set(n.id, accept ? 'accepted' : 'declined'))
+      return
+    }
+
+    if (accept) {
+      await supabase.from('community_members').upsert(
+        { user_id: user.id, community_id: communityId, status: 'active', role: 'member' },
+        { onConflict: 'user_id,community_id', ignoreDuplicates: true }
+      )
+      // Notify inviter
+      const inviterId = n.metadata?.from_id
+      if (inviterId) {
+        await supabase.from('notifications').insert({
+          user_id: inviterId, type: 'join_accepted',
+          title: 'Invitasjon godtatt',
+          body: `${currentProfile?.name || user.email?.split('@')[0]} ble med i kretsen`,
+          metadata: { community_id: communityId },
+        })
+      }
+    }
+
+    await markNotifRead(n.id)
+    setHandled(prev => new Map(prev).set(n.id, accept ? 'accepted' : 'declined'))
+    if (accept && communityId) router.push(`/community/${communityId}`)
+  }
+
   // ── Feed composition ─────────────────────────────────────────────────────
   const feed = useMemo(() => {
     const withReceipts = notifications.map(n =>
@@ -408,7 +437,6 @@ export default function NotificationsPage() {
     const showAvatar = AVATAR_TYPES.has(n.type)
     const LeadIcon = () => showAvatar ? <NotifAvatar n={n} /> : <NotifIcon type={n.type} />
 
-    // Receipt card (just handled this session)
     if (n._receipt) return (
       <div ref={el => observeCard(el, n.id, false)} style={outer}>
         <div className="glass" style={inner}>
@@ -424,7 +452,6 @@ export default function NotificationsPage() {
       </div>
     )
 
-    // Action card (pending godta/avslå)
     if (isAction) return (
       <div style={outer}>
         <div className="glass" style={{ ...inner, flexWrap: 'wrap' as const }}>
@@ -437,16 +464,16 @@ export default function NotificationsPage() {
             {n.body && <p style={{ fontSize: 12, color: 'var(--terra-mid)', margin: '2px 0 0' }}>{n.body}</p>}
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
               <button onClick={() => {
-                const h = n.type === 'friend_request' ? handleFriendRequest
-                  : n.type === 'connection_request' ? handleConnectionRequest
-                  : handleJoinRequest
-                h(n, true)
+                if (n.type === 'friend_request') handleFriendRequest(n, true)
+                else if (n.type === 'connection_request') handleConnectionRequest(n, true)
+                else if (n.type === 'join_request') handleJoinRequest(n, true)
+                else if (n.type === 'community_invite') handleCommunityInvite(n, true)
               }} style={btnAccept}>✓ Godta</button>
               <button onClick={() => {
-                const h = n.type === 'friend_request' ? handleFriendRequest
-                  : n.type === 'connection_request' ? handleConnectionRequest
-                  : handleJoinRequest
-                h(n, false)
+                if (n.type === 'friend_request') handleFriendRequest(n, false)
+                else if (n.type === 'connection_request') handleConnectionRequest(n, false)
+                else if (n.type === 'join_request') handleJoinRequest(n, false)
+                else if (n.type === 'community_invite') handleCommunityInvite(n, false)
               }} style={btnDecline}>Avslå</button>
             </div>
           </div>
@@ -454,10 +481,11 @@ export default function NotificationsPage() {
       </div>
     )
 
-    // Regular info card — tappable, auto-read on scroll
+    // Regular info card
     const href =
       n.type === 'import_ready' ? (n.action_url ?? '/add')
       : ['connection_accepted', 'connection_disconnected'].includes(n.type) ? '/settings'
+      : n.metadata?.community_id ? `/community/${n.metadata.community_id}`
       : n.loans?.community_id ? `/community/${n.loans.community_id}`
       : n.loans?.item_id ? `/items/${n.loans.item_id}`
       : '#'
@@ -475,8 +503,6 @@ export default function NotificationsPage() {
     )
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  // No <header> here — NavBar owns the top bar
   return (
     <div className="max-w-lg mx-auto" style={{ marginTop: 0 }}>
       <div style={{ padding: '0 14px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>

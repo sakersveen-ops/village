@@ -108,20 +108,34 @@ export default function NavBar() {
 
   // ── Unread notifications ──────────────────────────────────────────────────
   const loadUnread = useCallback(async () => {
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setHasUser(false); return undefined }
-    setHasUser(true)
+      const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) { setHasUser(false); return undefined }
+  setHasUser(true)
 
-    const { count } = await supabase
-      .from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('read', false)
+  const SOCIAL_TYPES = [
+    'friend_request',
+    'friend_accepted',
+    'connection_request',
+    'connection_accepted',
+    'connection_disconnected',
+    'join_request',
+    'join_accepted',
+    'join_declined',
+    'starred',
+  ]
 
-    setUnread(count || 0)
-    return user.id
-  }, [])
+  const { count } = await supabase
+    .from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('read', false)
+    .in('type', SOCIAL_TYPES)
+
+  setUnread(count || 0)
+  return user.id
+}, [])
+  
 
   // ── Unread messages ───────────────────────────────────────────────────────
   // loan_message_reads tracks read_at per loan per user.

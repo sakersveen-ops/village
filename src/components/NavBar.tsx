@@ -123,6 +123,7 @@ export default function NavBar() {
     'join_accepted',
     'join_declined',
     'starred',
+    'community_invite',
   ]
 
   const { count } = await supabase

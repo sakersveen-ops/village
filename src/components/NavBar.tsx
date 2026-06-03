@@ -52,11 +52,9 @@ const iconBtnStyle = (active = false): React.CSSProperties => ({
   transition: 'opacity 150ms ease, transform 150ms ease',
 })
 
-// Shared event so NotificationsPage can trigger a re-fetch of unread count
 export const notifRefreshEvent =
   typeof window !== 'undefined' ? new EventTarget() : null
 
-// SVG nav icons
 const HomeIcon = ({ active }: { active: boolean }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill={active ? 'var(--terra)' : 'none'} stroke={active ? 'var(--terra)' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -86,17 +84,29 @@ const ProfileIcon = ({ active }: { active: boolean }) => (
   </svg>
 )
 
-export default function NavBar() {
-  const [unread, setUnread] = useState(0)
-  const [hasUser, setHasUser] = useState(false)
-  const [showMenu, setShowMenu] = useState(false)
-  const [markingAll, setMarkingAll] = useState(false)
-  const pathname = usePathname()
-  const router = useRouter()
+const badgeStyle: React.CSSProperties = {
+  position: 'absolute', top: 4, right: 4,
+  background: 'var(--terra)', color: 'white',
+  fontSize: 9, fontWeight: 700,
+  minWidth: 14, height: 14, borderRadius: 7,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  padding: '0 3px', lineHeight: 1,
+  boxShadow: '0 0 0 2px rgba(252,254,255,0.9)',
+}
 
-  const showBack = !isRootPath(pathname)
+export default function NavBar() {
+  const [unread, setUnread]               = useState(0)
+  const [unreadMessages, setUnreadMessages] = useState(0)
+  const [hasUser, setHasUser]             = useState(false)
+  const [showMenu, setShowMenu]           = useState(false)
+  const [markingAll, setMarkingAll]       = useState(false)
+  const pathname  = usePathname()
+  const router    = useRouter()
+
+  const showBack          = !isRootPath(pathname)
   const isNotificationsPage = pathname === '/notifications'
 
+  // ── Unread notifications ──────────────────────────────────────────────────
   const loadUnread = useCallback(async () => {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -113,22 +123,76 @@ export default function NavBar() {
     return user.id
   }, [])
 
-  useEffect(() => {
-    setShowMenu(false)
-  }, [pathname])
+  // ── Unread messages ───────────────────────────────────────────────────────
+  // loan_message_reads tracks read_at per loan per user.
+  // A loan has unread messages if its latest message is newer than read_at,
+  // or if there is no read record at all — and the latest message is not from us.
+  const loadUnreadMessages = useCallback(async () => {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    // Active loans where user is a party
+    const { data: loans } = await supabase
+      .from('loans')
+      .select('id')
+      .or(`owner_id.eq.${user.id},borrower_id.eq.${user.id}`)
+      .in('status', ['pending', 'confirmed', 'active', 'change_proposed', 'pending_return', 'overdue'])
+
+    if (!loans?.length) { setUnreadMessages(0); return }
+    const loanIds = loans.map(l => l.id)
+
+    // Latest message per loan
+    const { data: latestMsgs } = await supabase
+      .from('loan_messages')
+      .select('loan_id, sender_id, created_at')
+      .in('loan_id', loanIds)
+      .order('created_at', { ascending: false })
+
+    if (!latestMsgs?.length) { setUnreadMessages(0); return }
+
+    // Keep only the latest message per loan
+    const latestByLoan: Record<string, { sender_id: string; created_at: string }> = {}
+    for (const msg of latestMsgs) {
+      if (!latestByLoan[msg.loan_id]) latestByLoan[msg.loan_id] = msg
+    }
+
+    // Read receipts for these loans
+    const { data: reads } = await supabase
+      .from('loan_message_reads')
+      .select('loan_id, read_at')
+      .eq('user_id', user.id)
+      .in('loan_id', loanIds)
+
+    const readMap: Record<string, string> = {}
+    for (const r of reads || []) readMap[r.loan_id] = r.read_at
+
+    // Count loans with unread: latest msg not from us AND (no read record OR msg newer than read_at)
+    let count = 0
+    for (const [loanId, msg] of Object.entries(latestByLoan)) {
+      if (msg.sender_id === user.id) continue
+      const readAt = readMap[loanId]
+      if (!readAt || new Date(msg.created_at) > new Date(readAt)) count++
+    }
+
+    setUnreadMessages(count)
+  }, [])
+
+  useEffect(() => { setShowMenu(false) }, [pathname])
 
   useEffect(() => {
     let channel: any = null
     const supabase = createClient()
 
-    // Listen for auth state changes so navbar appears immediately after login
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         setHasUser(true)
         loadUnread()
+        loadUnreadMessages()
       } else {
         setHasUser(false)
         setUnread(0)
+        setUnreadMessages(0)
       }
     })
 
@@ -140,20 +204,31 @@ export default function NavBar() {
           event: '*', schema: 'public', table: 'notifications',
           filter: `user_id=eq.${userId}`,
         }, () => loadUnread())
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'loan_messages',
+        }, () => loadUnreadMessages())
         .subscribe()
     })
+    loadUnreadMessages()
 
-    const handler = () => loadUnread()
+    const handler = () => { loadUnread(); loadUnreadMessages() }
     notifRefreshEvent?.addEventListener('refresh', handler)
 
-    const interval = setInterval(loadUnread, 30000)
+    const interval = setInterval(() => { loadUnread(); loadUnreadMessages() }, 30000)
     return () => {
       clearInterval(interval)
       notifRefreshEvent?.removeEventListener('refresh', handler)
       subscription.unsubscribe()
       if (channel) supabase.removeChannel(channel)
     }
-  }, [loadUnread])
+  }, [loadUnread, loadUnreadMessages])
+
+  // Reset message badge when navigating to /messages
+  useEffect(() => {
+    if (pathname === '/messages' || pathname.startsWith('/messages/')) {
+      setTimeout(() => loadUnreadMessages(), 500)
+    }
+  }, [pathname])
 
   const handleMarkAllRead = async () => {
     setMarkingAll(true)
@@ -256,15 +331,7 @@ export default function NavBar() {
               style={{ ...iconBtnStyle(pathname === '/notifications'), position: 'relative' }}>
               <BellIcon />
               {unread > 0 && (
-                <span style={{
-                  position: 'absolute', top: 4, right: 4,
-                  background: 'var(--terra)', color: 'white',
-                  fontSize: 9, fontWeight: 700,
-                  minWidth: 14, height: 14, borderRadius: 7,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '0 3px', lineHeight: 1,
-                  boxShadow: '0 0 0 2px rgba(252,254,255,0.9)',
-                }}>
+                <span style={badgeStyle}>
                   {unread > 9 ? '9+' : unread}
                 </span>
               )}
@@ -273,10 +340,15 @@ export default function NavBar() {
 
           <Link href="/messages" aria-label="Meldinger" data-tour="messages"
             className="navbar-icon-btn"
-            style={iconBtnStyle(pathname === '/messages')}>
+            style={{ ...iconBtnStyle(pathname === '/messages'), position: 'relative' }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
+            {unreadMessages > 0 && (
+              <span style={badgeStyle}>
+                {unreadMessages > 9 ? '9+' : unreadMessages}
+              </span>
+            )}
           </Link>
 
           <div style={{ position: 'relative' }}>

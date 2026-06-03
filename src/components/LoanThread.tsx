@@ -34,8 +34,6 @@ const fmtTime = (d: string) => {
 
 function todayYMD() { return new Date().toISOString().split('T')[0] }
 
-// ── Status helpers ────────────────────────────────────────────────────────────
-
 type StatusStyle = {
   pillBg: string
   pillColor: string
@@ -62,8 +60,6 @@ function statusStyle(status: string): StatusStyle {
       return { pillBg: '#F1EFE8', pillColor: '#5F5E5A', label: 'Avsluttet', cardBorder: 'rgba(156,123,101,0.2)', cardHeaderBg: 'rgba(156,123,101,0.04)' }
   }
 }
-
-// ── Hurtigvalg ────────────────────────────────────────────────────────────────
 
 type QuickAction = {
   id: string
@@ -96,7 +92,6 @@ function getQuickActions(status: string, isOwner: boolean): QuickAction[] {
       { id: 'ikke-mottatt', label: 'Ikke mottatt ennå', sub: 'Send melding i tråden', type: 'chat', chatNote: n => `Hei! Jeg har ikke fått tilbake «${n}» ennå – hvor er du?`, style: 'default' },
     ]
   } else {
-    // Borrower
     if (status === 'pending' || status === 'confirmed') return [
       { id: 'avtal-henting', label: 'Avtal henting', sub: 'Spør om sted og tidspunkt', type: 'chat', chatNote: n => `Hei! Når og hvor kan jeg hente «${n}»? 😊`, style: 'default' },
       { id: 'tilpass', label: 'Tilpass periode', sub: 'Endre datoer', type: 'proposal', delta: 0, style: 'default' },
@@ -112,8 +107,6 @@ function getQuickActions(status: string, isOwner: boolean): QuickAction[] {
   }
   return []
 }
-
-// ── CounterpartRow ────────────────────────────────────────────────────────────
 
 function CounterpartRow({ loan, item, isOwner }: { loan: any; item: any; isOwner: boolean }) {
   const profile = isOwner ? (loan?.profiles ?? null) : (item?.profiles ?? null)
@@ -136,8 +129,6 @@ function CounterpartRow({ loan, item, isOwner }: { loan: any; item: any; isOwner
   )
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
-
 export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, openProposal, onProposalOpened }: LoanThreadProps) {
   const [messages, setMessages]         = useState<any[]>([])
   const [newMessage, setNewMessage]     = useState('')
@@ -156,6 +147,8 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
   const bottomRef   = useRef<HTMLDivElement>(null)
   const proposalRef = useRef<HTMLDivElement>(null)
   const inputRef    = useRef<HTMLTextAreaElement>(null)
+  // Track IDs loaded from DB to prevent realtime duplicates
+  const loadedIdsRef = useRef<Set<string>>(new Set())
 
   const today = todayYMD()
   const isActiveStatus = loan?.status === 'active'
@@ -164,13 +157,10 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
   const ss = statusStyle(loan?.status ?? '')
   const quickActions = getQuickActions(loan?.status ?? '', isOwner)
 
-  // Auto-open card when action needed
   useEffect(() => {
     const needsAction = ['pending', 'pending_return', 'overdue'].includes(loan?.status)
     if (needsAction) setCardOpen(true)
   }, [loan?.status])
-
-  // ── Effects ───────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!loan?.id) return
@@ -184,9 +174,10 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
         payload => {
           const newMsg = payload.new as any
           setMessages(prev => {
-            // Already have this exact id (e.g. system msg added via addLocal, or optimistic replaced)
+            // Already loaded from DB or already in state
+            if (loadedIdsRef.current.has(newMsg.id)) return prev
             if (prev.some(m => m.id === newMsg.id)) return prev
-            // Optimistic chat/proposal sent by us — replace the _sending placeholder
+            // Replace optimistic placeholder
             const optimisticIdx = prev.findIndex(
               m => m._sending && m.body === newMsg.body && m.sender_id === newMsg.sender_id
             )
@@ -219,8 +210,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     }
   }, [openProposal])
 
-  // ── Load ──────────────────────────────────────────────────────────────────
-
   const loadMessages = async () => {
     setLoading(true)
     const supabase = createClient()
@@ -229,7 +218,10 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
       .select('*, profiles(id, name, email, avatar_url)')
       .eq('loan_id', loan.id)
       .order('created_at', { ascending: true })
-    setMessages(data || [])
+    const msgs = data || []
+    // Register all loaded IDs so realtime doesn't re-add them
+    msgs.forEach(m => loadedIdsRef.current.add(m.id))
+    setMessages(msgs)
     setLoading(false)
   }
 
@@ -250,8 +242,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     }
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
   const addLocal = (msg: any) => setMessages(prev => [...prev, msg])
 
   async function injectSystemMessage(body: string) {
@@ -260,12 +250,11 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
       .from('loan_messages')
       .insert({ loan_id: loan.id, sender_id: user.id, type: 'system', body })
       .select('*, profiles(id, name, email, avatar_url)').single()
-    // Realtime picks this up — but if realtime is slow or missed, fall back.
-    // Guard against duplicate: only add if id not already present.
-    if (data) setMessages(prev => prev.some(m => m.id === data.id) ? prev : [...prev, data])
+    if (data) {
+      loadedIdsRef.current.add(data.id)
+      setMessages(prev => prev.some(m => m.id === data.id) ? prev : [...prev, data])
+    }
   }
-
-  // ── Send chat ─────────────────────────────────────────────────────────────
 
   const sendChat = async (body: string) => {
     if (!body.trim() || sending) return
@@ -285,6 +274,7 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
       .select('*, profiles(id, name, email, avatar_url)').single()
 
     if (error) { setMessages(prev => prev.filter(m => m.id !== tmpId)); setSending(false); return }
+    if (msg) loadedIdsRef.current.add(msg.id)
     setMessages(prev => prev.map(m => m.id === tmpId ? (msg || m) : m))
 
     const recipientId = isOwner ? loan.borrower_id : item?.owner_id
@@ -297,8 +287,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     }
     setSending(false)
   }
-
-  // ── Quick actions ─────────────────────────────────────────────────────────
 
   const handleQuickAction = async (qa: QuickAction) => {
     const itemName = item?.name ?? 'gjenstanden'
@@ -362,8 +350,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     }
   }
 
-  // ── Send proposal ─────────────────────────────────────────────────────────
-
   const sendProposal = async () => {
     if (!propStart || !propEnd || submitting) return
     setSubmitting(true)
@@ -386,6 +372,7 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
       .select('*, profiles(id, name, email, avatar_url)').single()
 
     if (error) { setMessages(prev => prev.filter(m => m.id !== tmpId)); setSubmitting(false); return }
+    if (msg) loadedIdsRef.current.add(msg.id)
     setMessages(prev => prev.map(m => m.id === tmpId ? (msg || m) : m))
     await supabase.from('loans').update({ status: 'change_proposed' }).eq('id', loan.id)
     onLoanUpdated({ ...loan, status: 'change_proposed' })
@@ -405,8 +392,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     setSubmitting(false)
     track(Events.PROPOSAL_SENT, { loan_id: loan.id, item_id: item?.id })
   }
-
-  // ── Respond to proposal ───────────────────────────────────────────────────
 
   const respondProposal = async (messageId: string, accept: boolean) => {
     const supabase = createClient()
@@ -434,8 +419,10 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
     const { data: sysMsg } = await supabase
       .from('loan_messages').insert({ loan_id: loan.id, sender_id: user.id, type: 'system', body: sysBody })
       .select('*, profiles(id, name, email, avatar_url)').single()
-    // Guard: realtime also delivers this insert — only add if not already present
-    if (sysMsg) setMessages(prev => prev.some(m => m.id === sysMsg.id) ? prev : [...prev, sysMsg])
+    if (sysMsg) {
+      loadedIdsRef.current.add(sysMsg.id)
+      setMessages(prev => prev.some(m => m.id === sysMsg.id) ? prev : [...prev, sysMsg])
+    }
 
     await supabase.from('notifications').insert({
       user_id: target.sender_id,
@@ -451,20 +438,16 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
   const senderName = (msg: any) => msg.profiles?.name || msg.profiles?.email?.split('@')[0] || '?'
   const isMe = (msg: any) => msg.sender_id === user.id
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
   return (
     <div className="flex flex-col gap-0" style={{ borderRadius: 16, overflow: 'hidden' }}>
 
       {/* ── AVTALEKORT ── */}
       <div style={{ background: 'rgba(255,248,243,0.95)', border: `1px solid ${ss.cardBorder}`, borderRadius: 16, overflow: 'hidden', marginBottom: 6 }}>
 
-        {/* Header — produktbilde + navn + status, klikk for å kollapse */}
         <button
           onClick={() => setCardOpen(o => !o)}
           style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
         >
-          {/* Produktbilde eller kategori-fallback */}
           {item?.image_url ? (
             <img src={item.image_url} alt={item?.name ?? ''}
               style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
@@ -477,7 +460,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
             </div>
           )}
 
-          {/* Navn + status + datoer */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--terra-dark)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: 4 }}>
               {item?.name ?? ''}
@@ -499,13 +481,10 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
           </svg>
         </button>
 
-        {/* Body — kollapses */}
         {cardOpen && (
           <div>
-            {/* Låntaker / utleier-rad */}
             <CounterpartRow loan={loan} item={item} isOwner={isOwner} />
 
-            {/* Datorad */}
             <div style={{ display: 'flex', borderTop: `0.5px solid ${ss.cardBorder}` }}>
               <div style={{ flex: 1, padding: '10px 14px', borderRight: `0.5px solid ${ss.cardBorder}` }}>
                 <p style={{ fontSize: 10, color: 'var(--terra-mid)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>Starter</p>
@@ -520,7 +499,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
               </div>
             </div>
 
-            {/* Hurtigvalg */}
             {quickActions.length > 0 && !showProposal && (
               <div style={{ padding: '10px 14px', borderTop: `0.5px solid ${ss.cardBorder}`, display: 'flex', flexDirection: 'column', gap: 7 }}>
                 <p style={{ fontSize: 10, color: 'var(--terra-mid)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>Hurtigvalg</p>
@@ -551,7 +529,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
               </div>
             )}
 
-            {/* Proposal form */}
             {showProposal && (
               <div ref={proposalRef} style={{ padding: '12px 14px', borderTop: `0.5px solid ${ss.cardBorder}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -595,8 +572,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
 
       {/* ── MELDINGSTRÅD ── */}
       <div style={{ background: 'rgba(245,245,245,0.8)', borderRadius: 16, overflow: 'hidden' }}>
-
-        {/* Meldinger */}
         <div className="flex flex-col px-3 py-4 gap-0.5 overflow-y-auto" style={{ minHeight: 160, maxHeight: 400 }}>
           {loading ? (
             <p className="text-center text-sm py-8" style={{ color: 'var(--terra-mid)' }}>Laster…</p>
@@ -613,7 +588,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
               ? (typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : msg.metadata)
               : null
 
-            // System pill
             if (msg.type === 'system') {
               return (
                 <div key={msg.id} className="flex flex-col items-center my-2 px-2">
@@ -622,7 +596,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
               )
             }
 
-            // Change proposal card
             if (msg.type === 'change_proposal') {
               const proposalStatus = (meta?.status && meta.status !== '') ? meta.status : 'pending'
               const canRespond = !mine && proposalStatus === 'pending'
@@ -679,7 +652,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
               )
             }
 
-            // Chat bubble
             const showSender = !mine && !prevSameSender
             const showTimestamp = isLast || !nextSameSender
             const br = mine
@@ -726,7 +698,6 @@ export default function LoanThread({ loan, item, user, isOwner, onLoanUpdated, o
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
         <div className="px-3 py-2" style={{ borderTop: '1px solid rgba(196,103,58,0.1)' }}>
           <div className="flex items-end gap-2">
             <textarea

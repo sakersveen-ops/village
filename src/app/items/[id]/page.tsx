@@ -179,10 +179,6 @@ export default function ItemPage() {
       return
     }
 
-    await supabase.from('loan_messages').insert({
-      loan_id: newLoan.id, sender_id: user.id, type: 'chat', body: message,
-    })
-
     await supabase.from('notifications').insert({
       user_id: notifyUserId, type: 'loan_request',
       title: 'Ny låneforespørsel',
@@ -619,7 +615,7 @@ export default function ItemPage() {
 
             {pendingLoans.map(l => (
               <div key={l.id} className="flex flex-col">
-                <div className="glass" style={{ borderRadius: '16px 16px 0 0', padding: 16 }}>
+                <div className="glass" style={{ borderRadius: '16px 16px 0 0', padding: 16, position: 'relative', zIndex: 2 }}>
                   <div className="flex items-center gap-2 mb-3">
                     <Link href={`/profile/${l.profiles?.id}`}>
                       <div className="rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center font-bold text-sm"
@@ -669,7 +665,7 @@ export default function ItemPage() {
                   )}
                 </div>
 
-                <div id={`proposal-${l.id}`} style={{ borderRadius: '0 0 16px 16px', overflow: 'hidden' }}>
+                <div id={`proposal-${l.id}`} style={{ borderRadius: '0 0 16px 16px', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
                   <LoanThread
                     loan={l} item={item} user={user} isOwner={true}
                     openProposal={proposalLoanId === l.id}

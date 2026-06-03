@@ -217,13 +217,13 @@ function AccessPageInner() {
           name:          draft.name,
           description:   draft.description || null,
           category:      draft.categoryId,
-          subcategory:   draft.subcategoryIds?.[0] || null,
           subcategories: draft.subcategoryIds || [],
           image_url:     image_url || null,
           available:     true,
           location:      draft.location || null,
           color:         draft.color || null,
           size:          draft.size || null,
+          gender:        draft.gender || null,
           age_ranges:    draft.ageRanges || [],
         })
         .select()

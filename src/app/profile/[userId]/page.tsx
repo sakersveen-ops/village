@@ -1,4 +1,3 @@
-// Path of this file: src/app/profile/[userId]/page.tsx
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
@@ -6,16 +5,9 @@ import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import ItemRequestCard from '@/components/ItemRequestCard'
 import StoryRing from '@/components/StoryRing'
-import ShareButton from "@/components/ShareLinkButton"
-
-const CATEGORIES = [
-  { id: 'hjem-og-hage',          label: 'Hjem & hage',        emoji: '🏠' },
-  { id: 'baby-og-barn',          label: 'Baby & barn',        emoji: '🧸' },
-  { id: 'fest-og-arrangement',   label: 'Fest & arrangement', emoji: '🎉' },
-  { id: 'friluft-og-sport',      label: 'Friluft & sport',    emoji: '⛷️' },
-  { id: 'klar-og-mote',          label: 'Klær & mote',        emoji: '👗' },
-  { id: 'boker',                 label: 'Bøker',              emoji: '📚' },
-]
+import ShareButton from '@/components/ShareLinkButton'
+import { track, Events } from '@/lib/track'
+import { CATEGORIES, getCategoryLabel, normalizeCategory } from '@/lib/categories'
 
 const CATEGORY_EMOJI: Record<string, string> = {
   'hjem-og-hage':        '🏠',
@@ -24,29 +16,41 @@ const CATEGORY_EMOJI: Record<string, string> = {
   'friluft-og-sport':    '⛷️',
   'klar-og-mote':        '👗',
   'boker':               '📚',
+  'annet':               '📦',
 }
+
+const DISPLAY_CATEGORIES = [
+  { id: 'hjem-og-hage',          label: 'Hjem & hage',        emoji: '🏠' },
+  { id: 'baby-og-barn',          label: 'Baby & barn',        emoji: '🧸' },
+  { id: 'fest-og-arrangement',   label: 'Fest & arrangement', emoji: '🎉' },
+  { id: 'friluft-og-sport',      label: 'Friluft & sport',    emoji: '⛷️' },
+  { id: 'klar-og-mote',          label: 'Klær & mote',        emoji: '👗' },
+  { id: 'boker',                 label: 'Bøker',              emoji: '📚' },
+  { id: 'annet',                 label: 'Annet',              emoji: '📦' },
+]
 
 type AccessLevel = 'friend' | 'friend_of_friend' | 'community' | 'stranger'
 
 export default function UserProfilePage() {
-  const [viewer, setViewer] = useState<any>(null)
-  const [viewerProfile, setViewerProfile] = useState<any>(null)
-  const [profile, setProfile] = useState<any>(null)
-  const [items, setItems] = useState<any[]>([])
-  const [friends, setFriends] = useState<any[]>([])
-  const [accessLevel, setAccessLevel] = useState<AccessLevel>('stranger')
-  const [isStarred, setIsStarred] = useState(false)
+  const [viewer, setViewer]                       = useState<any>(null)
+  const [viewerProfile, setViewerProfile]         = useState<any>(null)
+  const [profile, setProfile]                     = useState<any>(null)
+  const [items, setItems]                         = useState<any[]>([])
+  const [friends, setFriends]                     = useState<any[]>([])
+  const [accessLevel, setAccessLevel]             = useState<AccessLevel>('stranger')
+  const [isStarred, setIsStarred]                 = useState(false)
   const [friendRequestSent, setFriendRequestSent] = useState(false)
-  const [isFriend, setIsFriend] = useState(false)
+  const [isFriend, setIsFriend]                   = useState(false)
   const [sharedCommunities, setSharedCommunities] = useState<any[]>([])
   const [publicCommunities, setPublicCommunities] = useState<any[]>([])
-  const [mutualFriends, setMutualFriends] = useState<any[]>([])
-  const [myComIds, setMyComIds] = useState<Set<string>>(new Set())
-  const [itemSearch, setItemSearch] = useState('')
-  const [itemCategory, setItemCategory] = useState('')
-  const [activeLoansCount, setActiveLoansCount] = useState(0)
-  const [friendsCount, setFriendsCount] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const [mutualFriends, setMutualFriends]         = useState<any[]>([])
+  const [myComIds, setMyComIds]                   = useState<Set<string>>(new Set())
+  const [itemSearch, setItemSearch]               = useState('')
+  const [itemCategory, setItemCategory]           = useState('')
+  const [showAllItems, setShowAllItems]           = useState(false)
+  const [activeLoansCount, setActiveLoansCount]   = useState(0)
+  const [friendsCount, setFriendsCount]           = useState(0)
+  const [loading, setLoading]                     = useState(true)
   const router = useRouter()
   const { userId } = useParams()
 
@@ -64,6 +68,8 @@ export default function UserProfilePage() {
 
       const { data: targetProfile } = await supabase.from('profiles').select('*').eq('id', userId).single()
       setProfile(targetProfile)
+
+      track(Events.PROFILE_VIEWED, { profile_id: userId as string })
 
       const { data: starredRow } = await supabase
         .from('starred_users').select('id').eq('user_id', user.id).eq('starred_id', userId).maybeSingle()
@@ -91,13 +97,12 @@ export default function UserProfilePage() {
         .from('community_members')
         .select('community_id, communities(id, name, avatar_emoji, is_public)')
         .eq('user_id', userId as string).eq('status', 'active')
-      const myComIds = new Set<string>((myMemberships || []).map((m: any) => m.community_id as string))
-      setMyComIds(myComIds)
-      const shared = (theirMemberships || []).filter((m: any) => myComIds.has(m.community_id))
+      const myComIdsSet = new Set<string>((myMemberships || []).map((m: any) => m.community_id as string))
+      setMyComIds(myComIdsSet)
+      const shared = (theirMemberships || []).filter((m: any) => myComIdsSet.has(m.community_id))
       setSharedCommunities(shared)
-
       const publicComs = (theirMemberships || []).filter((m: any) =>
-        m.communities?.is_public && !myComIds.has(m.community_id)
+        m.communities?.is_public && !myComIdsSet.has(m.community_id)
       )
       setPublicCommunities(publicComs)
 
@@ -123,12 +128,12 @@ export default function UserProfilePage() {
 
         const visible = (allItems || []).filter((item: any) => {
           const access: any[] = item.item_access || []
-          if (access.length === 0) return friend // ingen regel = kun venner
+          if (access.length === 0) return friend
           return access.some((rule: any) => {
             if (rule.access_type === 'public') return true
             if (rule.access_type === 'friends' && friend) return true
             if (rule.access_type === 'friends_of_friends' && (friend || isFoF)) return true
-            if (rule.access_type === 'community' && myComIds.has(rule.community_id)) return true
+            if (rule.access_type === 'community' && myComIdsSet.has(rule.community_id)) return true
             return false
           })
         })
@@ -143,7 +148,6 @@ export default function UserProfilePage() {
           .limit(12)
         setFriends((theirFriendsFull || []).map((f: any) => f.profiles))
 
-        // Stats: totalt antall venner + aktive lån
         const { count: totalFriends } = await supabase
           .from('friendships').select('user_b', { count: 'exact', head: true })
           .eq('user_a', userId as string)
@@ -188,26 +192,152 @@ export default function UserProfilePage() {
       body: `${viewerProfile?.name || viewer.email?.split('@')[0]} vil bli venner`,
     })
     setFriendRequestSent(true)
+    track(Events.FRIEND_REQUEST_SENT)
   }
 
   const displayName = (p: any) => p?.name || p?.username || p?.email?.split('@')[0]
-  const availableCategories = CATEGORIES.filter(c => items.some(i => i.category === c.id))
+
+  const availableCategories = DISPLAY_CATEGORIES.filter(c => items.some(i => normalizeCategory(i.category) === c.id))
+
   const filteredItems = items.filter(item => {
     const matchSearch = itemSearch.trim().length < 2 ||
       item.name?.toLowerCase().includes(itemSearch.toLowerCase()) ||
       item.description?.toLowerCase().includes(itemSearch.toLowerCase())
-    const matchCat = !itemCategory || item.category === itemCategory
+    const matchCat = !itemCategory || normalizeCategory(item.category) === itemCategory
     return matchSearch && matchCat
   })
 
-  if (loading) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
-  if (!profile) return <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Fant ikke brukeren</div>
+  const visibleItems = showAllItems ? filteredItems : filteredItems.slice(0, 5)
 
-  // ── Fremmed-visning ──
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen" style={{ color: 'var(--terra-mid)' }}>Laster…</div>
+  )
+  if (!profile) return (
+    <div className="p-8 text-center" style={{ color: 'var(--terra-mid)' }}>Fant ikke brukeren</div>
+  )
+
+  // ── Item list — gjenbrukt i begge visninger ──────────────────────────────
+  const ItemList = () => (
+    <>
+      {items.length > 3 && (
+        <div className="relative mb-3">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--terra-mid)" strokeWidth="2.2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+          </span>
+          <input
+            value={itemSearch}
+            onChange={e => { setItemSearch(e.target.value); setShowAllItems(false) }}
+            placeholder="Søk i gjenstander…"
+            className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none"
+            style={{ background: '#fff', border: '1px solid var(--glass-border)', color: 'var(--terra-dark)' }}
+            onFocus={e => e.currentTarget.style.borderColor = 'var(--terra)'}
+            onBlur={e => e.currentTarget.style.borderColor = 'var(--glass-border)'}
+          />
+        </div>
+      )}
+
+      {availableCategories.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 mb-3" style={{ scrollbarWidth: 'none' }}>
+          <button
+            onClick={() => { setItemCategory(''); setShowAllItems(false) }}
+            className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0"
+            style={!itemCategory
+              ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
+              : { background: '#fff', color: '#1A3542', border: '1px solid var(--glass-border)' }}
+          >
+            Alle
+          </button>
+          {availableCategories.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => { setItemCategory(itemCategory === cat.id ? '' : cat.id); setShowAllItems(false) }}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0"
+              style={itemCategory === cat.id
+                ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
+                : { background: '#fff', color: '#1A3542', border: '1px solid var(--glass-border)' }}
+            >
+              {cat.emoji} {cat.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {filteredItems.length === 0 ? (
+        <div className="rounded-2xl p-6 text-center text-sm" style={{ background: '#fff', color: 'var(--terra-mid)' }}>
+          {items.length === 0 ? 'Ingen gjenstander delt ennå' : 'Ingen treff på søket'}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {visibleItems.map(item => {
+            const communityRule = (item.item_access || []).find((rule: any) =>
+              rule.access_type === 'community' && myComIds.has(rule.community_id)
+            )
+            const communityName = communityRule
+              ? sharedCommunities.find((m: any) => m.community_id === communityRule.community_id)?.communities?.name
+              : null
+            const communityEmoji = communityRule
+              ? sharedCommunities.find((m: any) => m.community_id === communityRule.community_id)?.communities?.avatar_emoji
+              : null
+            return (
+              <Link key={item.id} href={`/items/${item.id}`}>
+                <div className="flex items-center gap-3 px-4 py-3 rounded-2xl shadow-sm" style={{ background: '#fff' }}>
+                  {item.image_url
+                    ? <img src={item.image_url} className="rounded-xl object-cover flex-shrink-0"
+                        style={{ width: 48, height: 48 }} alt={item.name} />
+                    : <div className="flex items-center justify-center text-xl flex-shrink-0 rounded-xl"
+                        style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
+                        {CATEGORY_EMOJI[normalizeCategory(item.category)] ?? '📦'}
+                      </div>
+                  }
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>
+                        {DISPLAY_CATEGORIES.find(c => c.id === normalizeCategory(item.category))?.label
+                          || item.category?.replace(/-/g, ' ')}
+                      </p>
+                      {communityName && (
+                        <span className="text-xs flex items-center gap-0.5 px-1.5 py-0.5 rounded-full"
+                          style={{ background: 'var(--glass-bg)', color: 'var(--terra-mid)', lineHeight: 1.2 }}>
+                          🏘️ {communityEmoji} {communityName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {item.price && (
+                    <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--terra)' }}>
+                      {item.price} kr/dag
+                    </span>
+                  )}
+                </div>
+              </Link>
+            )
+          })}
+
+          {filteredItems.length > 5 && (
+            <button
+              onClick={() => setShowAllItems(v => !v)}
+              className="flex items-center justify-center gap-1 text-sm w-full py-2.5 rounded-xl transition-opacity hover:opacity-80"
+              style={{ color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.2)', background: 'rgba(46,98,113,0.04)' }}
+            >
+              {showAllItems
+                ? 'Vis færre ↑'
+                : `Vis alle ${filteredItems.length} gjenstander →`}
+            </button>
+          )}
+        </div>
+      )}
+    </>
+  )
+
+  // ── Fremmed-visning ──────────────────────────────────────────────────────
   if (!isFriend) {
     return (
       <div className="max-w-lg mx-auto pb-24">
-        <div style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }} className="px-4 pt-6 pb-8">
+        <div style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }}
+          className="px-4 pt-6 pb-8">
           <div className="flex flex-col items-center text-center pt-4">
             <div className="flex items-center justify-center text-white font-bold text-3xl overflow-hidden mb-4"
               style={{ width: 88, height: 88, borderRadius: '50%', background: 'var(--terra)' }}>
@@ -235,7 +365,6 @@ export default function UserProfilePage() {
                 : '👤 Ikke tilkoblet'}
             </p>
 
-            {/* Felles kretser — vises kun ved community-tilgang */}
             {accessLevel === 'community' && sharedCommunities.length > 0 && (
               <div className="flex flex-wrap gap-2 justify-center mt-3">
                 {sharedCommunities.map((m: any) => (
@@ -261,9 +390,11 @@ export default function UserProfilePage() {
               style={{ background: 'rgba(46,98,113,0.10)', border: '1px solid rgba(46,98,113,0.15)', color: 'var(--terra-dark)' }}
             />
           </div>
+
           <div className="mt-6">
             {!friendRequestSent ? (
-              <button onClick={sendFriendRequest} className="btn-primary w-full"
+              <button onClick={sendFriendRequest}
+                className="btn-primary w-full"
                 style={{ borderRadius: 12, padding: '12px 0', fontSize: 15 }}>
                 + Legg til som venn
               </button>
@@ -281,56 +412,11 @@ export default function UserProfilePage() {
           <div className="px-4 pt-5 pb-8">
             <h2 className="font-bold mb-3" style={{ color: 'var(--terra-dark)', fontSize: 15 }}>
               Delte gjenstander
-              <span className="font-normal ml-1.5" style={{ color: 'var(--terra-mid)', fontSize: 13 }}>({items.length})</span>
+              <span className="font-normal ml-1.5" style={{ color: 'var(--terra-mid)', fontSize: 13 }}>
+                ({items.length})
+              </span>
             </h2>
-            <div className="flex flex-col gap-2">
-              {items.slice(0, 5).map((item: any) => {
-                // Finn hvilken felles krets som gir tilgang
-                const communityRule = (item.item_access || []).find((rule: any) =>
-                  rule.access_type === 'community' && myComIds.has(rule.community_id)
-                )
-                const communityName = communityRule
-                  ? sharedCommunities.find((m: any) => m.community_id === communityRule.community_id)?.communities?.name
-                  : null
-                const communityEmoji = communityRule
-                  ? sharedCommunities.find((m: any) => m.community_id === communityRule.community_id)?.communities?.avatar_emoji
-                  : null
-                return (
-                  <Link key={item.id} href={`/items/${item.id}`}>
-                    <div className="flex items-center gap-3 px-4 py-3 rounded-2xl shadow-sm" style={{ background: '#fff' }}>
-                      {item.image_url
-                        ? <img src={item.image_url} className="rounded-xl object-cover flex-shrink-0"
-                            style={{ width: 48, height: 48 }} alt={item.name} />
-                        : <div className="flex items-center justify-center text-xl flex-shrink-0 rounded-xl"
-                            style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
-                            {CATEGORY_EMOJI[item.category] ?? '📦'}
-                          </div>
-                      }
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>
-                            {CATEGORIES.find(c => c.id === item.category)?.label || item.category?.replace(/-/g, ' ')}
-                          </p>
-                          {communityName && (
-                            <span className="text-xs flex items-center gap-0.5 px-1.5 py-0.5 rounded-full"
-                              style={{ background: 'var(--glass-bg)', color: 'var(--terra-mid)', lineHeight: 1.2 }}>
-                              🏘️ {communityEmoji} {communityName}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-full flex-shrink-0 font-medium text-xs"
-                        style={item.available
-                          ? { background: '#EEF4F0', color: 'var(--terra-green)' }
-                          : { background: 'var(--glass-bg)', color: 'var(--terra)' }}>
-                        {item.available ? '● Ledig' : '● Utlånt'}
-                      </span>
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
+            <ItemList />
           </div>
         )}
 
@@ -339,12 +425,13 @@ export default function UserProfilePage() {
     )
   }
 
-  // ── Venn-visning ──
+  // ── Venn-visning ─────────────────────────────────────────────────────────
   return (
     <div className="max-w-lg mx-auto pb-24">
 
       {/* Profilhode */}
-      <div style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }} className="px-4 pt-6 pb-6">
+      <div style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }}
+        className="px-4 pt-6 pb-6">
         <div className="flex items-start gap-4">
           <div className="flex items-center justify-center text-white font-bold text-2xl overflow-hidden flex-shrink-0"
             style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--terra)' }}>
@@ -411,7 +498,9 @@ export default function UserProfilePage() {
                 </Link>
               ))}
               {mutualFriends.length > 5 && (
-                <span className="text-xs self-center" style={{ color: 'var(--terra-mid)' }}>+{mutualFriends.length - 5} til</span>
+                <span className="text-xs self-center" style={{ color: 'var(--terra-mid)' }}>
+                  +{mutualFriends.length - 5} til
+                </span>
               )}
             </div>
           </div>
@@ -452,40 +541,31 @@ export default function UserProfilePage() {
         )}
       </div>
 
-      {/* Stats-bokser */}
-      <div className="flex gap-2 px-4 pt-4 pb-2" style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }}>
-        <div className="flex-1">
-          <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16 }}>
-            <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{items.length}</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>gjenstander</p>
+      {/* Stats */}
+      <div className="flex gap-2 px-4 pt-4 pb-2"
+        style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }}>
+        {[
+          { value: items.length,       label: 'gjenstander' },
+          { value: activeLoansCount,   label: 'avtaler'     },
+          { value: friendsCount,       label: 'venner'      },
+        ].map(stat => (
+          <div key={stat.label} className="flex-1">
+            <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16 }}>
+              <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{stat.value}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>{stat.label}</p>
+            </div>
           </div>
-        </div>
-        <div className="flex-1">
-          <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16 }}>
-            <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{activeLoansCount}</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>avtaler</p>
-          </div>
-        </div>
-        <div className="flex-1">
-          <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16 }}>
-            <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>{friendsCount}</p>
-            <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>venner</p>
-          </div>
-        </div>
+        ))}
       </div>
 
       {/* Stories */}
       <div style={{ borderBottom: '1px solid var(--glass-border)', background: 'var(--glass-bg-heavy)' }}>
-        <StoryRing
-          ownerId={userId as string}
-          isOwner={false}
-          canView={true}
-        />
+        <StoryRing ownerId={userId as string} isOwner={false} canView={true} />
       </div>
 
       <div className="px-4 pt-5 flex flex-col gap-6 pb-8">
 
-        {/* ── 1) Ønsker ── */}
+        {/* Ønsker */}
         {viewer && (
           <ItemRequestCard
             profileUserId={userId as string}
@@ -495,122 +575,32 @@ export default function UserProfilePage() {
           />
         )}
 
-        {/* ── 2) Delte gjenstander ── */}
+        {/* Gjenstander */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-bold" style={{ color: 'var(--terra-dark)' }}>
               Delte gjenstander
               {items.length > 0 && (
-                <span className="font-normal text-sm ml-1.5" style={{ color: 'var(--terra-mid)' }}>({items.length})</span>
+                <span className="font-normal text-sm ml-1.5" style={{ color: 'var(--terra-mid)' }}>
+                  ({items.length})
+                </span>
               )}
             </h2>
           </div>
-
-          {items.length > 3 && (
-            <div className="relative mb-3">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm pointer-events-none">🔍</span>
-              <input value={itemSearch} onChange={e => setItemSearch(e.target.value)}
-                placeholder="Søk i gjenstander…"
-                className="w-full rounded-xl pl-10 pr-4 py-2.5 text-sm outline-none"
-                style={{ background: '#fff', border: '1px solid var(--glass-border)', color: 'var(--terra-dark)' }}
-                onFocus={e => e.currentTarget.style.borderColor = 'var(--terra)'}
-                onBlur={e => e.currentTarget.style.borderColor = 'var(--glass-border)'}
-              />
-            </div>
-          )}
-
-          {availableCategories.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto pb-1 mb-3" style={{ scrollbarWidth: 'none' }}>
-              <button onClick={() => setItemCategory('')}
-                className="px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0"
-                style={!itemCategory
-                  ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
-                  : { background: '#fff', color: '#1A3542', border: '1px solid var(--glass-border)' }
-                }>
-                Alle
-              </button>
-              {availableCategories.map(cat => (
-                <button key={cat.id} onClick={() => setItemCategory(itemCategory === cat.id ? '' : cat.id)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs whitespace-nowrap flex-shrink-0"
-                  style={itemCategory === cat.id
-                    ? { background: 'var(--terra)', color: '#fff', border: '1.5px solid transparent' }
-                    : { background: '#fff', color: '#1A3542', border: '1px solid var(--glass-border)' }
-                  }>
-                  {cat.emoji} {cat.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {filteredItems.length === 0 ? (
-            <div className="rounded-2xl p-6 text-center text-sm" style={{ background: '#fff', color: 'var(--terra-mid)' }}>
-              {items.length === 0 ? 'Ingen gjenstander delt ennå' : 'Ingen treff på søket'}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {filteredItems.slice(0, 5).map(item => {
-                const communityRule = (item.item_access || []).find((rule: any) =>
-                  rule.access_type === 'community' && myComIds.has(rule.community_id)
-                )
-                const communityName = communityRule
-                  ? sharedCommunities.find((m: any) => m.community_id === communityRule.community_id)?.communities?.name
-                  : null
-                const communityEmoji = communityRule
-                  ? sharedCommunities.find((m: any) => m.community_id === communityRule.community_id)?.communities?.avatar_emoji
-                  : null
-                return (
-                  <Link key={item.id} href={`/items/${item.id}`}>
-                    <div className="flex items-center gap-3 px-4 py-3 rounded-2xl shadow-sm" style={{ background: '#fff' }}>
-                      {item.image_url
-                        ? <img src={item.image_url} className="rounded-xl object-cover flex-shrink-0"
-                            style={{ width: 48, height: 48 }} alt={item.name} />
-                        : <div className="flex items-center justify-center text-xl flex-shrink-0 rounded-xl"
-                            style={{ width: 48, height: 48, background: 'var(--glass-border)' }}>
-                            {CATEGORY_EMOJI[item.category] ?? '📦'}
-                          </div>
-                      }
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate" style={{ color: 'var(--terra-dark)' }}>{item.name}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          <p className="text-xs" style={{ color: 'var(--terra-mid)' }}>
-                            {CATEGORIES.find(c => c.id === item.category)?.label || item.category?.replace(/-/g, ' ')}
-                          </p>
-                          {communityName && (
-                            <span className="text-xs flex items-center gap-0.5 px-1.5 py-0.5 rounded-full"
-                              style={{ background: 'var(--glass-bg)', color: 'var(--terra-mid)', lineHeight: 1.2 }}>
-                              🏘️ {communityEmoji} {communityName}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {item.price && (
-                        <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--terra)' }}>
-                          {item.price} kr/dag
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                )
-              })}
-              {filteredItems.length > 5 && (
-                <Link href={`/profile/${userId}/items`}
-                  className="flex items-center justify-center text-sm w-full py-2.5 rounded-xl"
-                  style={{ color: 'var(--terra)', border: '1px solid rgba(46,98,113,0.2)', background: 'rgba(46,98,113,0.04)' }}>
-                  Vis alle {filteredItems.length} gjenstander →
-                </Link>
-              )}
-            </div>
-          )}
+          <ItemList />
         </div>
 
-        {/* ── 3) Venner ── */}
+        {/* Venner */}
         {friends.length > 0 && (
           <div>
             <h2 className="font-bold mb-3" style={{ color: 'var(--terra-dark)' }}>
               Venner
-              <span className="font-normal text-sm ml-1.5" style={{ color: 'var(--terra-mid)' }}>({friends.length})</span>
+              <span className="font-normal text-sm ml-1.5" style={{ color: 'var(--terra-mid)' }}>
+                ({friends.length})
+              </span>
             </h2>
-            <div className="rounded-2xl px-4 py-3 flex items-center gap-1 shadow-sm flex-wrap" style={{ background: '#fff' }}>
+            <div className="rounded-2xl px-4 py-3 flex items-center gap-1 shadow-sm flex-wrap"
+              style={{ background: '#fff' }}>
               {friends.slice(0, 10).map((f: any) => (
                 <Link key={f.id} href={`/profile/${f.id}`}>
                   <div className="flex items-center justify-center font-bold text-sm overflow-hidden"

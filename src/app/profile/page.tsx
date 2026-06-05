@@ -1,4 +1,3 @@
-// Path of this file: src/app/profile/page.tsx
 'use client'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
@@ -60,6 +59,13 @@ const ACCESS_LABEL: Record<string, { label: string; icon: string }> = {
   community:          { label: 'Krets',          icon: '🏘️' },
 }
 
+const CameraIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+    <circle cx="12" cy="13" r="4"/>
+  </svg>
+)
+
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
@@ -81,6 +87,7 @@ export default function ProfilePage() {
   const [storyRefreshKey, setStoryRefreshKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [avatarUploading, setAvatarUploading] = useState(false)
+  const [avatarHover, setAvatarHover] = useState(false)
   const [starred, setStarred] = useState<Set<string>>(new Set())
   const [showShareModal, setShowShareModal] = useState(false)
   const [showInviteComposer, setShowInviteComposer] = useState(false)
@@ -232,26 +239,20 @@ export default function ProfilePage() {
   }
 
   const cancelFriendRequest = async (requestId: string, toId?: string) => {
-    // Optimistic update first
     setSentRequests(prev => prev.filter(r => r.id !== requestId))
-    if (toId) {
-      setSearchResults(prev => prev.map(r => r.id === toId ? { ...r, requestSent: false } : r))
-    }
+    if (toId) setSearchResults(prev => prev.map(r => r.id === toId ? { ...r, requestSent: false } : r))
     const supabase = createClient()
     const { error } = await supabase
       .from('friend_requests').delete()
       .eq('id', requestId).eq('from_id', user.id)
     if (error) {
-      // Revert on failure
       console.error('cancelFriendRequest error:', error)
       const { data: sent } = await supabase
         .from('friend_requests')
         .select('*, profiles!friend_requests_to_id_fkey(id, name, email, avatar_url)')
         .eq('from_id', user.id).eq('status', 'pending')
       setSentRequests(sent || [])
-      if (toId) {
-        setSearchResults(prev => prev.map(r => r.id === toId ? { ...r, requestSent: true } : r))
-      }
+      if (toId) setSearchResults(prev => prev.map(r => r.id === toId ? { ...r, requestSent: true } : r))
     }
   }
 
@@ -321,9 +322,17 @@ export default function ProfilePage() {
     <div className="max-w-lg mx-auto pb-24">
 
       {/* ── Profilhode ── */}
-      <div style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }} className="px-4 pt-6 pb-4">
+      <div style={{ background: 'var(--glass-bg-heavy)', borderBottom: '1px solid var(--glass-border)' }}
+        className="px-4 pt-6 pb-4">
         <div className="flex items-center gap-4">
-          <label className="relative cursor-pointer flex-shrink-0">
+
+          {/* Avatar med overlay-upload */}
+          <label
+            className="relative cursor-pointer flex-shrink-0"
+            onMouseEnter={() => setAvatarHover(true)}
+            onMouseLeave={() => setAvatarHover(false)}
+            aria-label="Bytt profilbilde"
+          >
             <div
               className="flex items-center justify-center text-white font-bold text-2xl overflow-hidden"
               style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--terra)' }}
@@ -332,20 +341,41 @@ export default function ProfilePage() {
                 ? <img src={profile.avatar_url} className="w-full h-full object-cover" alt={displayName} />
                 : displayName?.[0]?.toUpperCase()}
             </div>
+
+            {/* Dark overlay — synlig ved hover (desktop) eller alltid ved opplasting */}
             <div
-              className="absolute bottom-0 right-0 w-5 h-5 rounded-full flex items-center justify-center text-xs"
-              style={{ background: '#fff', border: '1px solid var(--glass-border)' }}
+              className="absolute inset-0 rounded-full flex items-center justify-center transition-opacity duration-150"
+              style={{
+                background: 'rgba(26,37,48,0.45)',
+                opacity: avatarUploading || avatarHover ? 1 : 0,
+                pointerEvents: 'none',
+              }}
             >
-              {avatarUploading ? '…' : '📷'}
+              {avatarUploading
+                ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                : <CameraIcon size={20} />
+              }
             </div>
+
+            {/* Teal badge — alltid synlig som hint på mobil */}
+            {!avatarUploading && (
+              <div
+                className="absolute bottom-0 right-0 w-5 h-5 rounded-full flex items-center justify-center"
+                style={{ background: 'var(--terra)', border: '2px solid white' }}
+              >
+                <CameraIcon size={9} />
+              </div>
+            )}
+
             <input type="file" accept="image/*" onChange={uploadAvatar} className="hidden" />
           </label>
+
           <div className="flex-1 min-w-0">
             <h2 className="font-display text-xl font-bold" style={{ color: 'var(--terra-dark)' }}>
               {displayName}
             </h2>
-            
-            {/* Bio — redigerbar med blyantikon */}
+
+            {/* Bio */}
             {editingBio ? (
               <div className="mt-2">
                 <textarea
@@ -361,7 +391,8 @@ export default function ProfilePage() {
                 <div className="flex gap-1.5 mt-1">
                   <button onClick={saveBio} className="text-xs px-2 py-0.5 rounded-lg font-medium"
                     style={{ background: 'var(--terra)', color: '#fff' }}>Lagre</button>
-                  <button onClick={() => { setEditingBio(false); setBioInput(profile?.bio || '') }} className="text-xs px-2 py-0.5 rounded-lg"
+                  <button onClick={() => { setEditingBio(false); setBioInput(profile?.bio || '') }}
+                    className="text-xs px-2 py-0.5 rounded-lg"
                     style={{ color: 'var(--terra-mid)', border: '1px solid var(--glass-border)' }}>✕</button>
                 </div>
               </div>
@@ -378,7 +409,7 @@ export default function ProfilePage() {
               </button>
             )}
 
-            {/* Lokasjonsfelt — inline redigerbart */}
+            {/* By */}
             {editingCity ? (
               <div className="flex items-center gap-1.5 mt-1">
                 <span style={{ color: 'var(--terra-mid)', fontSize: 13 }}>📍</span>
@@ -409,6 +440,7 @@ export default function ProfilePage() {
               </button>
             )}
           </div>
+
           <ShareLinkButton
             variant="own-profile"
             profileName={displayName}
@@ -417,14 +449,14 @@ export default function ProfilePage() {
           />
         </div>
 
-        {/* Stats-bokser */}
+        {/* Stats */}
         <div className="flex gap-2 mt-5">
           <Link href="/items/manage" className="flex-1">
             <div className="glass rounded-2xl p-3 text-center" style={{ borderRadius: 16, cursor: 'pointer' }}>
               <p className="text-lg font-bold" style={{ color: 'var(--terra-dark)' }}>
                 {myItems.filter(i => i.owner_id === user?.id).length}
               </p>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--terra-mid)' }}>
                 gjenstander{lentOut > 0 && <span> ({lentOut} utlånt)</span>}
               </p>
             </div>
@@ -458,7 +490,7 @@ export default function ProfilePage() {
 
       <div className="px-4 pt-5 flex flex-col gap-6">
 
-        {/* ── 1) Mine ønsker ── */}
+        {/* Mine ønsker */}
         {user && (
           <ItemRequestCard
             profileUserId={user.id}
@@ -468,7 +500,7 @@ export default function ProfilePage() {
           />
         )}
 
-        {/* ── 2) Mine gjenstander ── */}
+        {/* Mine gjenstander */}
         <div>
           <div className="flex items-center gap-2 mb-3">
             <h2 className="font-bold flex-1" style={{ color: 'var(--terra-dark)' }}>
@@ -589,7 +621,7 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* ── 3) Venner ── */}
+        {/* Venner */}
         <div>
           {pendingRequests.length > 0 && (
             <div className="mb-4">
@@ -785,7 +817,7 @@ export default function ProfilePage() {
           )}
         </div>
 
-        {/* ── 4) Inviter venner ── */}
+        {/* Inviter venner */}
         <button
           onClick={() => setShowInviteComposer(true)}
           className="flex items-center justify-center gap-1.5 text-sm w-full py-2.5 rounded-xl mb-4"

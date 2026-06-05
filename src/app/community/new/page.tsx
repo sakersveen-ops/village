@@ -1,79 +1,95 @@
-// Path of this file: src/app/community/new/page.tsx
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { track, Events } from '@/lib/track'
 
 const EMOJIS = ['🏘️', '🌳', '👨‍👩‍👧‍👦', '🤝', '🏡', '🌻', '🎪', '⚽', '📚', '🍼']
 
-// Visibility levels — higher index = more open
 type VisibilityLevel = 'friends' | 'friends_of_friends' | 'public'
 
 const VISIBILITY_OPTIONS: { id: VisibilityLevel; label: string; desc: string; emoji: string }[] = [
-  { id: 'friends',          label: 'Venner',              desc: 'Kun dine venner kan finne og søke om å bli med', emoji: '👥' },
-  { id: 'friends_of_friends', label: 'Venners venner',    desc: 'Dine venner og deres venner kan se kretsen',     emoji: '🔗' },
-  { id: 'public',           label: 'Offentlig',           desc: 'Alle kan finne kretsen og søke om å bli med',    emoji: '🌍' },
+  { id: 'friends',            label: 'Venner',          desc: 'Kun dine venner kan finne og søke om å bli med',          emoji: '👥' },
+  { id: 'friends_of_friends', label: 'Venners venner',  desc: 'Dine venner og deres venner kan se kretsen',              emoji: '🔗' },
+  { id: 'public',             label: 'Offentlig',        desc: 'Alle kan finne kretsen og søke om å bli med',             emoji: '🌍' },
 ]
 
+const CONTEXT_TEXT: Record<VisibilityLevel, string> = {
+  friends:            '🔒 Kun venner kan finne kretsen. Nye medlemmer trenger invitasjonslenke eller din godkjenning.',
+  friends_of_friends: '🔗 Venners venner kan se kretsen og søke om å bli med. Du godkjenner alle forespørsler.',
+  public:             '🌍 Alle kan finne kretsen i søk. Venner, venners venner og ukjente kan søke om å bli med.',
+}
+
+const MAX_DESCRIPTION = 500
+const MAX_NAME = 80
+
 export default function NewCommunityPage() {
-  const [name, setName] = useState('')
+  const [name, setName]               = useState('')
   const [description, setDescription] = useState('')
-  const [emoji, setEmoji] = useState('🏘️')
-  const [visibility, setVisibility] = useState<VisibilityLevel>('friends_of_friends')
-  const [loading, setLoading] = useState(false)
+  const [emoji, setEmoji]             = useState('🏘️')
+  const [visibility, setVisibility]   = useState<VisibilityLevel>('friends_of_friends')
+  const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState<string | null>(null)
   const router = useRouter()
-
-  // "public" implies friends_of_friends implies friends
-  const isSelected = (level: VisibilityLevel) => {
-    const order: VisibilityLevel[] = ['friends', 'friends_of_friends', 'public']
-    return order.indexOf(level) <= order.indexOf(visibility)
-  }
-
-  const isPublic = visibility === 'public'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!name.trim()) return
     setLoading(true)
+    setError(null)
+
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
 
     const inviteCode = Math.random().toString(36).substring(2, 8)
 
-    const { data: community, error } = await supabase
+    const { data: community, error: insertError } = await supabase
       .from('communities')
       .insert({
-        name,
-        description,
+        name: name.trim(),
+        description: description.trim(),
         avatar_emoji: emoji,
         created_by: user.id,
-        is_public: isPublic,
-        visibility,         // store the full visibility level for future use
+        is_public: visibility === 'public',
+        visibility,
         invite_code: inviteCode,
       })
       .select()
       .single()
 
-    if (error || !community) {
-      console.error('community error:', error)
+    if (insertError || !community) {
+      console.error('community error:', insertError)
+      setError('Noe gikk galt. Prøv igjen.')
       setLoading(false)
       return
     }
 
-    await supabase.from('community_members').insert({
+    const { error: memberError } = await supabase.from('community_members').insert({
       community_id: community.id,
       user_id: user.id,
       role: 'admin',
       status: 'active',
     })
 
+    if (memberError) {
+      console.error('member error:', memberError)
+      // Community was created — still navigate, don't block user
+    }
+
     router.push(`/community/${community.id}/created`)
   }
 
   return (
     <div className="max-w-lg mx-auto px-4 pt-10 pb-28">
-      <button onClick={() => router.back()} className="text-[var(--terra)] mb-6 text-sm">← Tilbake</button>
-      <h1 className="font-display text-2xl font-bold text-[var(--terra-dark)] mb-6" style={{ letterSpacing: '-0.02em' }}>
+      <button onClick={() => router.back()} className="text-[var(--terra)] mb-6 text-sm">
+        ← Tilbake
+      </button>
+
+      <h1
+        className="font-display text-2xl font-bold text-[var(--terra-dark)] mb-6"
+        style={{ letterSpacing: '-0.02em' }}
+      >
         Opprett krets
       </h1>
 
@@ -81,7 +97,9 @@ export default function NewCommunityPage() {
 
         {/* Emoji */}
         <div>
-          <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide mb-2 block">Ikon</label>
+          <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide mb-2 block">
+            Ikon
+          </label>
           <div className="flex gap-2 flex-wrap">
             {EMOJIS.map(e => (
               <button
@@ -91,7 +109,7 @@ export default function NewCommunityPage() {
                 className="w-11 h-11 rounded-xl text-xl flex items-center justify-center border-2 transition-all active:scale-95"
                 style={{
                   borderColor: emoji === e ? 'var(--terra)' : 'rgba(46,98,113,0.2)',
-                  background: emoji === e ? 'rgba(46,98,113,0.08)' : 'rgba(252,254,255,0.7)',
+                  background:  emoji === e ? 'rgba(46,98,113,0.08)' : 'rgba(252,254,255,0.7)',
                 }}
               >
                 {e}
@@ -102,12 +120,20 @@ export default function NewCommunityPage() {
 
         {/* Navn */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide">Navn</label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide">
+              Navn
+            </label>
+            <span className="text-xs text-[var(--terra-mid)]">
+              {name.length}/{MAX_NAME}
+            </span>
+          </div>
           <input
             value={name}
-            onChange={e => setName(e.target.value)}
+            onChange={e => setName(e.target.value.slice(0, MAX_NAME))}
             placeholder="eks. Nabolaget på Grünerløkka"
             required
+            maxLength={MAX_NAME}
             className="glass rounded-xl px-4 py-3 text-[var(--terra-dark)] outline-none text-sm"
             style={{ border: '1px solid rgba(46,98,113,0.2)' }}
           />
@@ -115,55 +141,68 @@ export default function NewCommunityPage() {
 
         {/* Beskrivelse */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide">Beskrivelse</label>
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide">
+              Beskrivelse
+            </label>
+            <span className="text-xs text-[var(--terra-mid)]">
+              {description.length}/{MAX_DESCRIPTION}
+            </span>
+          </div>
           <textarea
             value={description}
-            onChange={e => setDescription(e.target.value)}
+            onChange={e => setDescription(e.target.value.slice(0, MAX_DESCRIPTION))}
             placeholder="Hvem er dette for?"
             rows={3}
+            maxLength={MAX_DESCRIPTION}
             className="glass rounded-xl px-4 py-3 text-[var(--terra-dark)] outline-none text-sm resize-none"
             style={{ border: '1px solid rgba(46,98,113,0.2)' }}
           />
         </div>
 
-        {/* Synlighet */}
+        {/* Synlighet — radio */}
         <div>
           <label className="text-xs text-[var(--terra-mid)] font-medium uppercase tracking-wide mb-2 block">
             Synlighet
           </label>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2" role="radiogroup" aria-label="Synlighet">
             {VISIBILITY_OPTIONS.map(opt => {
-              const selected = isSelected(opt.id)
               const active = visibility === opt.id
               return (
                 <button
                   key={opt.id}
                   type="button"
+                  role="radio"
+                  aria-checked={active}
                   onClick={() => setVisibility(opt.id)}
                   className="flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
                   style={{
-                    background: selected ? 'rgba(46,98,113,0.07)' : 'rgba(252,254,255,0.6)',
-                    border: `1.5px solid ${active ? 'var(--terra)' : selected ? 'rgba(46,98,113,0.3)' : 'rgba(46,98,113,0.15)'}`,
+                    background:    active ? 'rgba(46,98,113,0.07)' : 'rgba(252,254,255,0.6)',
+                    border:        `1.5px solid ${active ? 'var(--terra)' : 'rgba(46,98,113,0.15)'}`,
                     backdropFilter: 'blur(10px)',
                   }}
                 >
-                  {/* Checkmark indicator */}
+                  {/* Radio indicator */}
                   <div
                     className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
                     style={{
-                      background: selected ? 'var(--terra)' : 'rgba(46,98,113,0.12)',
-                      border: `2px solid ${selected ? 'var(--terra)' : 'rgba(46,98,113,0.25)'}`,
+                      background: active ? 'var(--terra)' : 'transparent',
+                      border:     `2px solid ${active ? 'var(--terra)' : 'rgba(46,98,113,0.3)'}`,
                     }}
                   >
-                    {selected && (
-                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-                        <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
+                    {active && (
+                      <div
+                        className="w-2 h-2 rounded-full"
+                        style={{ background: 'white' }}
+                      />
                     )}
                   </div>
                   <span className="text-lg flex-shrink-0">{opt.emoji}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[var(--terra-dark)]" style={{ letterSpacing: '-0.01em' }}>
+                    <p
+                      className="text-sm font-medium text-[var(--terra-dark)]"
+                      style={{ letterSpacing: '-0.01em' }}
+                    >
                       {opt.label}
                     </p>
                     <p className="text-xs text-[var(--terra-mid)] mt-0.5">{opt.desc}</p>
@@ -173,20 +212,23 @@ export default function NewCommunityPage() {
             })}
           </div>
 
-          {/* Contextual info */}
-          <div className="mt-2 px-3 py-2 rounded-lg"
-            style={{ background: 'rgba(46,98,113,0.06)', border: '1px solid rgba(46,98,113,0.12)' }}>
-            <p className="text-xs text-[var(--terra-mid)]">
-              {visibility === 'friends' && '🔒 Kun venner kan finne kretsen. Nye medlemmer trenger invitasjonslenke eller din godkjenning.'}
-              {visibility === 'friends_of_friends' && '🔗 Venners venner kan se kretsen og søke om å bli med. Du godkjenner alle forespørsler.'}
-              {visibility === 'public' && '🌍 Alle kan finne kretsen i søk. Venner, venners venner og ukjente kan søke om å bli med.'}
-            </p>
+          {/* Context hint */}
+          <div
+            className="mt-2 px-3 py-2 rounded-lg"
+            style={{ background: 'rgba(46,98,113,0.06)', border: '1px solid rgba(46,98,113,0.12)' }}
+          >
+            <p className="text-xs text-[var(--terra-mid)]">{CONTEXT_TEXT[visibility]}</p>
           </div>
         </div>
 
+        {/* Error */}
+        {error && (
+          <p className="text-sm text-red-500 text-center">{error}</p>
+        )}
+
         <button
           type="submit"
-          disabled={loading || !name}
+          disabled={loading || !name.trim()}
           className="btn-primary w-full py-3 mt-1 disabled:opacity-50"
         >
           {loading ? 'Oppretter…' : 'Opprett krets'}
